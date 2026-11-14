@@ -112,6 +112,763 @@
     },
     {
       "path": [
+        "api",
+        "list"
+      ],
+      "summary": "list every Notion API operation this CLI offers, without calling Notion",
+      "effects": {
+        "remote": "none",
+        "local": "none"
+      },
+      "permission": "api.list",
+      "entity": "api_operation"
+    },
+    {
+      "path": [
+        "api",
+        "show"
+      ],
+      "summary": "show one operation's parameters and request schema, without calling Notion",
+      "effects": {
+        "remote": "none",
+        "local": "none"
+      },
+      "permission": "api.show"
+    },
+    {
+      "path": [
+        "api",
+        "get-self"
+      ],
+      "summary": "Retrieve your token's bot user — read (GET /v1/users/me)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-self"
+    },
+    {
+      "path": [
+        "api",
+        "get-user"
+      ],
+      "summary": "Retrieve a user — read (GET /v1/users/{user_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-user"
+    },
+    {
+      "path": [
+        "api",
+        "get-users"
+      ],
+      "summary": "List all users — read (GET /v1/users)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-users"
+    },
+    {
+      "path": [
+        "api",
+        "post-page"
+      ],
+      "summary": "Create a page — write (POST /v1/pages)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.post-page"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-a-page"
+      ],
+      "summary": "Retrieve a page — read (GET /v1/pages/{page_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-a-page"
+    },
+    {
+      "path": [
+        "api",
+        "patch-page"
+      ],
+      "summary": "Update page — write (PATCH /v1/pages/{page_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.patch-page"
+    },
+    {
+      "path": [
+        "api",
+        "move-page"
+      ],
+      "summary": "Move a page — write (POST /v1/pages/{page_id}/move)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.move-page"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-a-page-property"
+      ],
+      "summary": "Retrieve a page property item — read (GET…",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-a-page-property"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-page-markdown"
+      ],
+      "summary": "Retrieve a page as markdown — read (GET /v1/pages/{page_id}/markdown)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-page-markdown"
+    },
+    {
+      "path": [
+        "api",
+        "update-page-markdown"
+      ],
+      "summary": "Update a page's content as markdown — write (PATCH /v1/pages/{page_id}/markdown)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-page-markdown"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-async-task"
+      ],
+      "summary": "Retrieve an async task — read (GET /v1/async_tasks/{task_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-async-task"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-a-block"
+      ],
+      "summary": "Retrieve a block — read (GET /v1/blocks/{block_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-a-block"
+    },
+    {
+      "path": [
+        "api",
+        "update-a-block"
+      ],
+      "summary": "Update a block — write (PATCH /v1/blocks/{block_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-a-block"
+    },
+    {
+      "path": [
+        "api",
+        "delete-a-block"
+      ],
+      "summary": "Delete a block — destructive (DELETE /v1/blocks/{block_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.delete-a-block"
+    },
+    {
+      "path": [
+        "api",
+        "get-block-children"
+      ],
+      "summary": "Retrieve block children — read (GET /v1/blocks/{block_id}/children)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-block-children"
+    },
+    {
+      "path": [
+        "api",
+        "patch-block-children"
+      ],
+      "summary": "Append block children — write (PATCH /v1/blocks/{block_id}/children)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.patch-block-children"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-a-data-source"
+      ],
+      "summary": "Retrieve a data source — read (GET /v1/data_sources/{data_source_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-a-data-source"
+    },
+    {
+      "path": [
+        "api",
+        "update-a-data-source"
+      ],
+      "summary": "Update a data source — write (PATCH /v1/data_sources/{data_source_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-a-data-source"
+    },
+    {
+      "path": [
+        "api",
+        "post-database-query"
+      ],
+      "summary": "Query a data source — read (POST /v1/data_sources/{data_source_id}/query)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.post-database-query"
+    },
+    {
+      "path": [
+        "api",
+        "create-a-database"
+      ],
+      "summary": "Create a data source — write (POST /v1/data_sources)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.create-a-database"
+    },
+    {
+      "path": [
+        "api",
+        "list-data-source-templates"
+      ],
+      "summary": "List templates in a data source — read (GET…",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.list-data-source-templates"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-database"
+      ],
+      "summary": "Retrieve a database — read (GET /v1/databases/{database_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-database"
+    },
+    {
+      "path": [
+        "api",
+        "update-database"
+      ],
+      "summary": "Update a database — write (PATCH /v1/databases/{database_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-database"
+    },
+    {
+      "path": [
+        "api",
+        "create-database"
+      ],
+      "summary": "Create a database — write (POST /v1/databases)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.create-database"
+    },
+    {
+      "path": [
+        "api",
+        "post-search"
+      ],
+      "summary": "Search by title — read (POST /v1/search)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.post-search"
+    },
+    {
+      "path": [
+        "api",
+        "list-comments"
+      ],
+      "summary": "List comments — read (GET /v1/comments)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.list-comments"
+    },
+    {
+      "path": [
+        "api",
+        "create-a-comment"
+      ],
+      "summary": "Create a comment — write (POST /v1/comments)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.create-a-comment"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-comment"
+      ],
+      "summary": "Retrieve a comment — read (GET /v1/comments/{comment_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-comment"
+    },
+    {
+      "path": [
+        "api",
+        "update-a-comment"
+      ],
+      "summary": "Update a comment — write (PATCH /v1/comments/{comment_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-a-comment"
+    },
+    {
+      "path": [
+        "api",
+        "delete-a-comment"
+      ],
+      "summary": "Delete a comment — destructive (DELETE /v1/comments/{comment_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.delete-a-comment"
+    },
+    {
+      "path": [
+        "api",
+        "list-file-uploads"
+      ],
+      "summary": "List file uploads — read (GET /v1/file_uploads)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.list-file-uploads"
+    },
+    {
+      "path": [
+        "api",
+        "create-file"
+      ],
+      "summary": "Create a file upload — write (POST /v1/file_uploads)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.create-file"
+    },
+    {
+      "path": [
+        "api",
+        "complete-file-upload"
+      ],
+      "summary": "Complete a multi-part file upload — write (POST…",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.complete-file-upload"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-file-upload"
+      ],
+      "summary": "Retrieve a file upload — read (GET /v1/file_uploads/{file_upload_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-file-upload"
+    },
+    {
+      "path": [
+        "api",
+        "list-custom-emojis"
+      ],
+      "summary": "List custom emojis — read (GET /v1/custom_emojis)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.list-custom-emojis"
+    },
+    {
+      "path": [
+        "api",
+        "list-views"
+      ],
+      "summary": "List views — read (GET /v1/views)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.list-views"
+    },
+    {
+      "path": [
+        "api",
+        "create-view"
+      ],
+      "summary": "Create a view — write (POST /v1/views)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.create-view"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-a-view"
+      ],
+      "summary": "Retrieve a view — read (GET /v1/views/{view_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-a-view"
+    },
+    {
+      "path": [
+        "api",
+        "update-a-view"
+      ],
+      "summary": "Update a view — write (PATCH /v1/views/{view_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-a-view"
+    },
+    {
+      "path": [
+        "api",
+        "delete-view"
+      ],
+      "summary": "Delete a view — destructive (DELETE /v1/views/{view_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.delete-view"
+    },
+    {
+      "path": [
+        "api",
+        "create-view-query"
+      ],
+      "summary": "Create a view query — read (POST /v1/views/{view_id}/queries)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.create-view-query"
+    },
+    {
+      "path": [
+        "api",
+        "get-view-query-results"
+      ],
+      "summary": "Get view query results — read (GET /v1/views/{view_id}/queries/{query_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-view-query-results"
+    },
+    {
+      "path": [
+        "api",
+        "delete-view-query"
+      ],
+      "summary": "Delete a view query — destructive (DELETE…",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.delete-view-query"
+    },
+    {
+      "path": [
+        "api",
+        "create-meeting-note"
+      ],
+      "summary": "Create a meeting note — write (POST /v1/blocks/meeting_notes)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.create-meeting-note"
+    },
+    {
+      "path": [
+        "api",
+        "query-meeting-notes"
+      ],
+      "summary": "Query meeting notes — read (POST /v1/blocks/meeting_notes/query)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.query-meeting-notes"
+    },
+    {
+      "path": [
+        "api",
+        "query-agents"
+      ],
+      "summary": "Query agents — read (POST /v1/agents/query)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.query-agents"
+    },
+    {
+      "path": [
+        "api",
+        "get-agent"
+      ],
+      "summary": "Get agent — read (GET /v1/agents/{agent_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-agent"
+    },
+    {
+      "path": [
+        "api",
+        "update-agent"
+      ],
+      "summary": "Update agent — write (PATCH /v1/agents/{agent_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-agent"
+    },
+    {
+      "path": [
+        "api",
+        "delete-agent"
+      ],
+      "summary": "Delete agent — destructive (DELETE /v1/agents/{agent_id})",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.delete-agent"
+    },
+    {
+      "path": [
+        "api",
+        "get-agent-insights"
+      ],
+      "summary": "Get agent insights — read (GET /v1/agents/{agent_id}/insights)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-agent-insights"
+    },
+    {
+      "path": [
+        "api",
+        "update-agent-status"
+      ],
+      "summary": "Update agent status — write (PATCH /v1/agents/{agent_id}/status)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-agent-status"
+    },
+    {
+      "path": [
+        "api",
+        "update-agent-credit-limit"
+      ],
+      "summary": "Update agent credit limit — write (PATCH /v1/agents/{agent_id}/credit_limit)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-agent-credit-limit"
+    },
+    {
+      "path": [
+        "api",
+        "agent-batch"
+      ],
+      "summary": "Apply many agent operations — write (POST /v1/agents/batch)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.agent-batch"
+    },
+    {
+      "path": [
+        "api",
+        "list-skills-plugins"
+      ],
+      "summary": "List skills plugins — read (GET /v1/ai/plugins)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.list-skills-plugins"
+    },
+    {
+      "path": [
+        "api",
+        "get-plugin-directory"
+      ],
+      "summary": "Get a plugin directory — read (GET /v1/ai/plugins/{id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-plugin-directory"
+    },
+    {
+      "path": [
+        "api",
+        "get-skill-directory"
+      ],
+      "summary": "Get a skill directory — read (GET /v1/ai/skills/{id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.get-skill-directory"
+    },
+    {
+      "path": [
+        "api",
+        "update-session"
+      ],
+      "summary": "Update a session — write (POST /v1/sessions)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.update-session"
+    },
+    {
+      "path": [
+        "api",
+        "retrieve-session"
+      ],
+      "summary": "Retrieve a session — read (GET /v1/sessions/{session_id})",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.retrieve-session"
+    },
+    {
+      "path": [
+        "api",
+        "query-sessions"
+      ],
+      "summary": "Query sessions — read (POST /v1/sessions/query)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.query-sessions"
+    },
+    {
+      "path": [
+        "api",
+        "query-session-events"
+      ],
+      "summary": "Query session events — read (POST /v1/sessions/{session_id}/events/query)",
+      "effects": {
+        "remote": "read",
+        "local": "none"
+      },
+      "permission": "api.query-session-events"
+    },
+    {
+      "path": [
+        "api",
+        "cancel-session"
+      ],
+      "summary": "Cancel a session — write (POST /v1/sessions/{session_id}/cancel)",
+      "effects": {
+        "remote": "write",
+        "local": "none"
+      },
+      "permission": "api.cancel-session"
+    },
+    {
+      "path": [
         "doctor"
       ],
       "summary": "the state this installation is in, without connecting unless --online",
@@ -377,6 +1134,12 @@
         "title"
       ]
     },
+    "api_operation": {
+      "fields": [
+        "effect",
+        "tag"
+      ]
+    },
     "run": {
       "fields": [
         "run_id",
@@ -410,7 +1173,13 @@
   },
   "network": {
     "hosts": [
-      "api.notion.com"
+      "api.notion.com",
+      "registry.npmjs.org",
+      "huggingface.co",
+      "*.huggingface.co",
+      "*.hf.co",
+      "github.com",
+      "*.githubusercontent.com"
     ]
   },
   "desktop": {

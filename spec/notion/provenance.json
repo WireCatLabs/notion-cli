@@ -1,0 +1,9 @@
+{
+  "source": "https://developers.notion.com/openapi.json",
+  "listed_in": "https://developers.notion.com/llms.txt",
+  "retrieved_at": "2026-11-14T02:08:31.213Z",
+  "sha256": "4c284abb96130f52ddc5dd3fcb7bbce246087ef5a06507641fbe2b899a5a1db4",
+  "bytes": 1244562,
+  "openapi": "3.1.0",
+  "info_version": "1.0.0"
+}

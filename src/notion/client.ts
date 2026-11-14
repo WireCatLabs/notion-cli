@@ -3,6 +3,7 @@ import { CliError, type SleepLike } from "@wirecat/cli-base"
 import { type FetchLike, hostFetch, type PacerLike, retrying, statusToCode } from "@wirecat/cli-base/http"
 import { type EventSink, providerRequest } from "@wirecat/cli-core/cli"
 import { BLOCKED, blocked, NOTION } from "./errors.js"
+import { READ_POST_PATHS } from "./read-posts.js"
 
 export const API_HOST = "api.notion.com"
 /** The API version every request names ([versioning](https://developers.notion.com/reference/versioning)). */
@@ -22,14 +23,13 @@ export const QUERY_PACE = { perMinute: 60, burst: 3 }
 
 const ID = /[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/giu
 const QUERY = /^\/v1\/data_sources\/[^/]+\/query$/u
-const READ_POSTS = [/^\/v1\/search$/u, QUERY]
 
 /** The run record keeps the path's shape, never a page id (WC-LIFE-15). */
 export const operationOf = (method: string, url: URL) => `${method} ${url.pathname.replace(ID, ":id")}`
 
-/** Search and data source queries are POST, yet read nothing but answers: they may be sent again. */
+/** Search, queries and the other POSTs in READ_POSTS change nothing: they may be sent again. */
 export const isRead = (method: string, url: URL) =>
-  method === "GET" || (method === "POST" && READ_POSTS.some((path) => path.test(url.pathname)))
+  method === "GET" || (method === "POST" && READ_POST_PATHS.some((path) => path.test(url.pathname)))
 
 export interface NotionClientOptions {
   token: string
@@ -84,7 +84,7 @@ const blockedAnswer = async (response: Response): Promise<boolean> => {
  * of the call under its path template. A failure to reach Notion is already a retryable CliError from `hostFetch`.
  */
 const attempt =
-  (send: FetchLike, options: NotionClientOptions): FetchLike =>
+  (send: FetchLike, options: Omit<NotionClientOptions, "token">): FetchLike =>
   async (input, init = {}) => {
     const url = new URL(String(input))
     const method = (init.method ?? "GET").toUpperCase()
@@ -98,7 +98,7 @@ const attempt =
       options.onAnswer?.(response)
       if (response.status === 429 && (await blockedAnswer(response))) {
         await response.body?.cancel().catch(() => {})
-        throw blocked({ status: 429, notion_code: "rate_limited" })
+        throw blocked({ status: 429, notion_code: "rate_limited", sent: false })
       }
       end({ status: response.status, ...(response.ok ? {} : { errorCode: statusToCode(response.status) }) })
       return bounded(response)
@@ -108,12 +108,8 @@ const attempt =
     }
   }
 
-/**
- * The only code that holds the token: the SDK puts it in the Authorization header. The SDK's own retries and console
- * logger are off: retries are cli-base's, paced by cli-core's Pacer, and the logger would print Notion's messages and
- * answer bodies (WC-SECR-6, WC-OUT-20).
- */
-export const notionClient = (options: NotionClientOptions): Client => {
+/** Every request's one path to Notion: paced per profile, retried by cli-base, data source queries on a pace of their own. */
+export const notionFetch = (options: Omit<NotionClientOptions, "token">): FetchLike => {
   const once = attempt(
     hostFetch({ hosts: [API_HOST], timeoutMs: EXCHANGE_MS, ...(options.fetch ? { fetch: options.fetch } : {}) }),
     options,
@@ -131,8 +127,16 @@ export const notionClient = (options: NotionClientOptions): Client => {
       ? both(options.pacer, options.queryPacer)
       : (options.queryPacer ?? options.pacer)
   const queries = retrying(once, { ...common, ...(queryPacer ? { pacer: queryPacer } : {}) })
-  const fetch: FetchLike = (input, init) =>
-    (QUERY.test(new URL(String(input)).pathname) ? queries : general)(input, init)
+  return (input, init) => (QUERY.test(new URL(String(input)).pathname) ? queries : general)(input, init)
+}
+
+/**
+ * The SDK puts the token in the Authorization header, as the `api` commands' executor does. The SDK's own retries and console
+ * logger are off: retries are cli-base's, paced by cli-core's Pacer, and the logger would print Notion's messages and
+ * answer bodies (WC-SECR-6, WC-OUT-20).
+ */
+export const notionClient = (options: NotionClientOptions): Client => {
+  const fetch = notionFetch(options)
   return new Client({
     auth: options.token,
     notionVersion: NOTION_VERSION,

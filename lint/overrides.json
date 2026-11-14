@@ -12,12 +12,5 @@
     "reason": "A Notion database holds data sources of rows with typed properties; no shared noun names it, as sheets is Drive's own (docs/dev/DESIGN.md, Commands). Add it to the cli-base vocabulary if a second CLI gets databases (Airtable, Coda).",
     "owner": "@WireCatLabs",
     "review_after": "2027-02-14"
-  },
-  {
-    "rule": "undeclared-host",
-    "target": "www.notion.so",
-    "reason": "The form of a Notion link a person pastes, in examples and in the id parser (src/notion/ids.ts); notion never sends a request there, and hostFetch would refuse one.",
-    "owner": "@WireCatLabs",
-    "review_after": "2027-05-14"
   }
 ]
