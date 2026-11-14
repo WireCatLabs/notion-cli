@@ -24,7 +24,7 @@ export interface NotionUser {
 export type NotionParent =
   | { type: "workspace"; workspace: true }
   | { type: "page_id"; page_id: string }
-  | { type: "data_source_id"; data_source_id: string; database_id?: string }
+  | { type: "data_source_id"; data_source_id: string; database_id: string }
   | { type: "database_id"; database_id: string }
   | { type: "block_id"; block_id: string }
 
@@ -106,7 +106,10 @@ export interface NotionPage {
 export interface NotionDataSource {
   object: "data_source"
   id: string
-  parent: { type: "database_id"; database_id: string }
+  /** An externally synced source can sit under another source; both forms name the database. */
+  parent:
+    | { type: "database_id"; database_id: string }
+    | { type: "data_source_id"; data_source_id: string; database_id: string }
   last_edited_time: string
   in_trash: boolean
 }
