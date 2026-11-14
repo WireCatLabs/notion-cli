@@ -24,7 +24,7 @@ export interface NotionUser {
 export type NotionParent =
   | { type: "workspace"; workspace: true }
   | { type: "page_id"; page_id: string }
-  | { type: "data_source_id"; data_source_id: string; database_id: string }
+  | { type: "data_source_id"; data_source_id: string; database_id?: string }
   | { type: "database_id"; database_id: string }
   | { type: "block_id"; block_id: string }
 
@@ -46,10 +46,7 @@ interface NotionFileValue {
   external?: { url: string }
 }
 
-/**
- * A value as a page or a query row carries it (https://developers.notion.com/reference/page-property-values). Notion
- * adds types over time, so a reader must expect a `type` outside this list and skip it.
- */
+/** A value as a page or a query row carries it (https://developers.notion.com/reference/page-property-values). */
 export type NotionPropertyValue = { id?: string } & (
   | { type: "title"; title: NotionRichText[] }
   | { type: "rich_text"; rich_text: NotionRichText[] }
@@ -75,6 +72,7 @@ export type NotionPropertyValue = { id?: string } & (
   | { type: "verification"; verification: { state: string; verified_by?: NotionUser | null } | null }
   | { type: "place"; place: { name?: string | null; address?: string | null } | null }
   | { type: "button"; button: Record<string, never> }
+  | { type: string; [key: string]: unknown }
 )
 
 export type NotionFormula =
@@ -82,18 +80,19 @@ export type NotionFormula =
   | { type: "number"; number: number | null }
   | { type: "boolean"; boolean: boolean | null }
   | { type: "date"; date: NotionDate | null }
+  | { type: string; [key: string]: unknown }
 
 export type NotionRollup =
   | { type: "number"; number: number | null }
   | { type: "date"; date: NotionDate | null }
   | { type: "array"; array: NotionPropertyValue[] }
-  | { type: "incomplete" | "unsupported" }
+  | { type: "incomplete" | "unsupported"; [key: string]: unknown }
 
 export interface NotionPage {
   object: "page"
   id: string
   created_time: string
-  /** Notion rounds it to the minute (not checked live). */
+  /** Notion rounds it down to the minute. */
   last_edited_time: string
   created_by?: NotionUser
   last_edited_by?: NotionUser
@@ -106,10 +105,7 @@ export interface NotionPage {
 export interface NotionDataSource {
   object: "data_source"
   id: string
-  /** An externally synced source can sit under another source; both forms name the database. */
-  parent:
-    | { type: "database_id"; database_id: string }
-    | { type: "data_source_id"; data_source_id: string; database_id: string }
+  parent: { type: "database_id"; database_id: string }
   last_edited_time: string
   in_trash: boolean
 }
@@ -171,13 +167,11 @@ export interface NotionPageMarkdown {
   unknown_block_ids: string[]
 }
 
-/** The token's bot user; a personal access token has one too, owned by the person who made it. */
 export interface NotionSelf {
-  object: "user"
-  id: string
-  type: "bot" | "person"
-  name?: string | null
-  bot?: { workspace_id?: string; workspace_name?: string | null; owner?: { type: "workspace" | "user" } }
+  /** The token's bot user. */
+  botId: string
+  workspaceId: string
+  workspaceName?: string
 }
 
 export interface NotionReads {
