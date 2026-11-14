@@ -195,7 +195,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     name: "Notion workspace",
     mime: "application/vnd.notion.workspace",
     parents: [],
-    url: "https://www.notion.so",
+    url: "",
     trashed: false,
     canDownload: false,
     providerMetadata: { kind: "workspace" },
