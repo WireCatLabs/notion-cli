@@ -1,6 +1,6 @@
 import { isCliError } from "@wirecat/cli-base"
+import { withoutSignedLinks } from "../notion/links.js"
 import type { NotionReads } from "../notion/reads.js"
-import { stripSignedLinks } from "./links.js"
 
 const UNKNOWN_TAG = /<unknown\b[^>]*\/>/g
 const bare = (id: string) => id.replaceAll("-", "").toLowerCase()
@@ -40,5 +40,5 @@ const expand = async (reads: NotionReads, markdown: string, unknown: string[], d
 export const pageText = async (reads: NotionReads, id: string): Promise<PageText> => {
   const page = await reads.pageMarkdown(id)
   const full = await expand(reads, page.markdown, page.unknown_block_ids, 0)
-  return { markdown: stripSignedLinks(full.markdown), missing: full.missing }
+  return { markdown: withoutSignedLinks(full.markdown).text, missing: full.missing }
 }

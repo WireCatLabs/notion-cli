@@ -9,7 +9,7 @@ import {
 } from "@wirecat/cli-core/documents"
 import { beforeEach, describe, expect, it } from "vitest"
 import type { NotionParent } from "../notion/reads.js"
-import { FakeNotion } from "../testing/fake-notion.js"
+import { FakeNotion } from "../testing/fake-notion-reads.js"
 import { decodeCursor } from "./cursor.js"
 import { isNotionFolder, type NotionFile, notionSource, type SyncWarning, WORKSPACE_ROOT } from "./source.js"
 

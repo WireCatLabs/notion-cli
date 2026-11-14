@@ -1,15 +1,15 @@
+import { withoutSignedLinks } from "../notion/links.js"
 import type { NotionDate, NotionPropertyValue, NotionRichText, NotionUser } from "../notion/reads.js"
-import { stripSignedLinks } from "./links.js"
 
 export type FrontMatterValue = string | number | boolean | (string | number | boolean)[]
 
 type Known = Extract<NotionPropertyValue, { type: string }>
 
-const text = (parts: NotionRichText[]) => stripSignedLinks(parts.map((part) => part.plain_text).join(""))
+const text = (parts: NotionRichText[]) => withoutSignedLinks(parts.map((part) => part.plain_text).join("")).text
 const person = (user: NotionUser) => user.name || user.id
 // ISO 8601 writes an interval as start/end.
 const date = (value: NotionDate) => (value.end ? `${value.start}/${value.end}` : value.start)
-const present = (value: string | null | undefined) => (value ? stripSignedLinks(value) : undefined)
+const present = (value: string | null | undefined) => (value ? withoutSignedLinks(value).text : undefined)
 
 const mapValue = (value: Known): FrontMatterValue | undefined => {
   switch (value.type) {

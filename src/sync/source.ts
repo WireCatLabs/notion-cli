@@ -1,5 +1,6 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type { DocumentSource, SourceChange, SourceContent, SourceFile } from "@wirecat/cli-core/documents"
+import { withoutSignedLinks } from "../notion/links.js"
 import type {
   NotionDatabase,
   NotionDataSource,
@@ -11,7 +12,6 @@ import type {
 } from "../notion/reads.js"
 import { decodeCursor, encodeCursor, type SyncCursor, type SyncPass, type SyncTask } from "./cursor.js"
 import { type FrontMatterValue, frontMatter, frontMatterLines, titleOf } from "./front-matter.js"
-import { stripSignedLinks } from "./links.js"
 import { pageText } from "./markdown.js"
 
 /** The folder that stands for everything the token sees, the scope when no folder is chosen. */
@@ -659,7 +659,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       const content: SourceContent<NotionFile> = {
         metadata,
         markdown: body.markdown,
-        text: stripSignedLinks(searchable),
+        text: withoutSignedLinks(searchable).text,
         tabs: [],
       }
       return content
