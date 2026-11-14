@@ -96,7 +96,7 @@ reason here.
 | Command | What it does | drive-cli |
 | --- | --- | --- |
 | `session start\|status\|end\|list`, `account remove` | sign-in, as above | same; `status` is required (WC-ACCT-12) |
-| `folders add\|list\|browse\|remove` | choose the pages and databases to sync | same name; a Notion "folder" is a page or a database |
+| `folders add\|list\|browse\|remove` | narrow the sync to chosen pages and databases; with none chosen, everything the token sees is synced | same name; a Notion "folder" is a page or a database |
 | `sync`, `status` | copy the chosen pages into the store; report coverage | same |
 | `documents list\|show\|export\|context\|add` | read the local copy; `add` one page by its link | same |
 | `documents get` | read one page live, as Markdown | same |
@@ -137,7 +137,8 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
      is stored.
 2. **How it syncs.** On demand (`sync`), on a schedule (`jobs`), and kept running by `mirrors watch`. Notion has no
    change feed, so the position is a time mark:
-   - The first sync walks the chosen folders: child pages, and the rows of each database.
+   - The first sync walks everything the token sees, or only the chosen folders: child pages, and the rows of each
+     database. WireCat Desktop offers the same choice.
    - Later syncs read the pages edited since the mark, with a two-minute overlap, because Notion's timestamps
      appear to be rounded to the minute (to be confirmed against the live API in step 2). They come from search
      sorted by `last_edited_time`, and from each chosen database filtered by `last_edited_time`.
@@ -147,7 +148,8 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
    - A database query stops at 10,000 rows and says so
      ([query a data source](https://developers.notion.com/reference/query-a-data-source)); the store's catalog takes
      at most 10,000 entries per scope. Every page of results is checked, and a folder that would pass a limit fails
-     with an error that names it, never a silent cut.
+     with an error that names it, never a silent cut. Syncing a whole workspace needs the store's 10,000-entry bound
+     lifted first, a shared change in cli-core.
    - Requests are paced below Notion's limit of 180 a minute per connection, with a second, slower pace for database
      queries ([request limits](https://developers.notion.com/reference/request-limits)), through cli-core's pacer.
      cli-base's retry waits for `Retry-After`; search and database queries are POST, so they are marked as reads.
@@ -179,8 +181,6 @@ deleted.
 
 ## Open questions for the owner
 
-- **The sync scope of a personal access token.** It sees the whole workspace. Proposed: sync only the chosen folders,
-  with an explicit way to choose everything.
 - **Mirrors, to settle before step 6:**
   - Where a page created from a local file keeps its origin key, so a create cut short is not repeated. Drive keeps
     it in a hidden file property. A Notion page has properties only inside a database.
