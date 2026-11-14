@@ -15,6 +15,18 @@ describe("stripSignedLinks", () => {
     expect(hasSignedLink(clean)).toBe(false)
   })
 
+  it("drops the signature hidden inside Notion's image proxy link and keeps the proxy's own query", () => {
+    const link =
+      "https://www.notion.so/image/https%3A%2F%2Fprod-files-secure.s3.us-west-2.amazonaws.com%2Fx.png" +
+      "%3FX-Amz-Signature%3Dabc?table=block&id=1"
+    const clean = stripSignedLinks(link)
+    expect(clean).not.toMatch(/X-Amz-/i)
+    expect(clean).toBe(
+      "https://www.notion.so/image/https%3A%2F%2Fprod-files-secure.s3.us-west-2.amazonaws.com%2Fx.png?table=block&id=1",
+    )
+    expect(stripSignedLinks("[f](https://h/x.png?X-Amz-Signature=s&amp;X-Amz-Date=d)")).toBe("[f](https://h/x.png)")
+  })
+
   it("leaves ordinary links alone, query and all", () => {
     const text = "see https://example.com/search?q=notion&page=2 and [doc](https://www.notion.so/abc#block)"
     expect(stripSignedLinks(text)).toBe(text)

@@ -9,6 +9,7 @@
  * - `CliError("permission_error")` for 403 `restricted_resource`.
  * - `CliError("rate_limited", …, { retry_after_ms })` for a 429 or 529 the implementation stopped retrying.
  * - `CliError("validation_error")` for a 400, for example a start cursor Notion no longer accepts.
+ * - A list answer cut at Notion's 10,000-result cap carries `request_status.type: "incomplete"`; search too.
  *
  * Endpoint pages: https://developers.notion.com/reference/post-search, /query-a-data-source, /retrieve-a-page,
  * /retrieve-a-database, /retrieve-a-block, /get-block-children, /retrieve-page-markdown, /get-self.
@@ -197,4 +198,9 @@ export interface NotionReads {
   blockChildren(id: string, startCursor?: string): Promise<NotionList<NotionBlock>>
   /** `GET /v1/pages/{id}/markdown?markdown_version=v2`; a block id fetches that block's subtree. */
   pageMarkdown(id: string): Promise<NotionPageMarkdown>
+  /**
+   * Notion's clock: the `Date` header of its latest answer, in milliseconds, or undefined before any answer. Not a
+   * request. The sync compares Notion's timestamps with it, never with this computer's clock.
+   */
+  serverTime?(): number | undefined
 }

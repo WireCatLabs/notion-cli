@@ -5,7 +5,14 @@ const PREFIX = "notion1."
 
 const Task = v.variant("t", [
   v.object({ t: v.literal("search"), kind: v.picklist(["page", "data_source"]) }),
-  v.object({ t: v.literal("rows"), database: v.string(), source: v.string(), after: v.optional(v.string()) }),
+  v.object({
+    t: v.literal("rows"),
+    database: v.string(),
+    source: v.string(),
+    after: v.optional(v.string()),
+    /** Every row, not only those edited since the mark: part of a full walk. */
+    full: v.optional(v.boolean()),
+  }),
   v.object({ t: v.literal("walk"), id: v.string() }),
 ])
 

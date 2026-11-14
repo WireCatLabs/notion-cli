@@ -33,6 +33,8 @@ export interface FakePage {
   trashed?: boolean
   /** False once the page is unshared from the token or deleted for good: Notion then answers 404. */
   shared?: boolean
+  /** Listed among its parent's children, yet a read of it answers 404, as a linked database view does. */
+  unreadable?: boolean
   markdown?: string
   /** Blocks the Markdown answer leaves out as `<unknown/>`; null is a block the token may not see. */
   unknown?: Record<string, string | null>
@@ -50,9 +52,10 @@ export interface FakeDatabase {
   sources: string[]
   trashed?: boolean
   shared?: boolean
+  unreadable?: boolean
 }
 
-type Method = keyof NotionReads
+type Method = Exclude<keyof NotionReads, "serverTime">
 
 const notFound = (what: string) => new CliError("not_found", `Could not find ${what}`, { status: 404 })
 const invalid = (message: string) => new CliError("validation_error", message, { status: 400 })
@@ -66,6 +69,10 @@ export class FakeNotion implements NotionReads {
   readonly blocks = new Map<string, NotionParent>()
   /** Pages search leaves out, as Notion's own docs say it may. */
   readonly hiddenFromSearch = new Set<string>()
+  /** Results after which search says `request_status: incomplete`, as Notion does at 10,000. */
+  searchCap = QUERY_CAP
+  /** Whether answers carry a Date header; without one the sync has only Notion's timestamps to go by. */
+  dateHeader = true
   readonly calls: Record<Method, number> = {
     self: 0,
     search: 0,
@@ -77,7 +84,7 @@ export class FakeNotion implements NotionReads {
     pageMarkdown: 0,
   }
   readonly log: { method: Method; id?: string }[] = []
-  private readonly failures: { method: Method; error: Error }[] = []
+  private readonly failures: { method: Method; error: Error; id?: string }[] = []
   private sortedRows = new Map<string, FakePage[]>()
 
   constructor(now = Date.parse("2026-11-14T10:00:30.000Z")) {
@@ -107,14 +114,17 @@ export class FakeNotion implements NotionReads {
     this.sortedRows.clear()
   }
 
-  failNext(method: Method, error: Error) {
-    this.failures.push({ method, error })
+  /** The next call of `method` (for that `id`, if given) fails with `error`. */
+  failNext(method: Method, error: Error, id?: string) {
+    this.failures.push({ method, error, ...(id ? { id } : {}) })
   }
 
   private enter(method: Method, id?: string) {
     this.calls[method]++
     this.log.push({ method, ...(id ? { id } : {}) })
-    const index = this.failures.findIndex((failure) => failure.method === method)
+    const index = this.failures.findIndex(
+      (failure) => failure.method === method && (failure.id === undefined || failure.id === id),
+    )
     if (index >= 0) {
       const [failure] = this.failures.splice(index, 1)
       throw failure?.error
@@ -129,6 +139,14 @@ export class FakeNotion implements NotionReads {
 
   private visible(page: FakePage | FakeDatabase | undefined) {
     return page !== undefined && page.shared !== false
+  }
+
+  private readable(page: FakePage | FakeDatabase | undefined) {
+    return this.visible(page) && !page?.unreadable
+  }
+
+  serverTime() {
+    return this.dateHeader && this.log.length ? this.now : undefined
   }
 
   private pageJson(page: FakePage): NotionPage {
@@ -195,12 +213,11 @@ export class FakeNotion implements NotionReads {
     const order = (a: { edited: number; id: string }, b: { edited: number; id: string }) =>
       (descending ? -1 : 1) * (Math.floor(a.edited / MINUTE) - Math.floor(b.edited / MINUTE)) ||
       a.id.localeCompare(b.id)
-    let items: (NotionPage | NotionDataSource)[]
+    let items: (FakePage | NotionDataSource)[]
     if (request.filter.value === "page") {
       items = [...this.pages.values()]
         .filter((page) => this.visible(page) && !page.trashed && !this.hiddenFromSearch.has(page.id))
         .sort(order)
-        .map((page) => this.pageJson(page))
     } else {
       items = [...this.databases.values()]
         .filter((database) => this.visible(database) && !database.trashed)
@@ -217,7 +234,19 @@ export class FakeNotion implements NotionReads {
           ),
         )
     }
-    return this.paginate(`search:${JSON.stringify([request.filter, request.sort])}`, items, request)
+    const capped = items.length > this.searchCap
+    const page = this.paginate(
+      `search:${JSON.stringify([request.filter, request.sort])}`,
+      items.slice(0, this.searchCap),
+      request,
+    )
+    return {
+      ...page,
+      results: page.results.map((item) => ("object" in item ? item : this.pageJson(item))),
+      request_status: capped
+        ? { type: "incomplete", incomplete_reason: "query_result_limit_reached" }
+        : { type: "complete" },
+    }
   }
 
   private matches(filter: NonNullable<NotionQueryRequest["filter"]>, page: FakePage): boolean {
@@ -270,14 +299,14 @@ export class FakeNotion implements NotionReads {
     this.enter("retrievePage", id)
     if (this.databases.has(id)) throw invalid(`${id} is a database, not a page`)
     const page = this.pages.get(id)
-    if (!page || !this.visible(page)) throw notFound(`page ${id}`)
+    if (!page || !this.readable(page)) throw notFound(`page ${id}`)
     return this.pageJson(page)
   }
 
   async retrieveDatabase(id: string): Promise<NotionDatabase> {
     this.enter("retrieveDatabase", id)
     const database = this.databases.get(id)
-    if (!database || !this.visible(database)) throw notFound(`database ${id}`)
+    if (!database || !this.readable(database)) throw notFound(`database ${id}`)
     return this.databaseJson(database)
   }
 
