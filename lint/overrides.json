@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "rule": "unknown-verb",
+    "target": "documents get",
+    "reason": "Reads one page live from Notion, as drive-cli's documents get reads one live from Google; documents show is kept for the local copy that step 2 adds (docs/dev/DESIGN.md, Commands). Review when the vocabulary names a live read beside show.",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-14"
+  },
+  {
+    "rule": "unknown-resource",
+    "target": "databases",
+    "reason": "A Notion database holds data sources of rows with typed properties; no shared noun names it, as sheets is Drive's own (docs/dev/DESIGN.md, Commands). Add it to the cli-base vocabulary if a second CLI gets databases (Airtable, Coda).",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-14"
+  },
+  {
+    "rule": "undeclared-host",
+    "target": "www.notion.so",
+    "reason": "The form of a Notion link a person pastes, in examples and in the id parser (src/notion/ids.ts); notion never sends a request there, and hostFetch would refuse one.",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-05-14"
+  }
+]

@@ -66,16 +66,16 @@ try {
     { encoding: "utf8", env: npmEnv, stdio: "pipe" },
   )
   const env = {
-    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(XDG_|NOTION_)/.test(key))),
+    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(XDG_|WCNOTION_)/.test(key))),
     NODE_OPTIONS: "",
     HOME: temp,
     DBUS_SESSION_BUS_ADDRESS: "disabled:",
-    NOTION_CONFIG_DIR: join(temp, "config"),
-    NOTION_STATE_DIR: join(temp, "state"),
-    NOTION_CACHE_DIR: join(temp, "cache"),
+    WCNOTION_CONFIG_DIR: join(temp, "config"),
+    WCNOTION_STATE_DIR: join(temp, "state"),
+    WCNOTION_CACHE_DIR: join(temp, "cache"),
     WIRECAT_STATE_DIR: join(temp, "wirecat"),
     MESSAGING_STORE: join(temp, "never-owner.db"),
-    NOTION_NO_UPDATE_CHECK: "1",
+    WCNOTION_NO_UPDATE_CHECK: "1",
   }
   const bin = join(installed, "node_modules", name, "dist/bin/notion.js")
   const run = (args: string[]) =>

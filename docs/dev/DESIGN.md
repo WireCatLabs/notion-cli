@@ -1,22 +1,7 @@
 # notion — design
 
-Written by `npx @wirecat/cli-template new`, then filled in during design. Nothing below is built yet. The owner reads
-this page before the first command is built.
-
-## First task
-
-Delete this section once every step is done (WC-DOC-3).
-
-1. If an answer below is missing, ask the owner the [design interview](skills/design-interview/SKILL.md).
-2. Learn how a command reaches a service from the sample (`AGENTS.md`, "The sample"), and the domain, the
-   store and its commands from the reference CLI below. Build the first command on the sample.
-3. Ask the further questions in the interview that the reference CLI does not answer, and write the answers here.
-   Build only after the owner has read this page.
-4. When the first command reaches the service, rewrite `README.md`, `docs/index.md` and the description in
-   `package.json` and `skills/notion-cli/SKILL.md` to say what the tool does and who it is for. Rewrite
-   `appMcpCommand`'s `name` and `untrusted` in `src/program.ts` too: name the kinds of outside text the CLI
-   carries (WC-MCP-11). Rewrite the tagline and the sign-in texts of `DESKTOP` in `src/identity.ts`, then run
-   `pnpm generate`: WireCat Desktop shows them before it installs the tool.
+Written by `npx @wirecat/cli-template new`, then filled in during design. Step 1 below is built: sign-in with a
+token, `doctor`, `documents get`, and `databases list|show`, read live.
 
 ## Answers
 
@@ -178,6 +163,24 @@ with `--keep`, nothing deleted on the other side. The Notion side reads a page a
 changed parts with [update page Markdown](https://developers.notion.com/reference/update-page-markdown). Notion applies
 the parts that match and only warns about the rest, so a warning counts as a failed write. Child pages are never
 deleted.
+
+## Live check
+
+The strict fake in `src/testing/fake-notion.ts` is built from Notion's reference only; no answer was captured from a
+live workspace. `bin/notion-live <page>` checks the real API through `scripts/live.sh`, with a temporary profile that
+stores nothing, and records the pass in `docs/dev/live-checks.txt` for `bin/release`. It fails on the first two points
+below; the rest a person reads in its output:
+
+- `GET /v1/users/me` gives `bot.workspace_id` for both kinds of token. The account is that id and the bot's id; the
+  reference lists the field but its example leaves it out, and sign-in refuses an answer without it.
+- `documents get` on a page with an uploaded file whose name has parentheses, such as `Screenshot (2).png`, cuts at
+  least one signed link and prints no `X-Amz-` or `signature=` query. Use such a page for the check: it fails on a
+  page with no file. The form of a signed link in Markdown v2 is not documented; `src/notion/links.ts` cuts every query
+  that carries a signature, plain or percent-encoded, wherever the link around it ends.
+- `bot.owner.type` is `user` for a personal access token and `workspace` for an internal connection's token.
+- On a page past about 20,000 blocks, the `<unknown url="…"/>` tag names its block id, so the fetched part lands in
+  place; otherwise it is added after the page.
+- `databases list` rows carry a data source's title, and `parent.database_id`, in search results.
 
 ## Open questions for the owner
 

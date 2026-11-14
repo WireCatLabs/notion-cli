@@ -1,7 +1,7 @@
 {
   "wcat_manifest": 2,
   "name": "notion",
-  "description": "a new WireCat CLI, started from cli-template",
+  "description": "Notion pages and databases for you and your agent, read live with your own token",
   "docs_url": "https://github.com/WireCatLabs/notion-cli#readme",
   "package": "@wirecat/notion-cli",
   "bin": "wcat-notion",
@@ -32,7 +32,7 @@
         "session",
         "start"
       ],
-      "summary": "sign in to Example Comments with an API token",
+      "summary": "sign in to Notion with a personal access token or an internal connection's token",
       "effects": {
         "remote": "read",
         "local": "write"
@@ -73,53 +73,42 @@
     },
     {
       "path": [
-        "comments",
+        "documents",
+        "get"
+      ],
+      "summary": "read one page live from Notion, as Markdown",
+      "effects": {
+        "remote": "read",
+        "local": "read"
+      },
+      "permission": "documents.get",
+      "entity": "document_markdown"
+    },
+    {
+      "path": [
+        "databases",
         "list"
       ],
-      "summary": "list the comments in Example Comments, newest first",
+      "summary": "list the databases this token can see, live, one row per data source",
       "effects": {
         "remote": "read",
         "local": "read"
       },
-      "permission": "comments.list",
-      "entity": "comment"
+      "permission": "databases.list",
+      "entity": "database"
     },
     {
       "path": [
-        "comments",
+        "databases",
         "show"
       ],
-      "summary": "show one comment in Example Comments",
+      "summary": "show one database live: its data sources, their ids and properties",
       "effects": {
         "remote": "read",
         "local": "read"
       },
-      "permission": "comments.show",
-      "entity": "comment"
-    },
-    {
-      "path": [
-        "comments",
-        "create"
-      ],
-      "summary": "post a comment in Example Comments",
-      "effects": {
-        "remote": "write",
-        "local": "write"
-      },
-      "permission": "comments.create"
-    },
-    {
-      "path": [
-        "comments",
-        "update"
-      ],
-      "summary": "change the text of your comment in Example Comments",
-      "effects": {
-        "remote": "write",
-        "local": "write"
-      },
-      "permission": "comments.update"
+      "permission": "databases.show",
+      "entity": "database"
     },
     {
       "path": [
@@ -383,9 +372,9 @@
     }
   ],
   "entities": {
-    "comment": {
+    "database": {
       "fields": [
-        "author"
+        "title"
       ]
     },
     "run": {
@@ -421,7 +410,7 @@
   },
   "network": {
     "hosts": [
-      "comments.example.invalid"
+      "api.notion.com"
     ]
   },
   "desktop": {
@@ -468,8 +457,8 @@
       "start"
     ],
     "signIn": {
-      "gives": "Lets your agent read and change your account through notion.",
-      "asks": "An API token or key from the service."
+      "gives": "Lets your agent read the Notion pages and databases your token can see.",
+      "asks": "A Notion personal access token, or the token of an internal connection you made in Notion."
     },
     "skill": {
       "status": [
@@ -550,7 +539,7 @@
     "storeReset": null,
     "storage": {
       "app": "notion-cli",
-      "env": "NOTION"
+      "env": "WCNOTION"
     },
     "settings": null
   }

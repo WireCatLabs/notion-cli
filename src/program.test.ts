@@ -40,7 +40,7 @@ it("doctor answers without a config file", async () => {
 })
 
 const withConfig = async (text: string, check: (config: unknown) => void) => {
-  const dir = process.env.NOTION_CONFIG_DIR ?? ""
+  const dir = process.env.WCNOTION_CONFIG_DIR ?? ""
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, "config.json"), text)
   try {
@@ -72,7 +72,7 @@ it("doctor reports settings an environment variable breaks, and still answers", 
   const code = await run(["doctor", "--json"], {
     streams: { data: (text) => out.push(text), diagnostic: () => {} },
     tty: false,
-    env: { ...process.env, NOTION_EMBEDDING_DIMS: "many" },
+    env: { ...process.env, WCNOTION_EMBEDDING_DIMS: "many" },
   })
   expect(code).toBe(0)
   expect(json(out.join("")).item).toMatchObject({ config: { issues: [] }, version: IDENTITY.version })
@@ -81,7 +81,7 @@ it("doctor reports settings an environment variable breaks, and still answers", 
 it.skipIf(process.platform === "win32")(
   "doctor names a config file and folder others can read, with the chmod that fixes each",
   async () => {
-    const dir = process.env.NOTION_CONFIG_DIR ?? ""
+    const dir = process.env.WCNOTION_CONFIG_DIR ?? ""
     const file = join(dir, "config.json")
     mkdirSync(dir, { recursive: true })
     writeFileSync(file, "{}")
@@ -186,7 +186,7 @@ it("runs list --compact prints one plain line per run and the next page as a # l
 })
 
 it("config migrate writes the missing defaults, keeps the owner's value, and repeats as a no-op", async () => {
-  const file = join(process.env.NOTION_CONFIG_DIR ?? "", "config.json")
+  const file = join(process.env.WCNOTION_CONFIG_DIR ?? "", "config.json")
   mkdirSync(join(file, ".."), { recursive: true })
   writeFileSync(file, '{ "defaults": { "limit": 5 } }')
   try {
@@ -202,7 +202,7 @@ it("config migrate writes the missing defaults, keeps the owner's value, and rep
 })
 
 it("config repair --dry-run changes nothing, and config repair fixes the JSON with a backup", async () => {
-  const dir = process.env.NOTION_CONFIG_DIR ?? ""
+  const dir = process.env.WCNOTION_CONFIG_DIR ?? ""
   const file = join(dir, "config.json")
   const broken = '{ "defaults": { "limit": 5, }, }'
   mkdirSync(dir, { recursive: true })
@@ -236,7 +236,7 @@ it("a deny in the profile stops a read command before its action runs", async ()
     reached.push("probe")
   })
   const withProbe = { ...definition(), commands: () => [...definition().commands(), probe] }
-  const dir = process.env.NOTION_CONFIG_DIR ?? ""
+  const dir = process.env.WCNOTION_CONFIG_DIR ?? ""
   mkdirSync(dir, { recursive: true })
   writeFileSync(
     join(dir, "config.json"),

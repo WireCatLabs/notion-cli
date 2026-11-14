@@ -8,7 +8,7 @@ How the tests run, and what they never touch. The rules are the handbook's
   folder. `src/testing/sandbox.ts` names the config folder, which tests write into by name.
 - `pnpm test:coverage` adds the coverage floor in `vitest.config.ts`.
 - A script that starts the built bin runs it through `scripts/sandboxed.ts`, as `lint:commands` and the smoke tests
-  do: a temporary home folder, its `XDG_*` folders, no `NOTION_*` overrides and the keyring out of reach. A run
+  do: a temporary home folder, its `XDG_*` folders, no `WCNOTION_*` overrides and the keyring out of reach. A run
   that sees your home can move your real folders.
 - `pnpm test:slow` lists the 20 slowest tests and the 10 slowest files. No test waits for real time (`WC-TEST-5`):
   waits go through an injected sleep, and `fakeClock()` from `@wirecat/cli-base/testing` records them.
