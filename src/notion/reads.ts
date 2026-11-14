@@ -46,7 +46,10 @@ interface NotionFileValue {
   external?: { url: string }
 }
 
-/** A value as a page or a query row carries it (https://developers.notion.com/reference/page-property-values). */
+/**
+ * A value as a page or a query row carries it (https://developers.notion.com/reference/page-property-values). Notion
+ * adds types over time, so a reader must expect a `type` outside this list and skip it.
+ */
 export type NotionPropertyValue = { id?: string } & (
   | { type: "title"; title: NotionRichText[] }
   | { type: "rich_text"; rich_text: NotionRichText[] }
@@ -72,7 +75,6 @@ export type NotionPropertyValue = { id?: string } & (
   | { type: "verification"; verification: { state: string; verified_by?: NotionUser | null } | null }
   | { type: "place"; place: { name?: string | null; address?: string | null } | null }
   | { type: "button"; button: Record<string, never> }
-  | { type: string; [key: string]: unknown }
 )
 
 export type NotionFormula =
@@ -80,13 +82,12 @@ export type NotionFormula =
   | { type: "number"; number: number | null }
   | { type: "boolean"; boolean: boolean | null }
   | { type: "date"; date: NotionDate | null }
-  | { type: string; [key: string]: unknown }
 
 export type NotionRollup =
   | { type: "number"; number: number | null }
   | { type: "date"; date: NotionDate | null }
   | { type: "array"; array: NotionPropertyValue[] }
-  | { type: "incomplete" | "unsupported"; [key: string]: unknown }
+  | { type: "incomplete" | "unsupported" }
 
 export interface NotionPage {
   object: "page"
@@ -167,11 +168,13 @@ export interface NotionPageMarkdown {
   unknown_block_ids: string[]
 }
 
+/** The token's bot user; a personal access token has one too, owned by the person who made it. */
 export interface NotionSelf {
-  /** The token's bot user. */
-  botId: string
-  workspaceId: string
-  workspaceName?: string
+  object: "user"
+  id: string
+  type: "bot" | "person"
+  name?: string | null
+  bot?: { workspace_id?: string; workspace_name?: string | null; owner?: { type: "workspace" | "user" } }
 }
 
 export interface NotionReads {
