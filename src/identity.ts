@@ -22,7 +22,7 @@ export const IDENTITY: AppIdentity = {
 export const DESKTOP: ManifestIdentity = {
   ...IDENTITY,
   docs: "https://github.com/WireCatLabs/notion-cli#readme",
-  // Every host the CLI contacts (WC-CMD-32). The sample's made-up host is its own, in src/sample/transport.ts.
+  // Every host the CLI contacts (WC-CMD-32).
   hosts: ["api.notion.com"],
   tagline: "Notion pages and databases, searchable on your computer",
   signIn: {

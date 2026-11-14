@@ -25,31 +25,31 @@ const getCommand = () =>
     .summary("read one page live from Notion, as Markdown")
     .description(
       "read one page live from Notion as Notion-flavoured Markdown. A page too long for one answer is read in parts; " +
-        "a part the token may not see is listed in missing_block_ids. Signed file links lose their signature, " +
+        "a part the token may not see is listed in missing_block_ids, and a page that is not whole answers " +
+        "meta.complete false and exits non-zero. Signed file links lose their signature, " +
         "so the output never carries a link that opens the file",
     )
     .argument("<page>", "the page's id or its Notion link")
     .action(async function (this: Command, page: string) {
       const id = notionId(page)
-      const found = await withNotion(this, (notion) => notion.document(id))
+      const { document, issues } = await withNotion(this, (notion) => notion.document(id))
+      const output = outputFor(this)
+      const missing = document.missing_block_ids.length
+      const why =
+        missing > 0
+          ? `${missing} blocks are missing: not shared with this token, or past what one read fetches`
+          : "Notion gave only part of the page"
       renderAnswer(
         this,
-        outputFor(this),
-        itemOf(found, {
-          ...(found.truncated
-            ? {
-                missing: [
-                  {
-                    field: "markdown",
-                    why: `${found.missing_block_ids.length} blocks are not shared with this token, or past Notion's limit`,
-                  },
-                ],
-              }
-            : {}),
+        output,
+        itemOf(document, {
+          ...(issues.length > 0 ? { missing: [{ field: "markdown", why }], meta: { issues } } : {}),
         }),
         // Other members wrote this text; a terminal would run an escape sequence in it (WC-SECR-11).
         (body) => `${visibleControls((body as { item: Document }).item.markdown)}\n`,
       )
+      if (issues.length > 0 && output.format !== "json" && output.format !== "jsonl")
+        output.renderer.warn(`the page is incomplete: ${why}`)
     })
 
 export const documentsCommand = (): Command =>

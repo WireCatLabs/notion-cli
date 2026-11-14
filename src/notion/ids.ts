@@ -10,7 +10,8 @@ const dashed = (hex: string) =>
 
 /**
  * A page or database id from what a person copies: the id, with or without dashes, or its Notion link. In a link the
- * id is the last 32 hex characters of the path; `?v=` names a view, never the database.
+ * id is the last 32 hex characters of the path; `?v=` names a view, never the database. A page opened over a
+ * database, `…/<database>?v=<view>&p=<page>`, is the page in `p=`, and the database is the one in the path.
  */
 export const notionId = (input: string, what = "page"): string => {
   const text = input.trim()
@@ -23,6 +24,8 @@ export const notionId = (input: string, what = "page"): string => {
     url = undefined
   }
   if (url && url.protocol === "https:" && NOTION_HOSTS.test(url.hostname)) {
+    const peek = url.searchParams.get("p")?.replaceAll("-", "")
+    if (what === "page" && peek && COMPACT.test(peek)) return dashed(peek)
     const found = [...url.pathname.matchAll(IN_PATH)].at(-1)?.[1]
     if (found) return dashed(found)
   }

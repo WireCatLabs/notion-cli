@@ -7,8 +7,9 @@
 #   NOTION_LIVE_KEYRING_ACCOUNT=<account> bin/notion-live <page id or link>
 #
 # The token comes from the keyring entry `service notion-live account <account>` when one is named, else it is asked
-# hidden. It reaches the CLI on stdin only: never a file, an argument or the screen. The page should hold an uploaded
-# file or image, so the check sees Notion's signed file links cut.
+# hidden. It reaches the CLI on stdin only, never as an argument or on the screen. The sign-in under test keeps it in a
+# private file (mode 600) in the check's temporary folder, deleted when the check ends. The page must hold an uploaded
+# file whose name has parentheses, such as `Screenshot (2).png`: the check fails unless a signed link was cut.
 set -euo pipefail
 
 page=${1:?give a page id or link the token can read: bin/notion-live <page>}

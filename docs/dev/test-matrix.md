@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**76 ✅ · 24 ⛔ · 0 ❌** — 37 commands, 63 options.
+**67 ✅ · 24 ⛔ · 0 ❌** — 33 commands, 58 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -24,15 +24,6 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `databases list` | `--limit` | ✅ |  |
 | `databases list` | `--cursor` | ✅ |  |
 | `databases show` |  | ✅ |  |
-| `comments list` |  | ✅ |  |
-| `comments list` | `--limit` | ✅ |  |
-| `comments list` | `--page` | ✅ |  |
-| `comments list` | `--all` | ✅ |  |
-| `comments show` |  | ✅ |  |
-| `comments create` |  | ✅ |  |
-| `comments create` | `--text` | ✅ |  |
-| `comments update` |  | ✅ |  |
-| `comments update` | `--text` | ✅ |  |
 | `doctor` |  | ✅ |  |
 | `doctor` | `--online` | ✅ |  |
 | `doctor reports show` |  | ⛔ | cli-core's appDoctorCommand; its app-mcp-command test creates and shows a report |

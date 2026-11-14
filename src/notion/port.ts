@@ -1,7 +1,6 @@
 import type { Client } from "@notionhq/client"
 import { CliError } from "@wirecat/cli-base"
-import { NOTION } from "./client.js"
-import { mapped } from "./errors.js"
+import { mapped, NOTION } from "./errors.js"
 import type {
   NotionBlock,
   NotionDatabase,

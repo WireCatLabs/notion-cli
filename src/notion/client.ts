@@ -2,8 +2,8 @@ import { Client } from "@notionhq/client"
 import { CliError, type SleepLike } from "@wirecat/cli-base"
 import { type FetchLike, hostFetch, type PacerLike, retrying, statusToCode } from "@wirecat/cli-base/http"
 import { type EventSink, providerRequest } from "@wirecat/cli-core/cli"
+import { BLOCKED, blocked, NOTION } from "./errors.js"
 
-export const NOTION = "Notion"
 export const API_HOST = "api.notion.com"
 /** The API version every request names ([versioning](https://developers.notion.com/reference/versioning)). */
 export const NOTION_VERSION = "2026-03-11"
@@ -67,6 +67,16 @@ const bounded = (response: Response): Response => {
   return new Response(capped, { status: response.status, statusText: response.statusText, headers: response.headers })
 }
 
+/** Notion's 429 body names why; a blocked connection must reach cli-base's retry as a failure, not a 429. */
+const blockedAnswer = async (response: Response): Promise<boolean> => {
+  try {
+    const body = (await response.clone().json()) as { additional_data?: { rate_limit_reason?: unknown } }
+    return body.additional_data?.rate_limit_reason === BLOCKED
+  } catch {
+    return false
+  }
+}
+
 /**
  * One attempt: only api.notion.com, no redirect (it would carry the token elsewhere), the run's signal, and a record
  * of the call under its path template. A failure to reach Notion is already a retryable CliError from `hostFetch`.
@@ -83,6 +93,10 @@ const attempt =
         redirect: "error",
         ...(options.signal ? { signal: options.signal } : {}),
       })
+      if (response.status === 429 && (await blockedAnswer(response))) {
+        await response.body?.cancel().catch(() => {})
+        throw blocked({ status: 429, notion_code: "rate_limited" })
+      }
       end({ status: response.status, ...(response.ok ? {} : { errorCode: statusToCode(response.status) }) })
       return bounded(response)
     } catch (error) {

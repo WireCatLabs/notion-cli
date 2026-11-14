@@ -173,8 +173,10 @@ below; the rest a person reads in its output:
 
 - `GET /v1/users/me` gives `bot.workspace_id` for both kinds of token. The account is that id and the bot's id; the
   reference lists the field but its example leaves it out, and sign-in refuses an answer without it.
-- `documents get` on a page with an uploaded file or image prints no `X-Amz-` signature. The form of a signed link in
-  Markdown v2 is not documented; `src/notion/links.ts` cuts the query of any link on Notion's or S3's file hosts.
+- `documents get` on a page with an uploaded file whose name has parentheses, such as `Screenshot (2).png`, cuts at
+  least one signed link and prints no `X-Amz-` or `signature=` query. Use such a page for the check: it fails on a
+  page with no file. The form of a signed link in Markdown v2 is not documented; `src/notion/links.ts` cuts every query
+  that carries a signature, plain or percent-encoded, wherever the link around it ends.
 - `bot.owner.type` is `user` for a personal access token and `workspace` for an internal connection's token.
 - On a page past about 20,000 blocks, the `<unknown url="…"/>` tag names its block id, so the fetched part lands in
   place; otherwise it is added after the page.

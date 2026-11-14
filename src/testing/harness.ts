@@ -3,7 +3,6 @@ import { type KeyringStore, memoryKeyring } from "@wirecat/cli-base"
 import type { RunOptions } from "@wirecat/cli-core/cli"
 import type { ServiceEnvironment } from "../context.js"
 import { run } from "../program.js"
-import { fakeComments } from "./fake-comments.js"
 import { FAKE_TOKEN, type FakeNotion, fakeNotion } from "./fake-notion.js"
 
 /** A keyring where profile `personal` is already signed in to the fake service; never the real one (WC-TEST-2). */
@@ -19,19 +18,10 @@ export interface Ran {
   json: () => Record<string, unknown>
 }
 
-/** Notion's requests to its fake, the sample's to its own. */
-export const bothFakes =
-  (notion: FakeNotion, service: ReturnType<typeof fakeComments>): typeof fetch =>
-  (input, init) =>
-    new URL(input instanceof Request ? input.url : String(input)).hostname === "api.notion.com"
-      ? notion.fetch(input, init)
-      : service.fetch(input, init)
-
 /** The CLI through its own `run()`, as a person or an agent types it, against the fake service (WC-TEST-6). */
 export const runCli = async (
   argv: string[],
   {
-    service = fakeComments(),
     notion = fakeNotion(),
     keyring = signedIn(),
     stdin,
@@ -39,7 +29,6 @@ export const runCli = async (
     answer,
     tty = false,
   }: {
-    service?: ReturnType<typeof fakeComments>
     notion?: FakeNotion
     keyring?: KeyringStore
     stdin?: string
@@ -57,7 +46,7 @@ export const runCli = async (
     streams: { data: (text) => out.push(text), diagnostic: (text) => err.push(text) },
     tty,
     keyring,
-    fetch: bothFakes(notion, service),
+    fetch: notion.fetch,
     sleep: async (ms) => {
       waits.push(ms)
     },

@@ -2,7 +2,6 @@ import { APIResponseError, isHTTPResponseError, RequestTimeoutError } from "@not
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { providerWaitMs, statusToCode } from "@wirecat/cli-base/http"
 import { defineReasons } from "@wirecat/cli-base/standards"
-import { NOTION } from "./client.js"
 
 /** notion's own reasons; the shared ones (`session.missing`, `offline.refused`, `provider.*`) are cli-core's and cli-base's. */
 export const REASONS = defineReasons(
@@ -18,12 +17,25 @@ export const REASONS = defineReasons(
       ["notion.unavailable", "provider_unavailable", "Notion is down or overloaded"],
       ["notion.invalid-response", "invalid_response", "Notion's answer does not have the documented shape"],
       ["notion.id-invalid", "validation_error", "that is not a Notion id or link"],
+      ["notion.truncated", "provider_error", "Notion gave only part of the page"],
     ] as const
   ).map(([reason, code, message]) => ({ reason, code, message, details: [] })),
 )
 
 /** Notion's error code and rate-limit reason are fixed words from its docs, never text it was sent. */
 export const DETAILS = ["notion_code", "rate_limit_reason"]
+
+export const NOTION = "Notion"
+
+/** A 429 with this reason is not a pace to wait out: "Retrying won't help" (Notion's request limits page). */
+export const BLOCKED = "public_api_request_blocked"
+
+export const blocked = (base: Record<string, unknown> = {}): CliError =>
+  new CliError(
+    "permission_error",
+    `${NOTION} has restricted this connection's API access; retrying will not help, contact Notion support`,
+    { ...base, rate_limit_reason: BLOCKED, reason: "notion.blocked" },
+  )
 
 const SIGN_IN = "sign in again with `notion <profile> session start`"
 
@@ -57,12 +69,7 @@ export const failureOf = (error: unknown): unknown => {
     })
   if (code === "rate_limited" || status === 429 || code === "service_overload" || status === 529) {
     const reason = notion ? additional(notion, "rate_limit_reason") : undefined
-    if (reason === "public_api_request_blocked")
-      return new CliError(
-        "permission_error",
-        `${NOTION} has restricted this connection's API access; retrying will not help, contact Notion support`,
-        { ...base, rate_limit_reason: reason, reason: "notion.blocked" },
-      )
+    if (reason === BLOCKED) return blocked(base)
     const wait = error.headers instanceof Headers ? providerWaitMs(error.headers, () => new Date()) : undefined
     return new CliError("rate_limited", `${NOTION} asked to slow down; run the command again later`, {
       ...base,

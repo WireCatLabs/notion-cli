@@ -1,8 +1,7 @@
 import type { Client } from "@notionhq/client"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { NOTION } from "./client.js"
-import { mapped } from "./errors.js"
+import { mapped, NOTION } from "./errors.js"
 import { withoutSignedLinks } from "./links.js"
 import { notionPort } from "./port.js"
 
@@ -136,6 +135,9 @@ export const documentSchema = v.strictObject({
 })
 export type Document = v.InferOutput<typeof documentSchema>
 
+/** A part of the answer that is not there (WC-OUT-7). */
+export type Issue = { code: "not_found" | "provider_error"; reason: string; source: "notion" }
+
 export const databaseRowSchema = v.strictObject({
   id: v.nullable(v.string()),
   data_source_id: v.string(),
@@ -197,33 +199,47 @@ export const liveReads = (client: Client) => {
 
     /**
      * A page as Notion-flavoured Markdown (v2). A truncated page's unknown blocks are fetched again and put in place of
-     * their `<unknown>` tag, or after the page when no tag names them; a block the token cannot see stays missing.
+     * their `<unknown>` tag, or after the page when no tag names them. What is still not there is an issue: a block
+     * the token cannot see, or a part past Notion's limit or past the blocks fetched again.
      */
-    document: async (id: string): Promise<Document> => {
+    document: async (id: string): Promise<{ document: Document; issues: Issue[] }> => {
       const read = async (pageId: string) =>
         parsed(wireMarkdown, { object: "page_markdown", id: pageId, ...(await port.pageMarkdown(pageId)) })
       const page = await read(id)
       let markdown = page.markdown
-      const missing: string[] = []
+      const hidden: string[] = []
+      const unread: string[] = []
+      // Notion lists at most 100 unknown blocks, so a cut page with none, or with a full list, may have more.
+      let cut = page.truncated && (page.unknown_block_ids.length === 0 || page.unknown_block_ids.length >= MORE_BLOCKS)
       for (const block of page.unknown_block_ids.slice(0, MORE_BLOCKS)) {
         try {
           const part = await read(block)
           const tag = placeholderFor(markdown, block)
           markdown = tag ? markdown.replace(tag, () => part.markdown) : `${markdown}\n\n${part.markdown}`
-          for (const more of part.unknown_block_ids) missing.push(more)
+          for (const more of part.unknown_block_ids) unread.push(more)
+          if (part.truncated && part.unknown_block_ids.length === 0) cut = true
         } catch (error) {
           if (!isCliError(error) || error.code !== "not_found") throw error
-          missing.push(block)
+          hidden.push(block)
         }
       }
-      for (const more of page.unknown_block_ids.slice(MORE_BLOCKS)) missing.push(more)
+      for (const more of page.unknown_block_ids.slice(MORE_BLOCKS)) unread.push(more)
       const clean = withoutSignedLinks(markdown)
+      const issues: Issue[] = [
+        ...(hidden.length > 0 ? [{ code: "not_found", reason: "notion.not-shared", source: "notion" } as const] : []),
+        ...(cut || unread.length > 0
+          ? [{ code: "provider_error", reason: "notion.truncated", source: "notion" } as const]
+          : []),
+      ]
       return {
-        id: page.id,
-        markdown: clean.text,
-        truncated: missing.length > 0,
-        missing_block_ids: missing,
-        signed_links_removed: clean.removed,
+        document: {
+          id: page.id,
+          markdown: clean.text,
+          truncated: issues.length > 0,
+          missing_block_ids: [...hidden, ...unread],
+          signed_links_removed: clean.removed,
+        },
+        issues,
       }
     },
 

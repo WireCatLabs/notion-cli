@@ -113,7 +113,7 @@ read Notion pages
 
 ### `notion documents get`
 
-read one page live from Notion as Notion-flavoured Markdown. A page too long for one answer is read in parts; a part the token may not see is listed in missing_block_ids. Signed file links lose their signature, so the output never carries a link that opens the file
+read one page live from Notion as Notion-flavoured Markdown. A page too long for one answer is read in parts; a part the token may not see is listed in missing_block_ids, and a page that is not whole answers meta.complete false and exits non-zero. Signed file links lose their signature, so the output never carries a link that opens the file
 
 ```sh
 notion documents get <page>
@@ -167,84 +167,6 @@ notion databases show <database>
 **Returns:** database — id, title, description, url, parent, is_inline, in_trash, created_time, and 2 more; every field: notion commands info databases show
 
 **Example:** `notion personal databases show 0123456789abcdef0123456789abcdef`, `notion personal databases show https://www.notion.so/0123456789abcdef0123456789abcdef --json`
-
-## `notion comments`
-
-read and write comments in Example Comments, the sample service
-
-### `notion comments list`
-
-list the comments in Example Comments, newest first
-
-```sh
-notion comments list [query] [options]
-```
-
-| Argument | | What it is |
-|---|---|---|
-| `query` | optional | field:value terms that narrow the list — the fields are below. |
-
-| Option | What it does |
-|---|---|
-| `--limit <n>` | how many to show. |
-| `--page <n>` | which page, starting at 1. |
-| `--all` | every row, no paging. |
-
-**Returns:** comment — id, text, author, created_at; every field: notion commands info comments list
-
-**Example:** `notion personal comments list`, `notion personal comments list author:u2 --json=id,text`
-
-### `notion comments show`
-
-show one comment in Example Comments
-
-```sh
-notion comments show <id>
-```
-
-| Argument | | What it is |
-|---|---|---|
-| `id` | required | the comment's id, as list prints it. |
-
-**Returns:** comment — id, text, author, created_at; every field: notion commands info comments show
-
-**Example:** `notion personal comments show c1`, `notion personal comments show c1 --json`
-
-### `notion comments create`
-
-post a comment in Example Comments
-
-**Changes something in the service.**
-
-```sh
-notion comments create [options]
-```
-
-| Option | What it does |
-|---|---|
-| `--text <text>` | the comment's text. |
-
-**Example:** `notion personal comments create --text "Looks good to me"`, `notion personal comments create --text "Looks good to me" --dry-run`
-
-### `notion comments update`
-
-change the text of your comment in Example Comments
-
-**Changes something in the service.**
-
-```sh
-notion comments update <id> [options]
-```
-
-| Argument | | What it is |
-|---|---|---|
-| `id` | required | the comment's id, as list prints it. |
-
-| Option | What it does |
-|---|---|
-| `--text <text>` | the new text. |
-
-**Example:** `notion personal comments update c1 --text "Looks good now"`
 
 ## `notion doctor`
 

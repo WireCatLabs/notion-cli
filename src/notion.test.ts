@@ -77,14 +77,43 @@ it("documents get fills a truncated page's unknown blocks in place, and lists th
     },
   })
   const got = await runCli(["personal", "documents", "get", PAGE_ID, "--json"], { notion })
-  expect(got.code).toBe(0)
+  expect(got.code).toBe(6)
   expect(got.json().item).toMatchObject({
     markdown: "# Long\n\nFetched part\n\nEnd",
     truncated: true,
     missing_block_ids: [HIDDEN],
   })
   expect(got.json().missing).toEqual([{ field: "markdown", why: expect.stringContaining("1 blocks") }])
+  expect(got.json().meta).toMatchObject({
+    complete: false,
+    issues: [{ code: "not_found", reason: "notion.not-shared", source: "notion" }],
+  })
   expect(notion.calls).toHaveLength(3)
+
+  const person = await runCli(["personal", "documents", "get", PAGE_ID], { notion, tty: true })
+  expect(person.code).toBe(6)
+  expect(person.out).toContain("Fetched part")
+  expect(person.err).toContain("the page is incomplete: 1 blocks are missing")
+})
+
+it("documents get says a page Notion cut at its own limit is incomplete, even with no block to fetch", async () => {
+  const notion = fakeNotion({ pages: { [PAGE_ID]: { markdown: "# Huge", truncated: true } } })
+  const got = await runCli(["personal", "documents", "get", PAGE_ID, "--json"], { notion })
+  expect(got.code).toBe(11)
+  expect(got.json().item).toMatchObject({ truncated: true, missing_block_ids: [] })
+  expect(got.json().meta).toMatchObject({
+    complete: false,
+    issues: [{ code: "provider_error", reason: "notion.truncated" }],
+  })
+})
+
+it("documents get of a whole page is complete and exits 0", async () => {
+  const got = await runCli(["personal", "documents", "get", PAGE_ID, "--json"], {
+    notion: fakeNotion({ pages: { [PAGE_ID]: { markdown: "# Whole" } } }),
+  })
+  expect(got.code).toBe(0)
+  expect(got.json().meta).toMatchObject({ complete: true })
+  expect(got.json().meta).not.toHaveProperty("issues")
 })
 
 it("documents get cuts the signature from Notion's signed file links", async () => {
@@ -228,6 +257,7 @@ it("a blocked connection is a permission error that says retrying will not help"
   })
   const got = await runCli(["personal", "databases", "show", DATABASE_ID, "--json"], { notion })
   expect(got.json()).toMatchObject({ error: { code: "permission_error", reason: "notion.blocked" } })
+  expect(notion.calls).toHaveLength(1)
 })
 
 it.each([
@@ -315,6 +345,9 @@ it("ids: a dashed or compact id, or the last id in a Notion link's path; never t
   expect(notionId(`https://www.notion.so/${DATABASE_ID.replaceAll("-", "")}?v=${SOURCE_ID.replaceAll("-", "")}`)).toBe(
     DATABASE_ID,
   )
+  const peek = `https://www.notion.so/ws/${DATABASE_ID.replaceAll("-", "")}?v=${SOURCE_ID.replaceAll("-", "")}&p=${PAGE_ID.replaceAll("-", "")}&pm=s`
+  expect(notionId(peek)).toBe(PAGE_ID)
+  expect(notionId(peek, "database")).toBe(DATABASE_ID)
   expect(() => notionId(`http://www.notion.so/${PAGE_ID.replaceAll("-", "")}`)).toThrow()
   expect(() => notionId("not an id")).toThrow()
 })
@@ -332,12 +365,34 @@ it("reads: GET, search and data source queries may be sent again; nothing else",
 })
 
 it("links: a signed link loses its query; a link with no signature stays as it is", () => {
-  expect(
-    withoutSignedLinks(`a ${SIGNED} b https://file.notion.so/f/x.pdf?table=block&id=1 c https://example.com/?q=1`),
-  ).toEqual({
-    text: "a https://prod-files-secure.s3.us-west-2.amazonaws.com/space/file/test.png b https://file.notion.so/f/x.pdf c https://example.com/?q=1",
+  const notionFile =
+    "https://file.notion.so/f/f/space/file/x.pdf?table=block&id=1&expirationTimestamp=1&signature=wcfake"
+  expect(withoutSignedLinks(`a ${SIGNED} b ${notionFile} c https://example.com/?q=1`)).toEqual({
+    text: "a https://prod-files-secure.s3.us-west-2.amazonaws.com/space/file/test.png b https://file.notion.so/f/f/space/file/x.pdf c https://example.com/?q=1",
     removed: 2,
   })
+})
+
+it("links: the signature goes whatever the file is called and however the link is written", () => {
+  const s3 = "https://prod-files-secure.s3.us-west-2.amazonaws.com/space/file"
+  const query = "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=FAKE%2F20261114&X-Amz-Signature=wcfakesig"
+  const encoded = encodeURIComponent(`${s3}/a.png${query}`)
+  const cases: [string, string][] = [
+    [`![](${s3}/Screenshot%20(2).png${query})`, `![](${s3}/Screenshot%20(2).png)`],
+    [`[file](${s3}/Slava's%20notes.pdf${query})`, `[file](${s3}/Slava's%20notes.pdf)`],
+    [`<${s3}/a[1].png${query}>`, `<${s3}/a[1].png>`],
+    [`<image source="${s3}/a.png${query.replaceAll("&", "&amp;")}"/>`, `<image source="${s3}/a.png"/>`],
+    [
+      `![](https://www.notion.so/image/${encoded}?table=block&id=1)`,
+      `![](https://www.notion.so/image/${encodeURIComponent(`${s3}/a.png`)}?table=block&id=1)`,
+    ],
+    [
+      `[x](https://file.notion.so/f/f/x.pdf?expirationTimestamp=1&signature=wcfake)`,
+      "[x](https://file.notion.so/f/f/x.pdf)",
+    ],
+  ]
+  for (const [text, clean] of cases) expect(withoutSignedLinks(text)).toEqual({ text: clean, removed: 1 })
+  expect(withoutSignedLinks("is it?yes, and https://example.com/a?b=c").removed).toBe(0)
 })
 
 it("the read port passes Notion's own JSON through, over the same client, and maps a 404 to not_found", async () => {

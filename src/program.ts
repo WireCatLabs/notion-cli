@@ -18,7 +18,6 @@ import {
 } from "@wirecat/cli-core/cli"
 import { appUpdate } from "@wirecat/cli-core/update"
 import type { Command } from "commander"
-import { commentsCommand } from "./commands/comments.js"
 import { databasesCommand } from "./commands/databases.js"
 import { documentsCommand } from "./commands/documents.js"
 import { sessionCommand } from "./commands/session.js"
@@ -65,7 +64,6 @@ export const definition = (): ProgramDefinition => ({
     sessionCommand(),
     documentsCommand(),
     databasesCommand(),
-    commentsCommand(),
     appDoctorCommand(IDENTITY, configuration, { packageName: PACKAGE }),
     skillCommand(IDENTITY, SKILL),
     mcpCommand(),

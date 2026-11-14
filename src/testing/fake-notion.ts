@@ -40,6 +40,8 @@ interface Route {
 export interface FakePage {
   markdown: string
   unknown_block_ids?: string[]
+  /** Notion cut the page at its own limit; by default only when some blocks are unknown. */
+  truncated?: boolean
 }
 
 export interface FakeNotionOptions {
@@ -174,7 +176,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
             object: "page_markdown",
             id,
             markdown: page.markdown,
-            truncated: unknown.length > 0,
+            truncated: page.truncated ?? unknown.length > 0,
             unknown_block_ids: unknown,
           },
         }

@@ -28,7 +28,7 @@ import { Command } from "commander"
 import { configuration } from "../config.js"
 import { contextOf, notionFor, withNotion } from "../context.js"
 import { IDENTITY } from "../identity.js"
-import { NOTION } from "../notion/client.js"
+import { NOTION } from "../notion/errors.js"
 
 // `session start | status | end | list` is every provider CLI's sign-in (WC-ACCT-12). The token is a personal access
 // token or an internal connection's; both are checked with GET /v1/users/me
