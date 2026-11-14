@@ -122,8 +122,10 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
      is stored.
 2. **How it syncs.** On demand (`sync`), on a schedule (`jobs`), and kept running by `mirrors watch`. Notion has no
    change feed, so the position is a time mark:
-   - The first sync walks everything the token sees, or only the chosen folders: child pages, and the rows of each
-     database. WireCat Desktop offers the same choice.
+   - The first sync walks everything the token sees, or only the chosen folders: the top of the workspace, and the
+     rows of each database. WireCat Desktop offers the same choice.
+   - Pages under pages are not synced yet, and a page cannot be chosen as a folder: cli-core's sync engine needs a
+     node that is both a folder and a document first (its change C2). [SYNC.md](SYNC.md) has the details.
    - Later syncs read the pages edited since the mark, with a two-minute overlap, because Notion's timestamps
      appear to be rounded to the minute (to be confirmed against the live API in step 2). They come from search
      sorted by `last_edited_time`, and from each chosen database filtered by `last_edited_time`.

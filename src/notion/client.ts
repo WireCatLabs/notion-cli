@@ -41,6 +41,8 @@ export interface NotionClientOptions {
   queryPacer?: PacerLike | undefined
   sleep?: SleepLike
   now?: () => Date
+  /** Sees every answer Notion gives, as `notionClock` does for its Date header. */
+  onAnswer?: (response: Response) => void
 }
 
 const both = (first: PacerLike, second: PacerLike): PacerLike => ({
@@ -93,6 +95,7 @@ const attempt =
         redirect: "error",
         ...(options.signal ? { signal: options.signal } : {}),
       })
+      options.onAnswer?.(response)
       if (response.status === 429 && (await blockedAnswer(response))) {
         await response.body?.cancel().catch(() => {})
         throw blocked({ status: 429, notion_code: "rate_limited" })

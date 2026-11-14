@@ -36,8 +36,24 @@ const list = <T>(items: string | readonly string[], value: unknown): NotionList<
   return value as NotionList<T>
 }
 
+/**
+ * Notion's clock, from the Date header of its latest answer. The sync compares Notion's timestamps with it, since
+ * this computer's clock can be minutes off. Pass `observe` as the client's `onAnswer`.
+ */
+export const notionClock = () => {
+  let last: number | undefined
+  return {
+    observe: (response: Response) => {
+      const time = Date.parse(response.headers.get("date") ?? "")
+      if (Number.isFinite(time)) last = time
+    },
+    time: () => last,
+  }
+}
+
 /** The read port src/notion/reads.ts names, over the SDK: the same client, pace, retries and error mapping as the commands. */
-export const notionPort = (client: Client): NotionReads => ({
+export const notionPort = (client: Client, clock?: ReturnType<typeof notionClock>): NotionReads => ({
+  ...(clock ? { serverTime: clock.time } : {}),
   self: async () => kind<NotionSelf>("user", await mapped(() => client.users.me({}))),
   search: async (request) =>
     list<NotionPage | NotionDataSource>(["page", "data_source"], await mapped(() => client.search({ ...request }))),
