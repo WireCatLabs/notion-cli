@@ -19,7 +19,10 @@ pages, keeps the checkpoint and resumes a cut batch. The reads it needs from Not
 **Not yet: pages under pages.** cli-core's sync engine treats a folder and a document as two different things, and
 a Notion page with child pages is both. Until cli-core can plan such a page (its change C2), the sync does not
 store a page that sits under another page, or a database that sits in a page, and a page cannot be chosen as a
-folder. The walk does not list the children of pages either, so it spends no requests on them.
+folder. The walk does not list the children of pages either, so it spends no requests on them. The fix is in
+cli-core: `syncDocuments` takes an optional `isDocument(file)`, so a page with children is walked and also saved
+([cli-core#2941](https://github.com/WireCatLabs/cli-core/pull/2941), not released yet). The sync uses it once it
+is released.
 
 ## The position between syncs
 
