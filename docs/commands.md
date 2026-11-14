@@ -168,6 +168,1043 @@ notion databases show <database>
 
 **Example:** `notion personal databases show 0123456789abcdef0123456789abcdef`, `notion personal databases show https://www.notion.so/0123456789abcdef0123456789abcdef --json`
 
+## `notion api`
+
+the raw Notion API, one command per operation of its OpenAPI document
+
+### `notion api list`
+
+list every Notion API operation this CLI offers, without calling Notion
+
+```sh
+notion api list [query]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+**Example:** `notion personal api list`, `notion personal api list effect:destructive --json=command,path`
+
+### `notion api show`
+
+show one operation's parameters and request schema, without calling Notion
+
+```sh
+notion api show <operation>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `operation` | required | the operation, as api list prints it. |
+
+**Example:** `notion personal api show retrieve-a-page --json`
+
+### `notion api call`
+
+call one Notion API operation by name, its parameters as JSON
+
+**Changes something in the service.**
+
+```sh
+notion api call <operation> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `operation` | required | the operation, as api list prints it. |
+
+| Option | What it does |
+|---|---|
+| `--params <json>` | path and query parameters as a JSON object. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+
+**Example:** `notion personal api call retrieve-a-page --params '{"page_id":"PAGE_ID"}'`, `notion personal api call post-search --body '{"query":"Plan"}'`
+
+### `notion api get-self`
+
+Retrieve your token's bot user — read (GET /v1/users/me)
+
+```sh
+notion api get-self
+```
+
+**Example:** `notion personal api get-self`
+
+### `notion api get-user`
+
+Retrieve a user — read (GET /v1/users/{user_id})
+
+```sh
+notion api get-user [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--user-id <value>` | user_id. |
+
+**Example:** `notion personal api get-user --user-id <value>`
+
+### `notion api get-users`
+
+List all users — read (GET /v1/users)
+
+```sh
+notion api get-users [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+
+**Example:** `notion personal api get-users`
+
+### `notion api post-page`
+
+Create a page — write (POST /v1/pages)
+
+**Changes something in the service.**
+
+```sh
+notion api post-page [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--filter-properties <value>` | filter_properties. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api post-page`
+
+### `notion api retrieve-a-page`
+
+Retrieve a page — read (GET /v1/pages/{page_id})
+
+```sh
+notion api retrieve-a-page [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--page-id <value>` | page_id. |
+| `--filter-properties <value>` | filter_properties. |
+
+**Example:** `notion personal api retrieve-a-page --page-id <value>`
+
+### `notion api patch-page`
+
+Update page — write (PATCH /v1/pages/{page_id})
+
+**Changes something in the service.**
+
+```sh
+notion api patch-page [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--page-id <value>` | page_id. |
+| `--filter-properties <value>` | filter_properties. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api patch-page --page-id <value>`
+
+### `notion api move-page`
+
+Move a page — write (POST /v1/pages/{page_id}/move)
+
+**Changes something in the service.**
+
+```sh
+notion api move-page [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--page-id <value>` | page_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api move-page --page-id <value>`
+
+### `notion api retrieve-a-page-property`
+
+Retrieve a page property item — read (GET /v1/pages/{page_id}/properties/{property_id})
+
+```sh
+notion api retrieve-a-page-property [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--page-id <value>` | page_id. |
+| `--property-id <value>` | property_id. |
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+
+**Example:** `notion personal api retrieve-a-page-property --page-id <value> --property-id <value>`
+
+### `notion api retrieve-page-markdown`
+
+Retrieve a page as markdown — read (GET /v1/pages/{page_id}/markdown)
+
+```sh
+notion api retrieve-page-markdown [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--page-id <value>` | page_id. |
+| `--include-transcript <value>` | include_transcript. |
+| `--markdown-version <value>` | markdown_version. |
+
+**Example:** `notion personal api retrieve-page-markdown --page-id <value>`
+
+### `notion api update-page-markdown`
+
+Update a page's content as markdown — write (PATCH /v1/pages/{page_id}/markdown)
+
+**Changes something in the service.**
+
+```sh
+notion api update-page-markdown [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--page-id <value>` | page_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-page-markdown --page-id <value>`
+
+### `notion api retrieve-async-task`
+
+Retrieve an async task — read (GET /v1/async_tasks/{task_id})
+
+```sh
+notion api retrieve-async-task [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--task-id <value>` | task_id. |
+
+**Example:** `notion personal api retrieve-async-task --task-id <value>`
+
+### `notion api retrieve-a-block`
+
+Retrieve a block — read (GET /v1/blocks/{block_id})
+
+```sh
+notion api retrieve-a-block [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--block-id <value>` | block_id. |
+
+**Example:** `notion personal api retrieve-a-block --block-id <value>`
+
+### `notion api update-a-block`
+
+Update a block — write (PATCH /v1/blocks/{block_id})
+
+**Changes something in the service.**
+
+```sh
+notion api update-a-block [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--block-id <value>` | block_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-a-block --block-id <value>`
+
+### `notion api delete-a-block`
+
+Delete a block — destructive (DELETE /v1/blocks/{block_id})
+
+**Changes something in the service.**
+
+```sh
+notion api delete-a-block [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--block-id <value>` | block_id. |
+
+**Example:** `notion personal api delete-a-block --block-id <value>`
+
+### `notion api get-block-children`
+
+Retrieve block children — read (GET /v1/blocks/{block_id}/children)
+
+```sh
+notion api get-block-children [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--block-id <value>` | block_id. |
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+
+**Example:** `notion personal api get-block-children --block-id <value>`
+
+### `notion api patch-block-children`
+
+Append block children — write (PATCH /v1/blocks/{block_id}/children)
+
+**Changes something in the service.**
+
+```sh
+notion api patch-block-children [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--block-id <value>` | block_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api patch-block-children --block-id <value>`
+
+### `notion api retrieve-a-data-source`
+
+Retrieve a data source — read (GET /v1/data_sources/{data_source_id})
+
+```sh
+notion api retrieve-a-data-source [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--data-source-id <value>` | data_source_id. |
+
+**Example:** `notion personal api retrieve-a-data-source --data-source-id <value>`
+
+### `notion api update-a-data-source`
+
+Update a data source — write (PATCH /v1/data_sources/{data_source_id})
+
+**Changes something in the service.**
+
+```sh
+notion api update-a-data-source [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--data-source-id <value>` | data_source_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-a-data-source --data-source-id <value>`
+
+### `notion api post-database-query`
+
+Query a data source — read (POST /v1/data_sources/{data_source_id}/query)
+
+```sh
+notion api post-database-query [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--data-source-id <value>` | data_source_id. |
+| `--filter-properties <value>` | filter_properties. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api post-database-query --data-source-id <value>`
+
+### `notion api create-a-database`
+
+Create a data source — write (POST /v1/data_sources)
+
+**Changes something in the service.**
+
+```sh
+notion api create-a-database [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api create-a-database`
+
+### `notion api list-data-source-templates`
+
+List templates in a data source — read (GET /v1/data_sources/{data_source_id}/templates)
+
+```sh
+notion api list-data-source-templates [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--data-source-id <value>` | data_source_id. |
+| `--name <value>` | name. |
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+
+**Example:** `notion personal api list-data-source-templates --data-source-id <value>`
+
+### `notion api retrieve-database`
+
+Retrieve a database — read (GET /v1/databases/{database_id})
+
+```sh
+notion api retrieve-database [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--database-id <value>` | database_id. |
+
+**Example:** `notion personal api retrieve-database --database-id <value>`
+
+### `notion api update-database`
+
+Update a database — write (PATCH /v1/databases/{database_id})
+
+**Changes something in the service.**
+
+```sh
+notion api update-database [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--database-id <value>` | database_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-database --database-id <value>`
+
+### `notion api create-database`
+
+Create a database — write (POST /v1/databases)
+
+**Changes something in the service.**
+
+```sh
+notion api create-database [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api create-database`
+
+### `notion api post-search`
+
+Search by title — read (POST /v1/search)
+
+```sh
+notion api post-search [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--filter-properties <value>` | filter_properties. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api post-search`
+
+### `notion api list-comments`
+
+List comments — read (GET /v1/comments)
+
+```sh
+notion api list-comments [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--block-id <value>` | block_id. |
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+
+**Example:** `notion personal api list-comments --block-id <value>`
+
+### `notion api create-a-comment`
+
+Create a comment — write (POST /v1/comments)
+
+**Changes something in the service.**
+
+```sh
+notion api create-a-comment [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api create-a-comment`
+
+### `notion api retrieve-comment`
+
+Retrieve a comment — read (GET /v1/comments/{comment_id})
+
+```sh
+notion api retrieve-comment [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--comment-id <value>` | comment_id. |
+
+**Example:** `notion personal api retrieve-comment --comment-id <value>`
+
+### `notion api update-a-comment`
+
+Update a comment — write (PATCH /v1/comments/{comment_id})
+
+**Changes something in the service.**
+
+```sh
+notion api update-a-comment [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--comment-id <value>` | comment_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-a-comment --comment-id <value>`
+
+### `notion api delete-a-comment`
+
+Delete a comment — destructive (DELETE /v1/comments/{comment_id})
+
+**Changes something in the service.**
+
+```sh
+notion api delete-a-comment [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--comment-id <value>` | comment_id. |
+
+**Example:** `notion personal api delete-a-comment --comment-id <value>`
+
+### `notion api list-file-uploads`
+
+List file uploads — read (GET /v1/file_uploads)
+
+```sh
+notion api list-file-uploads [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--status <value>` | status. |
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+
+**Example:** `notion personal api list-file-uploads`
+
+### `notion api create-file`
+
+Create a file upload — write (POST /v1/file_uploads)
+
+**Changes something in the service.**
+
+```sh
+notion api create-file [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api create-file`
+
+### `notion api complete-file-upload`
+
+Complete a multi-part file upload — write (POST /v1/file_uploads/{file_upload_id}/complete)
+
+**Changes something in the service.**
+
+```sh
+notion api complete-file-upload [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--file-upload-id <value>` | file_upload_id. |
+
+**Example:** `notion personal api complete-file-upload --file-upload-id <value>`
+
+### `notion api retrieve-file-upload`
+
+Retrieve a file upload — read (GET /v1/file_uploads/{file_upload_id})
+
+```sh
+notion api retrieve-file-upload [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--file-upload-id <value>` | file_upload_id. |
+
+**Example:** `notion personal api retrieve-file-upload --file-upload-id <value>`
+
+### `notion api list-custom-emojis`
+
+List custom emojis — read (GET /v1/custom_emojis)
+
+```sh
+notion api list-custom-emojis [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+| `--name <value>` | name. |
+
+**Example:** `notion personal api list-custom-emojis`
+
+### `notion api list-views`
+
+List views — read (GET /v1/views)
+
+```sh
+notion api list-views [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--database-id <value>` | database_id. |
+| `--data-source-id <value>` | data_source_id. |
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+
+**Example:** `notion personal api list-views`
+
+### `notion api create-view`
+
+Create a view — write (POST /v1/views)
+
+**Changes something in the service.**
+
+```sh
+notion api create-view [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api create-view`
+
+### `notion api retrieve-a-view`
+
+Retrieve a view — read (GET /v1/views/{view_id})
+
+```sh
+notion api retrieve-a-view [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--view-id <value>` | view_id. |
+
+**Example:** `notion personal api retrieve-a-view --view-id <value>`
+
+### `notion api update-a-view`
+
+Update a view — write (PATCH /v1/views/{view_id})
+
+**Changes something in the service.**
+
+```sh
+notion api update-a-view [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--view-id <value>` | view_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-a-view --view-id <value>`
+
+### `notion api delete-view`
+
+Delete a view — destructive (DELETE /v1/views/{view_id})
+
+**Changes something in the service.**
+
+```sh
+notion api delete-view [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--view-id <value>` | view_id. |
+
+**Example:** `notion personal api delete-view --view-id <value>`
+
+### `notion api create-view-query`
+
+Create a view query — read (POST /v1/views/{view_id}/queries)
+
+```sh
+notion api create-view-query [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--view-id <value>` | view_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api create-view-query --view-id <value>`
+
+### `notion api get-view-query-results`
+
+Get view query results — read (GET /v1/views/{view_id}/queries/{query_id})
+
+```sh
+notion api get-view-query-results [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--view-id <value>` | view_id. |
+| `--query-id <value>` | query_id. |
+| `--start-cursor <value>` | start_cursor. |
+| `--page-size <value>` | page_size. |
+
+**Example:** `notion personal api get-view-query-results --view-id <value> --query-id <value>`
+
+### `notion api delete-view-query`
+
+Delete a view query — destructive (DELETE /v1/views/{view_id}/queries/{query_id})
+
+**Changes something in the service.**
+
+```sh
+notion api delete-view-query [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--view-id <value>` | view_id. |
+| `--query-id <value>` | query_id. |
+
+**Example:** `notion personal api delete-view-query --view-id <value> --query-id <value>`
+
+### `notion api create-meeting-note`
+
+Create a meeting note — write (POST /v1/blocks/meeting_notes)
+
+**Changes something in the service.**
+
+```sh
+notion api create-meeting-note [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api create-meeting-note`
+
+### `notion api query-meeting-notes`
+
+Query meeting notes — read (POST /v1/blocks/meeting_notes/query)
+
+```sh
+notion api query-meeting-notes [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api query-meeting-notes`
+
+### `notion api query-agents`
+
+Query agents — read (POST /v1/agents/query)
+
+```sh
+notion api query-agents [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api query-agents`
+
+### `notion api get-agent`
+
+Get agent — read (GET /v1/agents/{agent_id})
+
+```sh
+notion api get-agent [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--agent-id <value>` | agent_id. |
+| `--verbose <value>` | verbose. |
+
+**Example:** `notion personal api get-agent --agent-id <value>`
+
+### `notion api update-agent`
+
+Update agent — write (PATCH /v1/agents/{agent_id})
+
+**Changes something in the service.**
+
+```sh
+notion api update-agent [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--agent-id <value>` | agent_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-agent --agent-id <value>`
+
+### `notion api delete-agent`
+
+Delete agent — destructive (DELETE /v1/agents/{agent_id})
+
+**Changes something in the service.**
+
+```sh
+notion api delete-agent [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--agent-id <value>` | agent_id. |
+
+**Example:** `notion personal api delete-agent --agent-id <value>`
+
+### `notion api get-agent-insights`
+
+Get agent insights — read (GET /v1/agents/{agent_id}/insights)
+
+```sh
+notion api get-agent-insights [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--agent-id <value>` | agent_id. |
+| `--start-time <value>` | start_time. |
+| `--end-time <value>` | end_time. |
+
+**Example:** `notion personal api get-agent-insights --agent-id <value>`
+
+### `notion api update-agent-status`
+
+Update agent status — write (PATCH /v1/agents/{agent_id}/status)
+
+**Changes something in the service.**
+
+```sh
+notion api update-agent-status [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--agent-id <value>` | agent_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-agent-status --agent-id <value>`
+
+### `notion api update-agent-credit-limit`
+
+Update agent credit limit — write (PATCH /v1/agents/{agent_id}/credit_limit)
+
+**Changes something in the service.**
+
+```sh
+notion api update-agent-credit-limit [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--agent-id <value>` | agent_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-agent-credit-limit --agent-id <value>`
+
+### `notion api agent-batch`
+
+Apply many agent operations — write (POST /v1/agents/batch)
+
+**Changes something in the service.**
+
+```sh
+notion api agent-batch [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api agent-batch`
+
+### `notion api list-skills-plugins`
+
+List skills plugins — read (GET /v1/ai/plugins)
+
+```sh
+notion api list-skills-plugins [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--page-size <value>` | page_size. |
+| `--start-cursor <value>` | start_cursor. |
+
+**Example:** `notion personal api list-skills-plugins`
+
+### `notion api get-plugin-directory`
+
+Get a plugin directory — read (GET /v1/ai/plugins/{id})
+
+```sh
+notion api get-plugin-directory [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--id <value>` | id. |
+
+**Example:** `notion personal api get-plugin-directory --id <value>`
+
+### `notion api get-skill-directory`
+
+Get a skill directory — read (GET /v1/ai/skills/{id})
+
+```sh
+notion api get-skill-directory [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--id <value>` | id. |
+
+**Example:** `notion personal api get-skill-directory --id <value>`
+
+### `notion api update-session`
+
+Update a session — write (POST /v1/sessions)
+
+**Changes something in the service.**
+
+```sh
+notion api update-session [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api update-session`
+
+### `notion api retrieve-session`
+
+Retrieve a session — read (GET /v1/sessions/{session_id})
+
+```sh
+notion api retrieve-session [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--session-id <value>` | session_id. |
+
+**Example:** `notion personal api retrieve-session --session-id <value>`
+
+### `notion api query-sessions`
+
+Query sessions — read (POST /v1/sessions/query)
+
+```sh
+notion api query-sessions [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api query-sessions`
+
+### `notion api query-session-events`
+
+Query session events — read (POST /v1/sessions/{session_id}/events/query)
+
+```sh
+notion api query-session-events [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--session-id <value>` | session_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api query-session-events --session-id <value>`
+
+### `notion api cancel-session`
+
+Cancel a session — write (POST /v1/sessions/{session_id}/cancel)
+
+**Changes something in the service.**
+
+```sh
+notion api cancel-session [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--session-id <value>` | session_id. |
+| `--body <json>` | the request body as JSON; - reads it from stdin. |
+| `--body-file <path>` | the request body from a JSON file; - is stdin. |
+
+**Example:** `notion personal api cancel-session --session-id <value>`
+
 ## `notion doctor`
 
 the state this installation is in, without connecting unless --online
@@ -517,8 +1554,8 @@ notion runs list [query] [options]
 
 | Option | What it does |
 |---|---|
-| `--limit <n>` | how many to show. Default: `20`. |
-| `--page <n>` | which page, starting at 1. Default: `1`. |
+| `--limit <n>` | how many to show. |
+| `--page <n>` | which page, starting at 1. |
 
 **Returns:** run — run_id, command, started_at, status, cli_version, profile, completed_at, requests, and 23 more; every field: notion commands info runs list
 

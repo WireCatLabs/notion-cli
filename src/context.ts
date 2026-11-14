@@ -12,7 +12,7 @@ import { Pacer, pacePathFor } from "@wirecat/cli-core/sends"
 import type { Command } from "commander"
 import { configuration } from "./config.js"
 import { IDENTITY } from "./identity.js"
-import { notionClient, PACE, QUERY_PACE } from "./notion/client.js"
+import { notionClient, notionFetch, PACE, QUERY_PACE } from "./notion/client.js"
 import { NOTION } from "./notion/errors.js"
 import { type LiveReads, liveReads } from "./notion/notion.js"
 
@@ -50,22 +50,26 @@ export const tokenOf = (command: Command): string => {
   return tokens.need(profile)
 }
 
-/** Notion for one run: the SDK over hostFetch, paced per profile, a slower pace of its own for data source queries. */
-export const notionFor = (command: Command, token: string, events: EventSink): LiveReads => {
+/** Notion's transport for one run: hostFetch, paced per profile, a slower pace of its own for data source queries. */
+const transportOf = (command: Command, events: EventSink) => {
   const { environment, env, profile } = contextOf(command)
   const pace = pacePathFor(IDENTITY, profile, env)
-  return liveReads(
-    notionClient({
-      token,
-      events,
-      signal: environment.signal,
-      fetch: environment.fetch,
-      pacer: new Pacer(pace, PACE),
-      ...(environment.sleep ? { sleep: environment.sleep } : {}),
-      queryPacer: new Pacer(pace.replace(/\.json$/u, ".queries.json"), QUERY_PACE),
-    }),
-  )
+  return {
+    events,
+    signal: environment.signal,
+    fetch: environment.fetch,
+    pacer: new Pacer(pace, PACE),
+    ...(environment.sleep ? { sleep: environment.sleep } : {}),
+    queryPacer: new Pacer(pace.replace(/\.json$/u, ".queries.json"), QUERY_PACE),
+  }
 }
+
+/** Notion for one run: the SDK over the run's transport. */
+export const notionFor = (command: Command, token: string, events: EventSink): LiveReads =>
+  liveReads(notionClient({ token, ...transportOf(command, events) }))
+
+/** The same transport for the generated `api` commands; their executor records each request in the run itself. */
+export const notionFetchFor = (command: Command) => notionFetch(transportOf(command, () => {}))
 
 /**
  * Every Notion call goes through here: inside cli-core's run, so `--timeout` bounds it, a failure or `--record` keeps

@@ -84,7 +84,7 @@ const blockedAnswer = async (response: Response): Promise<boolean> => {
  * of the call under its path template. A failure to reach Notion is already a retryable CliError from `hostFetch`.
  */
 const attempt =
-  (send: FetchLike, options: NotionClientOptions): FetchLike =>
+  (send: FetchLike, options: Omit<NotionClientOptions, "token">): FetchLike =>
   async (input, init = {}) => {
     const url = new URL(String(input))
     const method = (init.method ?? "GET").toUpperCase()
@@ -108,12 +108,8 @@ const attempt =
     }
   }
 
-/**
- * The only code that holds the token: the SDK puts it in the Authorization header. The SDK's own retries and console
- * logger are off: retries are cli-base's, paced by cli-core's Pacer, and the logger would print Notion's messages and
- * answer bodies (WC-SECR-6, WC-OUT-20).
- */
-export const notionClient = (options: NotionClientOptions): Client => {
+/** Every request's one path to Notion: paced per profile, retried by cli-base, data source queries on a pace of their own. */
+export const notionFetch = (options: Omit<NotionClientOptions, "token">): FetchLike => {
   const once = attempt(
     hostFetch({ hosts: [API_HOST], timeoutMs: EXCHANGE_MS, ...(options.fetch ? { fetch: options.fetch } : {}) }),
     options,
@@ -131,8 +127,16 @@ export const notionClient = (options: NotionClientOptions): Client => {
       ? both(options.pacer, options.queryPacer)
       : (options.queryPacer ?? options.pacer)
   const queries = retrying(once, { ...common, ...(queryPacer ? { pacer: queryPacer } : {}) })
-  const fetch: FetchLike = (input, init) =>
-    (QUERY.test(new URL(String(input)).pathname) ? queries : general)(input, init)
+  return (input, init) => (QUERY.test(new URL(String(input)).pathname) ? queries : general)(input, init)
+}
+
+/**
+ * The SDK puts the token in the Authorization header, as the `api` commands' executor does. The SDK's own retries and console
+ * logger are off: retries are cli-base's, paced by cli-core's Pacer, and the logger would print Notion's messages and
+ * answer bodies (WC-SECR-6, WC-OUT-20).
+ */
+export const notionClient = (options: NotionClientOptions): Client => {
+  const fetch = notionFetch(options)
   return new Client({
     auth: options.token,
     notionVersion: NOTION_VERSION,

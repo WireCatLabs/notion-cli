@@ -290,6 +290,14 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
       answer: (id) => (id in pages ? { status: 200, body: page(id) } : notionError(404, "object_not_found")),
     },
     {
+      // https://developers.notion.com/reference/patch-page
+      method: "PATCH",
+      path: new RegExp(`^/v1/pages/(${UUID})$`, "u"),
+      query: [],
+      body: ["properties", "icon", "cover", "in_trash", "is_locked"],
+      answer: (id) => (id in pages ? { status: 200, body: page(id) } : notionError(404, "object_not_found")),
+    },
+    {
       // https://developers.notion.com/reference/query-a-data-source
       method: "POST",
       path: new RegExp(`^/v1/data_sources/(${UUID})/query$`, "u"),

@@ -8,7 +8,9 @@
       "!.claude",
       "!pnpm-lock.yaml",
       "!config/wirecat",
-      "!contracts/wirecat.json"
+      "!contracts/wirecat.json",
+      "!spec/notion/openapi.json",
+      "!src/generated/definitions.ts"
     ]
   },
   "extends": ["./config/wirecat/biome.base.json"],

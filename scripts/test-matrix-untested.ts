@@ -1,3 +1,19 @@
+import { createProgram } from "./command-program.ts"
+
+const GENERATED =
+  "generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through " +
+  "retrieve-a-page, post-search, delete-a-block and api call, and scripts/notion-spec.test.ts checks the generation"
+
+type Node = { name(): string; commands: readonly Node[]; options: readonly { long?: string }[] }
+const api = (createProgram() as unknown as Node).commands.find((command) => command.name() === "api")
+const generatedOptions = [
+  ...new Set(
+    (api?.commands ?? [])
+      .filter((command) => !["list", "show", "call"].includes(command.name()))
+      .flatMap((command) => command.options.map((option) => option.long ?? "")),
+  ),
+].filter((name) => name && name !== "--help")
+
 const SHARED_MCP =
   "cli-core's appMcpCommand; its app-mcp-command and mcp-server-command tests drive it, and src/mcp.test.ts runs " +
   "this CLI's own server, config, revoke and refusals"
@@ -5,6 +21,8 @@ const SHARED_REPORTS = "cli-core's appDoctorCommand; its app-mcp-command test cr
 const LONG_RUNNING = `starts an HTTP server or a background process that runs until stopped; ${SHARED_MCP}`
 
 export const UNTESTED: { command: string; option?: string; reason: string }[] = [
+  { command: "api *", reason: GENERATED },
+  ...generatedOptions.map((option) => ({ command: "api *", option, reason: GENERATED })),
   {
     command: "",
     option: "--help-all",

@@ -17,6 +17,8 @@ export default defineConfig({
         "src/testing/**",
         // The entry point: one line handing argv to run(), which the suite drives directly.
         "src/bin/**",
+        // Generated from Notion's OpenAPI document; scripts/notion-spec.test.ts and src/commands/api.test.ts cover it.
+        "src/generated/**",
       ],
       reporter: ["text-summary", "json-summary"],
       thresholds: {
