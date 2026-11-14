@@ -22,17 +22,18 @@ Delete this section once every step is done (WC-DOC-3).
 
 - **Category:** files and documents
 - **Content languages:** en, ru, es
-- **Sign-in:** an API token or key; a browser sign-in (OAuth) comes in a later slice, see [Sign-in](#sign-in)
+- **Sign-in:** an API token or key; a browser sign-in (OAuth) comes last, see [Sign-in](#sign-in)
 - **The API:** an official API with an official client library
 - **How people filter:** by time, by person, by container (chat, folder, calendar), by words in the text, by status or label
 - **Never in the store, a log or the output:** tokens and passwords, links that carry a secret
-- **Untrusted input:** files and attachments, links, names and titles set by others
+- **Untrusted input:** page and row text written by other members, files and attachments, links, names and titles set
+  by others
 
 ## Reference CLI
 
 Learn from [drive-cli](https://github.com/WireCatLabs/drive-cli). Where drive-cli keeps code of its own for something
 cli-core now shares (profiles, the profile lock, the permission policy, the MCP server, session commands), follow
-gcal-cli, mail-cli and bitrix24-cli instead. bitrix24-cli is also the model for two sign-in kinds on one profile.
+gcal-cli, mail-cli and bitrix24-cli instead.
 
 ## Content languages
 
@@ -46,66 +47,76 @@ a folder of Markdown files and a Notion page tree in step, both ways.
 
 The work goes in this order, each step one pull request:
 
-1. Sign-in, `doctor`, and reading one page live, as Markdown. No store.
+1. Sign-in with a token, `doctor`, and reading one page live, as Markdown. No store.
 2. Sync into the shared store, search and MCP.
 3. Databases: their rows, with their properties.
 4. Search by a property (`status:Done`).
-5. Sign-in in the browser (OAuth).
-6. Writes: create, update and trash a page.
-7. A local folder kept in step with a Notion page tree.
-8. The raw API, comments and files.
+5. Writes: create, update and delete a page.
+6. A local folder kept in step with a Notion page tree.
+7. The raw API, comments and files.
+8. Sign-in in the browser (OAuth), if the owner keeps it.
+
+Every request runs inside cli-core's command run (WC-LIFE-15, WC-LIFE-17).
 
 ## Sign-in
 
-Two kinds of sign-in, both per profile, as in bitrix24-cli. Every secret lives in the system keyring (a private file
-only when the keyring fails or `--credential-storage file` is given); nothing is kept on a WireCat server.
+Every secret lives in the system keyring (a private file only when the keyring fails or `--credential-storage file`
+is given). Nothing is kept on a WireCat server.
 
-- **A token, first.** `notion <profile> session start` asks for the token hidden, or reads it from stdin, checks it
-  against Notion (`GET /v1/users/me`), and keeps it under the keyring account `token:<profile>`. Two kinds of token
-  work:
+- **A token.** `notion <profile> session start` asks for the token hidden, or reads it from stdin, checks it against
+  Notion ([retrieve your token's bot user](https://developers.notion.com/reference/get-self)), and keeps it under the
+  keyring account `token:<profile>`. Two kinds of token work:
   - a [personal access token](https://developers.notion.com/guides/connections-and-tokens/personal-access-tokens),
     which acts with the person's own rights and expires after at most one year;
   - an internal connection's token, which sees only the pages shared with that connection.
-- **OAuth, later.** `session start --client-id <id>` signs in through a public Notion connection in the browser:
-  - The connection's secret is asked hidden and kept in the keyring with the tokens under `oauth:notion:<profile>`.
-  - Notion's token endpoint takes the client id and secret as HTTP Basic and a JSON body
-    ([authorization guide](https://developers.notion.com/guides/get-started/authorization)), so the provider
-    supplies its own `exchange`.
-  - Each refresh returns a new refresh token, and replaying an old one can revoke the whole grant
-    ([MCP client guide](https://developers.notion.com/guides/mcp/build-mcp-client)). cli-core's token keeper
-    refreshes under one lock for every process, which this needs.
-  - Notion's documentation does not say whether a `localhost` redirect with any port is accepted. The browser
-    therefore returns to a fixed relay page on wirecat.dev, which forwards the code to the local port and stores
-    nothing, as bitrix24-cli does.
+- **OAuth, last.** Through a public Notion connection in the browser, under `oauth:notion:<profile>`. A profile uses
+  one kind of sign-in; starting the other replaces it.
+  - Notion's token endpoint takes the client id and secret as HTTP Basic and a JSON body, and each refresh returns a
+    new refresh token ([authorization guide](https://developers.notion.com/guides/get-started/authorization)).
+    cli-core's token keeper refreshes under one lock for every process, so a rotated token is never sent twice.
+  - The secret is needed for every exchange, and Notion does not call its clients public. So no WireCat app can ship
+    inside the tool (WC-SECR-25): the person registers their own public connection, its secret is asked hidden and
+    kept in the keyring, and `doctor` reports that WireCat has no app, with the reason.
+  - cli-core's sign-in listens on a random local port, and a connection matches its redirect address exactly.
+    Either cli-core gets a fixed local port, which the person registers with their own connection, or the browser
+    returns to a fixed relay page that forwards the code to the local port and stores nothing, as bitrix24-cli does.
 
 `session status`, `session list` and `session end` work as in the template sample. `session end` removes only this
-tool's own entries. The official Notion CLI keeps its tokens under the same keyring service name, `notion-cli`, with a
+tool's own entries. Notion's own CLI keeps its tokens under the same keyring service name, `notion-cli`, with a
 workspace id as the account; this tool never lists, reads or removes an account it did not write.
+
+The environment variable for a token must not be `NOTION_TOKEN`: Notion's own MCP server reads that name, and a
+token set for it would silently sign every profile in. The prefix is settled in step 1.
 
 ## Commands
 
-The command names are drive-cli's wherever the thing is the same. A difference has its reason here.
+The command names are drive-cli's and the shared vocabulary's wherever the thing is the same. A difference has its
+reason here.
 
 | Command | What it does | drive-cli |
 | --- | --- | --- |
-| `session start\|status\|end\|list`, `account remove` | sign-in, as above | same, plus `status` |
-| `roots add\|list\|browse\|remove` | choose the pages and databases to sync | `folders …`: Notion has no folders; a root is a page or a database |
+| `session start\|status\|end\|list`, `account remove` | sign-in, as above | same; `status` is required (WC-ACCT-12) |
+| `folders add\|list\|browse\|remove` | choose the pages and databases to sync | same name; a Notion "folder" is a page or a database |
 | `sync`, `status` | copy the chosen pages into the store; report coverage | same |
-| `documents list\|show\|export\|context` | read the local copy | same |
+| `documents list\|show\|export\|context\|add` | read the local copy; `add` one page by its link | same |
 | `documents get` | read one page live, as Markdown | same |
-| `documents create\|update\|trash` | write a page | `create\|update`; Notion trashes instead of deleting |
-| `databases list\|show\|query\|resolve` | a database, its data sources and rows, live | Notion only, as `sheets` is Drive only |
-| `search` | the local copy, Lucene syntax | same |
+| `documents create\|update\|delete\|restore` | write a page; `delete` moves it to Notion's trash | `create\|update`; Notion has a trash to restore from |
+| `databases list\|show` | a database, its data sources (their ids) and its properties, live | Notion only, as `sheets` is Drive only |
+| `search` | the local copy, Lucene syntax; database rows are searched here, not by a separate query | same |
 | `catalog`, `tags`, `relationships`, `notes`, `memories`, `facts`, `identities` | the knowledge layer over documents | same |
 | `mirrors add\|list\|remove\|status\|sync\|watch` | a local Markdown folder in step with a page tree | same |
-| `comments list\|add` | page comments | same group name |
+| `comments list\|create\|reply` | page comments | same group name |
 | `api list\|show\|call`, one command per operation | the raw API, from Notion's OpenAPI document | same |
 | `doctor`, `config`, `mcp`, `skill`, `runs`, `upgrade`, `commands` | from cli-core | same |
+
+drive-cli commands with no Notion counterpart: `documents check` and `documents history`, `revisions` (page history is
+out of scope), `files` (Notion stores files inside pages), `permissions` (no command changes who sees a page),
+`store` (an import for old drive installs).
 
 Notion's own CLI and MCP server show what users trip on. This tool takes three of their ideas:
 
 - `documents update` refuses to delete child pages and databases unless `--allow-deleting-content` is given;
-- `databases resolve` turns a database id into its data source ids;
+- `databases show` gives a database's data source ids, which every query after Notion's 2025-09-03 version needs;
 - `api` lists the operations and prints each one's spec.
 
 ## Further answers
@@ -113,24 +124,34 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
 ### Storing, indexing, syncing and deleting
 
 1. **What is kept.** Each page and each database row is a `documents` record through cli-core's document ingestion,
-   under the provider `notion` (kind `documents`, registered on every run that opens the store). The account is the
-   Notion workspace the token belongs to; the record's external id is the page id; the catalog kind is `page` or
-   `database`. The page text is Notion's own Markdown export
-   ([retrieve a page as Markdown](https://developers.notion.com/reference/retrieve-page-markdown), version 2). A
-   row's properties go into its front matter, so they are searchable as words from step 3, and as fields from step 4.
-   Authors and editors are recorded as identities. File links that Notion signs are never stored: they carry a
-   secret and expire after an hour.
+   under the provider `notion` (kind `documents`, registered on every run that opens the store).
+   - The account is one sign-in's view of a workspace: the workspace id plus the token's bot id. Two profiles in one
+     workspace see different pages, so they are different accounts.
+   - The record's external id is the page id. In the catalog a page is a `file` and a database a `folder`, with
+     Notion's type kept beside it. A page with child pages is both; that waits for a shared change in cli-core.
+   - The page text is Notion's own Markdown export
+     ([retrieve a page as Markdown](https://developers.notion.com/reference/retrieve-page-markdown), version 2). A
+     row's properties go into its front matter, so they are searchable as words from step 3, and as fields from
+     step 4. Authors and editors are recorded as identities.
+   - File links that Notion signs carry a secret and expire after an hour. They are removed from the text before it
+     is stored.
 2. **How it syncs.** On demand (`sync`), on a schedule (`jobs`), and kept running by `mirrors watch`. Notion has no
    change feed, so the position is a time mark:
-   - The first sync walks the chosen roots: child pages, and the rows of each database.
+   - The first sync walks the chosen folders: child pages, and the rows of each database.
    - Later syncs read the pages edited since the mark, with a two-minute overlap, because Notion's timestamps
-     appear to be rounded to the minute (to be confirmed against the live API in step 2). They come from search sorted by `last_edited_time`, and from each chosen database
-     filtered by `last_edited_time`.
+     appear to be rounded to the minute (to be confirmed against the live API in step 2). They come from search
+     sorted by `last_edited_time`, and from each chosen database filtered by `last_edited_time`.
    - Notion says its search is not complete and lags behind edits
      ([search limitations](https://developers.notion.com/reference/search-optimizations-and-limitations)). So a full
      walk runs again on a schedule and with `sync --rescan`, and that walk finds deleted pages.
-   - Requests are paced below Notion's limit of 180 a minute per connection
-     ([request limits](https://developers.notion.com/reference/request-limits)) and wait for `Retry-After`.
+   - A database query stops at 10,000 rows and says so
+     ([query a data source](https://developers.notion.com/reference/query-a-data-source)); the store's catalog takes
+     at most 10,000 entries per scope. Every page of results is checked, and a folder that would pass a limit fails
+     with an error that names it, never a silent cut.
+   - Requests are paced below Notion's limit of 180 a minute per connection, with a second, slower pace for database
+     queries ([request limits](https://developers.notion.com/reference/request-limits)), through cli-core's pacer.
+     cli-base's retry waits for `Retry-After`; search and database queries are POST, so they are marked as reads.
+   - `sync --limit` bounds one run (WC-LIFE-16), and `status` answers in the shared shape (WC-LIFE-14).
 3. **When Notion deletes a page.** It leaves the next full walk, is confirmed gone by asking Notion for it directly
    (a page missing from search is not proof), and is marked deleted in the store, never wiped.
 4. **Local deletion.** One account with `account remove`, as in drive-cli; the store's own commands cover the rest.
@@ -145,28 +166,28 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
 
 1. The system keyring, as above.
 2. Every write is a permission key of its own and goes through cli-core's guard and write journal, with `--dry-run`.
-   Proposed levels: creating and updating a page `ask`; trashing a page `ask`; deleting child pages through an
-   update needs its own flag on top. No command shares a page or changes who can see it.
+   As in gcal-cli and drive-cli, creating and updating a page is allowed, and deleting one asks first. Deleting child
+   pages through an update needs its own flag on top. No command shares a page or changes who can see it.
 
 ## Keeping a local folder in step
 
 `mirrors` uses cli-core's mirror engine, as drive-cli does: a three-way merge of Markdown blocks, conflicts settled
-with `--keep local|notion|both`, nothing deleted on the other side. The Notion side reads a page as Markdown and
-writes only the changed parts with
-[update page Markdown](https://developers.notion.com/reference/update-page-markdown). Child pages are never deleted.
+with `--keep`, nothing deleted on the other side. The Notion side reads a page as Markdown and writes only the
+changed parts with [update page Markdown](https://developers.notion.com/reference/update-page-markdown). Notion applies
+the parts that match and only warns about the rest, so a warning counts as a failed write. Child pages are never
+deleted.
 
 ## Open questions for the owner
 
-- **A WireCat public connection for OAuth.** It would let people sign in without making their own connection. Its
-  secret would have to ship with the tool; Notion treats it as confidential. Until decided, OAuth uses the person's
-  own connection.
-- **The sync scope of a personal access token.** It sees the whole workspace. Proposed: sync only the chosen roots,
+- **OAuth.** With no WireCat app possible, it helps only people who cannot use a token. Keep it as the last step, or
+  drop it.
+- **The sync scope of a personal access token.** It sees the whole workspace. Proposed: sync only the chosen folders,
   with an explicit way to choose everything.
-- **Mirrors, to settle before step 7:**
+- **Mirrors, to settle before step 6:**
   - Where a page created from a local file keeps its origin key, so a create cut short is not repeated. Drive keeps
     it in a hidden file property. A Notion page has properties only inside a database.
   - Notion has no revision lock on a write. A check of `last_edited_time` before the write leaves a short race.
   - A Markdown edit must match its old text exactly once. A line that repeats (the same checklist item twice) needs
     a whole-page replace instead.
-  - Notion blocks the shared Markdown blocks cannot hold (toggles, callouts, mentions, child pages) must pass through
-    unchanged.
+  - Notion blocks the shared Markdown blocks cannot hold (toggles, callouts, mentions, child pages, and possibly
+    bookmarks and embeds) must pass through unchanged.
