@@ -91,7 +91,7 @@ reason here.
 | `catalog`, `tags`, `relationships`, `notes`, `memories`, `facts`, `identities` | the knowledge layer over documents | same |
 | `mirrors add\|list\|remove\|status\|sync\|watch` | a local Markdown folder in step with a page tree | same |
 | `comments list\|create\|reply` | page comments | same group name |
-| `api list\|show\|call`, one command per operation | the raw API, from Notion's OpenAPI document | same |
+| `api list\|show`, one command per operation | the raw API, from Notion's OpenAPI document | same |
 | `doctor`, `config`, `mcp`, `skill`, `runs`, `upgrade`, `commands` | from cli-core | same |
 
 drive-cli commands with no Notion counterpart: `documents check` and `documents history`, `revisions` (page history is

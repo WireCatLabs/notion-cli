@@ -51,7 +51,7 @@ export const tokenOf = (command: Command): string => {
 }
 
 /** Notion's transport for one run: hostFetch, paced per profile, a slower pace of its own for data source queries. */
-const transportOf = (command: Command, events: EventSink) => {
+const transportOf = (command: Command, events: EventSink | undefined) => {
   const { environment, env, profile } = contextOf(command)
   const pace = pacePathFor(IDENTITY, profile, env)
   return {
@@ -68,8 +68,8 @@ const transportOf = (command: Command, events: EventSink) => {
 export const notionFor = (command: Command, token: string, events: EventSink): LiveReads =>
   liveReads(notionClient({ token, ...transportOf(command, events) }))
 
-/** The same transport for the generated `api` commands; their executor records each request in the run itself. */
-export const notionFetchFor = (command: Command) => notionFetch(transportOf(command, () => {}))
+/** The same transport for the generated `api` commands, each attempt recorded in the run, as the SDK's are. */
+export const notionFetchFor = (command: Command) => notionFetch(transportOf(command, undefined))
 
 /**
  * Every Notion call goes through here: inside cli-core's run, so `--timeout` bounds it, a failure or `--record` keeps

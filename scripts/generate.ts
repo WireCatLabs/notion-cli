@@ -12,6 +12,7 @@ import {
   valibotGenerator,
   writeArtifacts,
 } from "@wirecat/cli-base/codegen"
+import { READ_POSTS } from "../src/notion/read-posts.ts"
 import { normalizeNotionSpec } from "./notion-spec.ts"
 
 const root = resolve(import.meta.dirname, "..")
@@ -40,15 +41,7 @@ const artifacts = generate(
   ],
   {
     banner: ["Source: spec/notion/openapi.json, verified by provenance.json", "Run: pnpm generate"],
-    overrides: {
-      "post-search": read("a POST that only searches"),
-      "post-database-query": read("a POST that only queries a data source"),
-      "create-view-query": read("a POST that runs a view's query; it changes no page"),
-      "query-meeting-notes": read("a POST that only lists meeting notes"),
-      "query-agents": read("a POST that only lists agents"),
-      "query-sessions": read("a POST that only lists sessions"),
-      "query-session-events": read("a POST that only lists a session's events"),
-    },
+    overrides: Object.fromEntries(Object.entries(READ_POSTS).map(([id, { reason }]) => [id, read(reason)])),
   },
 )
 const coverage = artifacts.find((artifact) => artifact.path === "docs/dev/API_COVERAGE.md")

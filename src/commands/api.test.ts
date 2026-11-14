@@ -6,13 +6,16 @@ import type { ServiceEnvironment } from "../context.js"
 import { operations } from "../generated/manifest.js"
 import { NOTION_VERSION } from "../generated/metadata.js"
 import { schemas } from "../generated/schemas.js"
-import { NOTION_VERSION as CLIENT_VERSION } from "../notion/client.js"
+import { NOTION_VERSION as CLIENT_VERSION, isRead } from "../notion/client.js"
+import { READ_POSTS } from "../notion/read-posts.js"
 import { run } from "../program.js"
 import { FAKE_TOKEN } from "../testing/fake-notion.js"
 import { signedIn } from "../testing/harness.js"
 
 const PAGE = "00000000-0000-4000-8000-0000000000a1"
 const BLOCK = "00000000-0000-4000-8000-0000000000b1"
+const BLOCKED_BLOCK = "00000000-0000-4000-8000-0000000000b2"
+const DOWN_PAGE = "00000000-0000-4000-8000-000000000503"
 
 interface Call {
   method: string
@@ -50,6 +53,18 @@ const fakeNotion = () => {
         type: "page_or_data_source",
       })
     if (route === `DELETE /v1/blocks/${BLOCK}`) return Response.json({ object: "block", id: BLOCK, in_trash: true })
+    if (route === `DELETE /v1/blocks/${BLOCKED_BLOCK}`)
+      return Response.json(
+        {
+          object: "error",
+          status: 429,
+          code: "rate_limited",
+          message: "blocked",
+          additional_data: { rate_limit_reason: "public_api_request_blocked" },
+        },
+        { status: 429 },
+      )
+    if (route === `GET /v1/pages/${DOWN_PAGE}`) return refuse(503, "service_unavailable")
     return refuse(400, "invalid_request_url")
   }
   return { fetch, calls }
@@ -73,6 +88,7 @@ const notion = async (argv: string[], service = fakeNotion(), answer?: (question
     tty: false,
     keyring: signedIn(),
     fetch: service.fetch,
+    sleep: async () => {},
     ...(answer ? { answer } : {}),
   }
   const code = await run(argv, options)
@@ -136,28 +152,46 @@ describe("notion api", () => {
     expect(preview.code).toBe(0)
     withPermissions({ "api.retrieve-a-page": "deny" })
     expect((await notion(["personal", "api", "retrieve-a-page", "--page-id", PAGE, "--json"], service)).code).toBe(5)
-    expect(
-      (
-        await notion(
-          ["personal", "api", "call", "retrieve-a-page", "--params", `{"page_id":"${PAGE}"}`, "--json"],
-          service,
-        )
-      ).code,
-    ).toBe(5)
     rmSync(configFile)
     const invalid = await notion(["personal", "api", "post-search", "--body", '{"sort":"sideways"}', "--json"], service)
     expect(invalid.code).toBe(2)
     expect(service.calls).toEqual([])
   })
 
-  it("calls an operation by name with the same checks, and lists and shows without calling Notion", async () => {
+  it("has no api call, whose own key would differ from the one its operation checks", async () => {
     const service = fakeNotion()
     const called = await notion(
       ["personal", "api", "call", "retrieve-a-page", "--params", `{"page_id":"${PAGE}"}`, "--json"],
       service,
     )
-    expect(called.code).toBe(0)
-    expect(called.json().item).toMatchObject({ id: PAGE })
+    expect(called.code).toBe(2)
+    expect(service.calls).toEqual([])
+  })
+
+  it("keeps Notion's refusal of a blocked connection on a write instead of calling it outcome_unknown", async () => {
+    const service = fakeNotion()
+    const refused = await notion(
+      ["personal", "api", "delete-a-block", "--block-id", BLOCKED_BLOCK, "--yes", "--json"],
+      service,
+    )
+    expect(refused.json()).toMatchObject({ error: { code: "permission_error", reason: "notion.blocked" } })
+    expect(service.calls).toHaveLength(1)
+  })
+
+  it("records every attempt of a retried read in the run, not one request", async () => {
+    const service = fakeNotion()
+    const down = await notion(["personal", "api", "retrieve-a-page", "--page-id", DOWN_PAGE, "--json"], service)
+    expect(down.code).not.toBe(0)
+    expect(service.calls).toHaveLength(4)
+    const listed = await notion(["runs", "list", "--limit", "50", "--json"])
+    const id = listed.json().items.find((one: { argv: string[] }) => one.argv.includes(DOWN_PAGE)).run_id as string
+    const shown = await notion(["runs", "show", id, "--json"])
+    const attempts = JSON.stringify(shown.json()).match(/GET \/v1\/pages\/:id/gu) ?? []
+    expect(attempts.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it("lists and shows without calling Notion", async () => {
+    const service = fakeNotion()
     const listed = await notion(["api", "list", "--json"], service)
     expect(listed.json().items).toHaveLength(61)
     expect(listed.json().items).toContainEqual(
@@ -175,7 +209,18 @@ describe("notion api", () => {
     expect(shown.json().item).toMatchObject({ notion_version: "2026-03-11", request_schema: expect.any(Object) })
     const oauth = await notion(["api", "show", "create-a-token", "--json"], service)
     expect(oauth.json()).toMatchObject({ error: { code: "not_found", message: expect.stringContaining("OAuth") } })
-    expect(service.calls).toHaveLength(1)
+    expect(service.calls).toEqual([])
+  })
+
+  it("marks as reads exactly the POSTs the client may send again", () => {
+    const readPosts = operations
+      .filter((one) => one.effect === "read" && one.binding.kind === "http" && one.binding.method === "POST")
+      .map((one) => [one.id, one.binding.kind === "http" ? one.binding.path : ""])
+    expect(Object.fromEntries(readPosts)).toEqual(
+      Object.fromEntries(Object.entries(READ_POSTS).map(([id, { path }]) => [id, path])),
+    )
+    for (const [, path] of readPosts)
+      expect(isRead("POST", new URL(`https://api.notion.com${String(path).replace(/\{[^}]+\}/gu, PAGE)}`))).toBe(true)
   })
 
   it("accepts the request bodies Notion's reference pages show, after the spec was rewritten for the adapter", () => {

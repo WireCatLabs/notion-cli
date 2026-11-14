@@ -22,7 +22,6 @@ describe("each remote command runs inside cli-core's run", () => {
       "api retrieve-a-page": ["personal", "api", "retrieve-a-page", "--page-id", PAGE_ID],
       "api post-search": ["personal", "api", "post-search", "--body", "{}"],
       "api patch-page": ["personal", "api", "patch-page", "--page-id", PAGE_ID, "--body", "{}"],
-      "api call": ["personal", "api", "call", "patch-page", "--params", `{"page_id":"${PAGE_ID}"}`, "--body", "{}"],
     },
     skip: {
       ...Object.fromEntries(

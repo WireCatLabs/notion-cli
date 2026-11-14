@@ -138,18 +138,6 @@
     {
       "path": [
         "api",
-        "call"
-      ],
-      "summary": "call one Notion API operation by name, its parameters as JSON",
-      "effects": {
-        "remote": "write",
-        "local": "write"
-      },
-      "permission": "api.call"
-    },
-    {
-      "path": [
-        "api",
         "get-self"
       ],
       "summary": "Retrieve your token's bot user — read (GET /v1/users/me)",

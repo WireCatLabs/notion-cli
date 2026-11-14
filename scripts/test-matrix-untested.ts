@@ -2,14 +2,14 @@ import { createProgram } from "./command-program.ts"
 
 const GENERATED =
   "generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through " +
-  "retrieve-a-page, post-search, delete-a-block and api call, and scripts/notion-spec.test.ts checks the generation"
+  "retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation"
 
 type Node = { name(): string; commands: readonly Node[]; options: readonly { long?: string }[] }
 const api = (createProgram() as unknown as Node).commands.find((command) => command.name() === "api")
 const generatedOptions = [
   ...new Set(
     (api?.commands ?? [])
-      .filter((command) => !["list", "show", "call"].includes(command.name()))
+      .filter((command) => !["list", "show"].includes(command.name()))
       .flatMap((command) => command.options.map((option) => option.long ?? "")),
   ),
 ].filter((name) => name && name !== "--help")

@@ -200,27 +200,6 @@ notion api show <operation>
 
 **Example:** `notion personal api show retrieve-a-page --json`
 
-### `notion api call`
-
-call one Notion API operation by name, its parameters as JSON
-
-**Changes something in the service.**
-
-```sh
-notion api call <operation> [options]
-```
-
-| Argument | | What it is |
-|---|---|---|
-| `operation` | required | the operation, as api list prints it. |
-
-| Option | What it does |
-|---|---|
-| `--params <json>` | path and query parameters as a JSON object. |
-| `--body <json>` | the request body as JSON; - reads it from stdin. |
-
-**Example:** `notion personal api call retrieve-a-page --params '{"page_id":"PAGE_ID"}'`, `notion personal api call post-search --body '{"query":"Plan"}'`
-
 ### `notion api get-self`
 
 Retrieve your token's bot user — read (GET /v1/users/me)

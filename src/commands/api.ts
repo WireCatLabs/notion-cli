@@ -3,7 +3,6 @@ import { CliError } from "@wirecat/cli-base"
 import type { ManifestOperation } from "@wirecat/cli-base/codegen"
 import { annotate } from "@wirecat/cli-base/commands"
 import {
-  type ApiCommandInput,
   checkApiBody,
   checkApiParameter,
   generatedApiCommand,
@@ -12,10 +11,7 @@ import {
   listOf,
   NO_EFFECTS,
   outputFor,
-  parseApiJson,
   queryTerms,
-  REMOTE_WRITE,
-  readApiBody,
   renderAnswer,
   termField,
   terminalAsker,
@@ -25,10 +21,8 @@ import { guardedWrite, guardFor, keyedGuard, levelFor, newOperationId } from "@w
 import { Command } from "commander"
 import { permissions } from "../config.js"
 import { contextOf, notionFetchFor, tokenOf } from "../context.js"
-import { definitions } from "../generated/definitions.js"
 import { operations } from "../generated/manifest.js"
 import { excluded, NOTION_VERSION } from "../generated/metadata.js"
-import { schemas } from "../generated/schemas.js"
 import { IDENTITY } from "../identity.js"
 import { API_HOST } from "../notion/client.js"
 import { failureOf } from "../notion/errors.js"
@@ -103,12 +97,19 @@ const execute = httpApiExecutor({
   failure: (status, answer) => notionRefusal(status, answer),
 })
 
-const checkParameter = (name: string, schema: ManifestOperation["parameters"][number]["schema"], raw: string) =>
-  checkApiParameter(name, schema, raw, schemas)
-const checkBody = (operation: ManifestOperation, text: string | undefined) => checkApiBody(operation, text, schemas)
+/** The schemas are 0.5 MB of code, loaded only once an `api` command is about to check its input. */
+let schemas: typeof import("../generated/schemas.js")["schemas"] | undefined
+const loadSchemas = async () => {
+  schemas ??= (await import("../generated/schemas.js")).schemas
+}
+const loaded = () => {
+  if (!schemas) throw new CliError("configuration_error", "the api schemas were not loaded before the command ran")
+  return schemas
+}
 
-const bucketOf = (input: ApiCommandInput, place: ManifestOperation["parameters"][number]["in"]) =>
-  place === "header" ? input.headers : place === "body" ? input.fields : input[place]
+const checkParameter = (name: string, schema: ManifestOperation["parameters"][number]["schema"], raw: string) =>
+  checkApiParameter(name, schema, raw, loaded())
+const checkBody = (operation: ManifestOperation, text: string | undefined) => checkApiBody(operation, text, loaded())
 
 const operationOf = (name: string): ManifestOperation => {
   const found = operations.find((operation) => operation.command === name || operation.id === name)
@@ -163,65 +164,15 @@ const showCommand = () =>
   })
     .description("show one operation's parameters and request schema, without calling Notion")
     .argument("<operation>", "the operation, as api list prints it")
-    .action(function (this: Command, name: string) {
+    .action(async function (this: Command, name: string) {
       const operation = operationOf(name)
+      const { definitions } = await import("../generated/definitions.js")
       const schema = operation.request?.schema ? definitions[operation.request.schema] : undefined
       renderAnswer(
         this,
         outputFor(this),
         itemOf({ operation, notion_version: NOTION_VERSION, ...(schema ? { request_schema: schema } : {}) }),
       )
-    })
-
-/** One call by name: the same checks and level as the operation's own command, `api.<operation>`, not `api.call`. */
-const callCommand = () =>
-  annotate(new Command("call"), {
-    mcp: false,
-    effects: REMOTE_WRITE,
-    offline: false,
-    examples: [
-      `${CLI} personal api call retrieve-a-page --params '{"page_id":"PAGE_ID"}'`,
-      `${CLI} personal api call post-search --body '{"query":"Plan"}'`,
-    ],
-  })
-    .description("call one Notion API operation by name, its parameters as JSON")
-    .argument("<operation>", "the operation, as api list prints it")
-    .option("--params <json>", "path and query parameters as a JSON object")
-    .option("--body <json>", "the request body as JSON; - reads it from stdin")
-    .action(async function (this: Command, name: string, options: { params?: string; body?: string }) {
-      const operation = operationOf(name)
-      const { settings } = contextOf(this)
-      const { level } = levelFor(settings.permissions, keyOf(operation), permissions.defaults)
-      if (level === "deny")
-        throw new CliError("permission_error", `profile ${settings.profile} denies ${keyOf(operation)}`, {
-          permission: keyOf(operation),
-        })
-      if (level === "readonly" && operation.effect !== "read")
-        throw new CliError("permission_error", `profile ${settings.profile} only reads with ${keyOf(operation)}`, {
-          permission: keyOf(operation),
-        })
-      const params = options.params === undefined ? {} : parseApiJson(options.params)
-      if (params === null || typeof params !== "object" || Array.isArray(params))
-        throw new CliError("validation_error", "--params takes a JSON object")
-      const input: ApiCommandInput = { path: {}, query: {}, headers: {}, fields: {} }
-      for (const [field, value] of Object.entries(params)) {
-        const parameter = operation.parameters.find((one) => one.name === field && one.in !== "body")
-        if (!parameter) throw new CliError("validation_error", `${operation.command} has no parameter ${field}`)
-        const raw = Array.isArray(value) ? value.join(",") : String(value)
-        const problem = checkParameter(field, parameter.schema, raw)
-        if (problem) throw new CliError("validation_error", problem)
-        bucketOf(input, parameter.in)[field] = raw
-      }
-      for (const parameter of operation.parameters)
-        if (
-          parameter.required &&
-          parameter.in !== "body" &&
-          bucketOf(input, parameter.in)[parameter.name] === undefined
-        )
-          throw new CliError("validation_error", `${operation.command} needs ${parameter.name} in --params`)
-      const body = checkBody(operation, readApiBody(options))
-      if (body !== undefined) input.body = body
-      await execute(this, operation, input)
     })
 
 export const apiCommand = (): Command => {
@@ -235,7 +186,7 @@ export const apiCommand = (): Command => {
   const api = annotate(new Command("api"), { effects: NO_EFFECTS }).description(
     "the raw Notion API, one command per operation of its OpenAPI document",
   )
-  api.addCommand(listCommand()).addCommand(showCommand()).addCommand(callCommand())
-  for (const child of generated.commands) api.addCommand(child)
+  api.addCommand(listCommand()).addCommand(showCommand())
+  for (const child of generated.commands) api.addCommand(child.hook("preAction", loadSchemas))
   return api
 }
