@@ -93,7 +93,7 @@ export interface NotionPage {
   object: "page"
   id: string
   created_time: string
-  /** Notion rounds it down to the minute. */
+  /** Notion rounds it to the minute (not checked live). */
   last_edited_time: string
   created_by?: NotionUser
   last_edited_by?: NotionUser

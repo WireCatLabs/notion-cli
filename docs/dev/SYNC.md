@@ -32,9 +32,10 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 
 1. **Search.** Pages and data sources, newest edit first, until the results are older than the mark minus the
    overlap (ten minutes by default, never under two).
-   - Notion rounds `last_edited_time` down to the minute
-     ([changelog](https://developers.notion.com/changelog/last-edited-time-is-now-rounded-to-the-nearest-minute)).
-     The overlap covers that rounding, a small clock difference, and a short delay in search's index.
+   - Notion rounds `last_edited_time` to the minute
+     ([changelog](https://developers.notion.com/changelog/last-edited-time-is-now-rounded-to-the-nearest-minute);
+     not yet checked against the live API). The overlap covers that rounding, a small clock difference, and a
+     short delay in search's index.
    - A page that comes back in the trash is removed.
    - A new database is handed to the engine, which reads all its rows.
 2. **Each database in scope**, queried for rows edited on or after the mark minus the overlap
@@ -52,7 +53,7 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 
 ## Two traps and how they are handled
 
-- **Two edits in the same minute.** Notion gives both the same `last_edited_time`. A page read less than three
+- **Two edits in the same minute.** Notion may give both the same `last_edited_time`. A page read less than three
   minutes after its last edit is marked as "not settled", and the next sync reads it again. When the text has not
   changed, the engine counts it as unchanged and writes nothing.
 - **Large databases.** A query stops at 10,000 rows and says so
@@ -70,7 +71,7 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 | A page is edited, and search indexes it within the overlap | search | the sync after indexing |
 | A page is edited, and search indexes it later than the overlap | the full walk | 24 hours, or `--rescan` |
 | A page or row is moved to the trash, deleted, or unshared | the full walk and a direct read | 24 hours, or `--rescan` |
-| A page is moved | search or the full walk | the next sync, or 24 hours |
+| A page is moved | the full walk; search too, if a move changes `last_edited_time` (not checked) | 24 hours |
 | A new database | search, or the full walk | the next sync, or 24 hours |
 
 What the sync does not promise:

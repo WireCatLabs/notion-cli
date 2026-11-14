@@ -17,7 +17,7 @@ import { pageText } from "./markdown.js"
 export const WORKSPACE_ROOT = "notion-workspace"
 
 const MINUTE = 60_000
-/** Notion rounds `last_edited_time` down to the minute; a read this soon after it may miss an edit in that minute. */
+/** Notion rounds `last_edited_time` to the minute; a read this soon after an edit may miss another in that minute. */
 export const SETTLE_MS = 3 * MINUTE
 export const MIN_OVERLAP_MS = 2 * MINUTE
 const DEFAULTS = { overlapMs: 10 * MINUTE, walkEveryMs: 24 * 60 * MINUTE, maxRequests: 2000 }
@@ -372,6 +372,11 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     const known = knownFiles()
     const items = new Map<string, SourceChange<NotionFile>>()
     const emit = (file: NotionFile) => items.set(file.id, { id: file.id, removed: false, file })
+    // The engine walks every folder it is sent, all its rows, so a database it already holds is not sent again.
+    const unheld = (file: NotionFile) => {
+      const before = known.get(file.id)
+      return !before || before.name !== file.name || before.parents[0] !== file.parents[0]
+    }
     const gone = (id: string) => items.set(id, { id, removed: true })
 
     const search = async (kind: "page" | "data_source") => {
@@ -398,13 +403,12 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
           }
           if (result.in_trash) continue
           const database = result.parent.database_id
-          const entry = { database, source: result.id }
-          if (!cursor.sources.some((item) => item.source === result.id)) cursor.sources.push(entry)
+          const inScope = roots.includes(WORKSPACE_ROOT) || known.has(database)
+          if (inScope && !cursor.sources.some((item) => item.source === result.id))
+            cursor.sources.push({ database, source: result.id })
           const file = await databaseFile(await reads.retrieveDatabase(database))
-          const before = known.get(database)
           if (file.trashed) gone(database)
-          // A database already held is not sent again: the engine walks every folder it is sent, all its rows.
-          else if (!before || before.name !== file.name || before.parents[0] !== file.parents[0]) emit(file)
+          else if (unheld(file)) emit(file)
         }
       } while (start)
     }
@@ -443,7 +447,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       }
       for (const file of listing.moved) emit(file)
       for (const file of listing.files) {
-        emit(file)
+        if (!isNotionFolder(file) || unheld(file)) emit(file)
         if (file.providerMetadata.kind === "page" || file.providerMetadata.kind === "database")
           pass.tasks.push({ t: "walk", id: file.id })
         for (const source of file.providerMetadata.dataSources ?? [])

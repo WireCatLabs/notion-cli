@@ -131,10 +131,25 @@ describe("the Notion source under cli-core's sync engine", () => {
     ])
   })
 
-  it("narrows to a chosen database", async () => {
+  it("narrows to a chosen database, and queries no other database later", async () => {
+    notion.addDatabase({ id: "other", title: "Other", parent: top, sources: ["other-ds"] })
     const run = harness(notion, { roots: ["db"] })
     await run.sync()
     expect([...run.saved.keys()].sort()).toEqual(["r1", "r2", "r3"])
+    notion.advance(HOUR)
+    notion.edit("r1", { title: "edited" })
+    await run.sync()
+    expect(run.saved.get("r1")?.metadata.name).toBe("edited")
+    expect(notion.log).not.toContainEqual({ method: "queryDataSource", id: "other-ds" })
+  })
+
+  it("lists each database once in a full walk", async () => {
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(25 * HOUR)
+    const before = notion.calls.queryDataSource
+    await run.sync()
+    expect(notion.calls.queryDataSource - before).toBe(1)
   })
 
   it("picks up a second edit made in the same minute as the last read", async () => {
