@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# The owner's one-time GitHub setup for notion-cli: the repository, its main ruleset and the npm environment.
+# npm trusted publishing and the monthly cron minute stay manual; the script prints them at the end.
+set -euo pipefail
+
+REPO=WireCatLabs/notion-cli
+DIR=/home/leemour/Projects/AI/notion-cli
+
+cd "$DIR"
+git diff --quiet && git diff --cached --quiet || { echo "commit or stash the working tree first" >&2; exit 1; }
+
+if gh repo view "$REPO" >/dev/null 2>&1; then
+  echo "$REPO exists, skipping create"
+else
+  gh repo create "$REPO" --public --description "Notion pages and databases, searchable on your computer" \
+    --source "$DIR" --remote origin --push
+fi
+gh repo edit "$REPO" --delete-branch-on-merge
+
+# The ten checks the template's CI reports (cli-base docs/standards/new-cli.md); 15368 is GitHub Actions.
+checks='["standards","changelog / guard","validation / ci / check","validation / ci / bun","validation / ci / secrets",
+"validation / prose","validation / version","validation / node-22","validation / repo-setup","conformance"]'
+if gh api "repos/$REPO/rulesets" --jq '.[].name' | grep -qx main; then
+  echo "ruleset main exists, skipping"
+else
+  jq -n --argjson checks "$checks" '{
+    name: "main", target: "branch", enforcement: "active", bypass_actors: [],
+    conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+    rules: [
+      { type: "deletion" }, { type: "non_fast_forward" },
+      { type: "pull_request", parameters: { required_approving_review_count: 0, dismiss_stale_reviews_on_push: false,
+        require_code_owner_review: false, require_last_push_approval: false, required_review_thread_resolution: false,
+        allowed_merge_methods: ["squash", "rebase", "merge"] } },
+      { type: "required_status_checks", parameters: { strict_required_status_checks_policy: false,
+        do_not_enforce_on_create: false,
+        required_status_checks: ($checks | map({ context: ., integration_id: 15368 })) } }
+    ] }' | gh api -X POST "repos/$REPO/rulesets" --input - >/dev/null
+  echo "ruleset main created"
+fi
+
+gh api -X PUT "repos/$REPO/environments/npm" --input - >/dev/null <<'JSON'
+{ "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
+JSON
+gh api "repos/$REPO/environments/npm/deployment-branch-policies" --jq '.branch_policies[].name' | grep -qx main ||
+  gh api -X POST "repos/$REPO/environments/npm/deployment-branch-policies" -f name=main -f type=branch >/dev/null
+echo "environment npm limited to main"
+
+cat <<'TEXT'
+
+Done. Still by hand:
+  1. npm trusted publishing for @wirecat/notion-cli, naming release.yml: possible only after the first
+     publish (bin/release --local), so it waits for the first release.
+  2. The monthly cron minute: the agent edits .github/workflows/monthly.yml in its first pull request.
+TEXT
