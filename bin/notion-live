@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# The release's live check against the owner's real Notion, read-only (WC-TEST-18, WC-REL-17). Builds this checkout,
+# runs scripts/live.sh with a throwaway profile, and when it passes appends the version's line to
+# docs/dev/live-checks.txt, which bin/release checks.
+#
+#   bin/notion-live <page id or link>
+#   NOTION_LIVE_KEYRING_ACCOUNT=<account> bin/notion-live <page id or link>
+#
+# The token comes from the keyring entry `service notion-live account <account>` when one is named, else it is asked
+# hidden. It reaches the CLI on stdin only: never a file, an argument or the screen. The page should hold an uploaded
+# file or image, so the check sees Notion's signed file links cut.
+set -euo pipefail
+
+page=${1:?give a page id or link the token can read: bin/notion-live <page>}
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+
+token=""
+if [ -n "${NOTION_LIVE_KEYRING_ACCOUNT:-}" ]; then
+  token=$(secret-tool lookup service notion-live account "$NOTION_LIVE_KEYRING_ACCOUNT" 2>/dev/null) || true
+  [ -n "$token" ] || { echo "no keyring entry: service notion-live account $NOTION_LIVE_KEYRING_ACCOUNT" >&2; exit 1; }
+else
+  read -rsp "Notion token (personal access token or internal connection's): " token
+  echo >&2
+  [ -n "$token" ] || { echo "no token was given" >&2; exit 1; }
+fi
+
+printf '%s' "$token" | bash "$root/scripts/live.sh" "$page"
+unset token
+(cd "$root" && pnpm exec cli-dev live record --script bin/notion-live)
+echo "every step passed: commit docs/dev/live-checks.txt in the release pull request"

@@ -1,3 +1,4 @@
+import { visibleControls } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { answerEntity, itemOf, outputFor, REMOTE_READ, renderAnswer } from "@wirecat/cli-core/cli"
 import { Command } from "commander"
@@ -46,7 +47,8 @@ const getCommand = () =>
               }
             : {}),
         }),
-        (body) => `${(body as { item: Document }).item.markdown}\n`,
+        // Other members wrote this text; a terminal would run an escape sequence in it (WC-SECR-11).
+        (body) => `${visibleControls((body as { item: Document }).item.markdown)}\n`,
       )
     })
 

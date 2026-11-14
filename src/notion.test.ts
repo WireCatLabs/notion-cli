@@ -57,6 +57,15 @@ it("documents get reads a page by its link as Markdown v2, and prints the Markdo
   expect(text.out).toBe("# Test page\n\nFake text written by Test Person.\n")
 })
 
+it("documents get shows a terminal the escape sequences in a page as text, never runs them", async () => {
+  const notion = fakeNotion({
+    pages: { [PAGE_ID]: { markdown: "Fake \u001b[2J text \u001b]8;;https://example.com\u0007link\u001b]8;;\u0007" } },
+  })
+  const text = await runCli(["personal", "documents", "get", PAGE_ID], { notion, tty: true })
+  expect(text.out).not.toContain("\u001b")
+  expect(text.out).toContain("\\x1b[2J")
+})
+
 it("documents get fills a truncated page's unknown blocks in place, and lists the ones the token cannot see", async () => {
   const notion = fakeNotion({
     pages: {

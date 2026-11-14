@@ -167,8 +167,9 @@ deleted.
 ## Live check
 
 The strict fake in `src/testing/fake-notion.ts` is built from Notion's reference only; no answer was captured from a
-live workspace. `scripts/live.sh <page> < token-file` checks the real API with a temporary profile and stores nothing.
-It fails on the first two points below; the rest a person reads in its output:
+live workspace. `bin/notion-live <page>` checks the real API through `scripts/live.sh`, with a temporary profile that
+stores nothing, and records the pass in `docs/dev/live-checks.txt` for `bin/release`. It fails on the first two points
+below; the rest a person reads in its output:
 
 - `GET /v1/users/me` gives `bot.workspace_id` for both kinds of token. The account is that id and the bot's id; the
   reference lists the field but its example leaves it out, and sign-in refuses an answer without it.
