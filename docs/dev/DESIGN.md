@@ -54,7 +54,7 @@ The work goes in this order, each step one pull request:
 5. Writes: create, update and delete a page.
 6. A local folder kept in step with a Notion page tree.
 7. The raw API, comments and files.
-8. Sign-in in the browser (OAuth), if the owner keeps it.
+8. Sign-in in the browser (OAuth), through the person's own Notion connection.
 
 Every request runs inside cli-core's command run (WC-LIFE-15, WC-LIFE-17).
 
@@ -85,8 +85,8 @@ is given). Nothing is kept on a WireCat server.
 tool's own entries. Notion's own CLI keeps its tokens under the same keyring service name, `notion-cli`, with a
 workspace id as the account; this tool never lists, reads or removes an account it did not write.
 
-The environment variable for a token must not be `NOTION_TOKEN`: Notion's own MCP server reads that name, and a
-token set for it would silently sign every profile in. The prefix is settled in step 1.
+The environment variables start with `WCNOTION_` (`WCNOTION_TOKEN`, `WCNOTION_PROFILE`), not `NOTION_`: Notion's own
+MCP server reads `NOTION_TOKEN`, and a token set for it would silently sign every profile in.
 
 ## Commands
 
@@ -179,8 +179,6 @@ deleted.
 
 ## Open questions for the owner
 
-- **OAuth.** With no WireCat app possible, it helps only people who cannot use a token. Keep it as the last step, or
-  drop it.
 - **The sync scope of a personal access token.** It sees the whole workspace. Proposed: sync only the chosen folders,
   with an explicit way to choose everything.
 - **Mirrors, to settle before step 6:**
