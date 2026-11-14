@@ -2,17 +2,18 @@
 # The release's live check against the real service (WC-TEST-18, WC-REL-17): a person runs it with a real token on
 # stdin, then records it with `pnpm exec cli-dev live record --script scripts/live.sh`. Every folder is a temporary
 # one and the keyring is out of reach, so nothing touches the owner's store, keyring or settings.
-#   scripts/live.sh < token-file
-# SAMPLE: replace the comments reads with your own commands; checked against the sample, it fails at sign-in.
+#   scripts/live.sh <page id or link> < token-file
+# The page should hold an uploaded file or image, so the check sees Notion's signed file links cut.
 set -euo pipefail
+page=${1:?give a page id or link the token can read: scripts/live.sh <page> < token-file}
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-export NOTION_CONFIG_DIR="$work/config" NOTION_STATE_DIR="$work/state" NOTION_CACHE_DIR="$work/cache"
+export WCNOTION_CONFIG_DIR="$work/config" WCNOTION_STATE_DIR="$work/state" WCNOTION_CACHE_DIR="$work/cache"
 export MESSAGING_STORE="$work/wirecat.db"
 export DBUS_SESSION_BUS_ADDRESS="disabled:"
-unset NOTION_TOKEN
+unset WCNOTION_TOKEN
 cli=(node "$root/dist/bin/notion.js")
 
 pnpm --dir "$root" -s build >/dev/null
@@ -29,11 +30,21 @@ mkdir -p "$HOME"
 "${cli[@]}" live session start --credential-storage file --json >/dev/null
 trap '"${cli[@]}" live session end --json >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
-"${cli[@]}" live comments list --json >"$work/list.json"
+"${cli[@]}" live session status --check --json >"$work/status.json"
+"${cli[@]}" live databases list --limit 5 --json >"$work/list.json"
+"${cli[@]}" live documents get "$page" --json >"$work/page.json"
 node -e '
-  const list = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
-  if (!Array.isArray(list.items)) throw new Error(`no items: ${JSON.stringify(list).slice(0, 200)}`)' "$work/list.json"
+  const read = (name) => JSON.parse(require("fs").readFileSync(`${process.argv[1]}/${name}.json`, "utf8"))
+  const status = read("status").item
+  if (!status.verified || !/^[0-9a-f-]{36}$/.test(status.workspace?.id ?? "")) throw new Error("users/me gave no workspace id")
+  const list = read("list")
+  if (!Array.isArray(list.items)) throw new Error("databases list has no items")
+  const page = read("page").item
+  if (typeof page.markdown !== "string") throw new Error("documents get has no markdown")
+  if (/X-Amz-(Signature|Credential)/i.test(JSON.stringify(page))) throw new Error("a signed file link was not cut")' "$work"
+first=$(node -e 'const l = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(l.items[0]?.id ?? "")' "$work/list.json")
+if [ -n "$first" ]; then "${cli[@]}" live databases show "$first" --json >/dev/null; fi
 "${cli[@]}" live doctor --json >/dev/null
 
 "${cli[@]}" live session end --json >/dev/null
-echo "live check passed: describe format 2, sign-in, comments list, doctor, sign-out"
+echo "live check passed: describe format 2, sign-in, users/me, databases list and show, documents get, doctor, sign-out"

@@ -1,5 +1,6 @@
 import type { ManifestIdentity } from "@wirecat/cli-base/wcat/manifest"
 import type { AppIdentity } from "@wirecat/cli-core/cli"
+import { DETAILS, REASONS } from "./notion/errors.js"
 import { VERSION } from "./version.js"
 
 export const PACKAGE = "@wirecat/notion-cli"
@@ -7,25 +8,26 @@ export const PACKAGE = "@wirecat/notion-cli"
 export const IDENTITY: AppIdentity = {
   command: "notion",
   appName: "notion-cli",
-  envPrefix: "NOTION",
-  description: "a new WireCat CLI, started from cli-template",
+  envPrefix: "WCNOTION",
+  description: "Notion pages and databases for you and your agent, read live with your own token",
   version: VERSION,
   issues: "https://github.com/WireCatLabs/notion-cli/issues/new",
   messenger: false,
   contentLanguages: ["en", "ru", "es"],
+  errors: { reasons: REASONS, details: DETAILS },
 }
 
-// What `wcat` and WireCat Desktop show before the tool is installed: rewrite the tagline and the sign-in texts for
-// yours. The bin passes it to wcatStart before anything else loads; src/wcat.ts adds the permission keys.
+// What `wcat` and WireCat Desktop show before the tool is installed. The bin passes it to wcatStart before anything
+// else loads; src/wcat.ts adds the permission keys.
 export const DESKTOP: ManifestIdentity = {
   ...IDENTITY,
   docs: "https://github.com/WireCatLabs/notion-cli#readme",
-  // SAMPLE: every host the CLI contacts (WC-CMD-32); src/sample/transport.ts reaches only these.
-  hosts: ["comments.example.invalid"],
+  // Every host the CLI contacts (WC-CMD-32). The sample's made-up host is its own, in src/sample/transport.ts.
+  hosts: ["api.notion.com"],
   tagline: "Notion pages and databases, searchable on your computer",
   signIn: {
-    gives: "Lets your agent read and change your account through notion.",
-    asks: "An API token or key from the service.",
+    gives: "Lets your agent read the Notion pages and databases your token can see.",
+    asks: "A Notion personal access token, or the token of an internal connection you made in Notion.",
   },
 }
 

@@ -1,6 +1,9 @@
 {
   "session status": "read",
   "session list": "read",
+  "documents get": "read",
+  "databases list": "read",
+  "databases show": "read",
   "comments list": "read",
   "comments show": "read",
   "comments create": "write",

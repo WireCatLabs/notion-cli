@@ -1,4 +1,4 @@
-notion — a new WireCat CLI, started from cli-template
+notion — Notion pages and databases for you and your agent, read live with your own token
 
 Usage: notion <profile> <command> [options]
 Account commands start with your profile, a name you choose; none is ever assumed.

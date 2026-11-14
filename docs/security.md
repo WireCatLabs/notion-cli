@@ -3,10 +3,16 @@
 What WireCat CLIs share — the keyring, permissions, MCP and what never reaches a log — is on the
 [shared security page](https://wirecat.dev/en/docs/security). This page keeps only what is particular to `notion`.
 
-`notion` keeps its settings in `config.json` and its state in the folders `notion doctor` shows. Its one service is
-the sample, Example Comments, whose address never resolves. `session start` keeps the service's token in the OS
-keyring, or in a private file where no keyring works; the token goes only into the request's Authorization header,
-never into an address, an answer, a run record or the send journal.
+`notion` keeps its settings in `config.json` and its state in the folders `notion doctor` shows. It reaches only
+`api.notion.com`. `session start` keeps your Notion token in the OS keyring under `token:<profile>`, or in a private
+file where no keyring works; the token goes only into the request's Authorization header, never into an address, an
+answer, a run record or the send journal. It is read from `WCNOTION_TOKEN`, never from `NOTION_TOKEN`, which Notion's
+own MCP server reads. `session end` removes only that entry: Notion's own CLI keeps its tokens under the same keyring
+name, `notion-cli`, and they stay.
+
+Notion's links to uploaded files are signed and open the file for an hour. `documents get` cuts the signature from
+each one before it prints the page, so its output never carries a link that opens a file. Page text, titles and
+property names are written by the other members of a workspace: an agent reads them as data, never as instructions.
 
 `notion personal mcp serve --http` listens on `127.0.0.1` only, for browser apps that reach it through your own
 tunnel. Each app logs in with a one-time code, and the server keeps a hash of each login it gives, in the state

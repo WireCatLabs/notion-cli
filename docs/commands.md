@@ -5,7 +5,7 @@
 Every command, option and exit code, generated from the program itself. For the same list as JSON, run
 `notion commands --json`.
 
-**The first word is the profile**, a name you choose: `notion personal config show`. `NOTION_PROFILE`
+**The first word is the profile**, a name you choose: `notion personal config show`. `WCNOTION_PROFILE`
 does the same for a whole shell session. No profile is assumed: a command that uses an account stops without one and
 lists the profiles on this computer.
 
@@ -53,11 +53,11 @@ notion commands info [path]
 
 ## `notion session`
 
-keep this profile's Example Comments token in the OS keyring
+keep this profile's Notion token in the OS keyring
 
 ### `notion session start`
 
-sign this profile in: the Example Comments API token is asked hidden or read from stdin, never taken as an argument, checked against the service, and only then kept in the keyring, or in a private file
+sign this profile in: a Notion personal access token, which acts with your own rights, or an internal connection's token, which sees only the pages shared with that connection. It is asked hidden or read from stdin, never taken as an argument, checked with Notion, and only then kept in the keyring, or in a private file
 
 **Changes something on this computer only.**
 
@@ -73,7 +73,7 @@ notion session start [options]
 
 ### `notion session status`
 
-show where this profile's token comes from: NOTION_TOKEN, the keyring or a file, never the token; --check asks Example Comments whose token it is
+show where this profile's token comes from: WCNOTION_TOKEN, the keyring or a file, never the token; --check asks Notion whose token it is
 
 ```sh
 notion session status [options]
@@ -81,13 +81,13 @@ notion session status [options]
 
 | Option | What it does |
 |---|---|
-| `--check` | ask Example Comments whether the token still works, and whose it is. |
+| `--check` | ask Notion whether the token still works, and whose it is. |
 
 **Example:** `notion personal session status`, `notion personal session status --check --json`
 
 ### `notion session end`
 
-forget this profile's token on this computer; the token itself stays valid in Example Comments
+forget this profile's token on this computer; the token itself stays valid in Notion. Only this tool's own entry goes: Notion's own CLI keeps its tokens under the same keyring name, and they stay
 
 **Changes something on this computer only.**
 
@@ -106,6 +106,67 @@ notion session list
 ```
 
 **Example:** `notion session list`, `notion session list --json`
+
+## `notion documents`
+
+read Notion pages
+
+### `notion documents get`
+
+read one page live from Notion as Notion-flavoured Markdown. A page too long for one answer is read in parts; a part the token may not see is listed in missing_block_ids. Signed file links lose their signature, so the output never carries a link that opens the file
+
+```sh
+notion documents get <page>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `page` | required | the page's id or its Notion link. |
+
+**Returns:** document markdown — id, markdown, truncated, missing_block_ids, signed_links_removed; every field: notion commands info documents get
+
+**Example:** `notion personal documents get https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef`, `notion personal documents get 0123456789abcdef0123456789abcdef --json`
+
+## `notion databases`
+
+read Notion databases and their data sources
+
+### `notion databases list`
+
+list the databases this token can see, live from Notion's search: one row for each data source, with the database it belongs to. Notion's search can lag behind a new database by a few minutes
+
+```sh
+notion databases list [query] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | at most this many, up to 100; 50 if not given. |
+| `--cursor <cursor>` | go on from where the last page stopped; page.next gives it. |
+
+**Returns:** database — id, data_source_id, title, last_edited_time; every field: notion commands info databases list
+
+**Example:** `notion personal databases list`, `notion personal databases list title:Roadmap --json=id,data_source_id,title`
+
+### `notion databases show`
+
+show one database live from Notion: its title, where it sits, and each of its data sources with its id and its properties, with the options of each select and status; a query of the database names a data source id
+
+```sh
+notion databases show <database>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `database` | required | the database's id or its Notion link. |
+
+**Returns:** database — id, title, description, url, parent, is_inline, in_trash, created_time, and 2 more; every field: notion commands info databases show
+
+**Example:** `notion personal databases show 0123456789abcdef0123456789abcdef`, `notion personal databases show https://www.notion.so/0123456789abcdef0123456789abcdef --json`
 
 ## `notion comments`
 
@@ -290,7 +351,7 @@ notion mcp serve [options]
 
 | Option | What it does |
 |---|---|
-| `--permission <key=level>` | make a permission stricter for this server only, like comments.create=deny; it never loosens the profile; repeat for more keys. |
+| `--permission <key=level>` | make a permission stricter for this server only, like documents.get=deny; it never loosens the profile; repeat for more keys. |
 | `--profiles <names\|all>` | serve several profiles from one server instead of one: names, comma-separated, or all for every profile. |
 | `--http` | serve over HTTP on 127.0.0.1 for ChatGPT and Claude in the browser, behind your tunnel; the profile's permissions decide. |
 | `--port <port>` | the local port for --http (default 8765). |
@@ -377,7 +438,7 @@ notion mcp config [options]
 
 | Option | What it does |
 |---|---|
-| `--permission <key=level>` | make a permission stricter for this server only, like comments.create=deny; it never loosens the profile; repeat for more keys. |
+| `--permission <key=level>` | make a permission stricter for this server only, like documents.get=deny; it never loosens the profile; repeat for more keys. |
 | `--profiles <names\|all>` | serve several profiles from one server instead of one: names, comma-separated, or all for every profile. |
 
 **Example:** `notion personal mcp config`, `notion mcp config --profiles all`
@@ -399,7 +460,7 @@ notion mcp add <client> [options]
 | Option | What it does |
 |---|---|
 | `--allow-writes` | acknowledge that this profile offers writing tools. |
-| `--permission <key=level>` | make a permission stricter for this server only, like comments.create=deny; it never loosens the profile; repeat for more keys. |
+| `--permission <key=level>` | make a permission stricter for this server only, like documents.get=deny; it never loosens the profile; repeat for more keys. |
 
 **Example:** `notion personal mcp add codex --allow-writes`
 
@@ -413,7 +474,7 @@ notion mcp check [options]
 
 | Option | What it does |
 |---|---|
-| `--permission <key=level>` | make a permission stricter for this server only, like comments.create=deny; it never loosens the profile; repeat for more keys. |
+| `--permission <key=level>` | make a permission stricter for this server only, like documents.get=deny; it never loosens the profile; repeat for more keys. |
 
 **Example:** `notion personal mcp check`
 

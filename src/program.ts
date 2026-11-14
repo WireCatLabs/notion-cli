@@ -19,10 +19,11 @@ import {
 import { appUpdate } from "@wirecat/cli-core/update"
 import type { Command } from "commander"
 import { commentsCommand } from "./commands/comments.js"
+import { databasesCommand } from "./commands/databases.js"
+import { documentsCommand } from "./commands/documents.js"
 import { sessionCommand } from "./commands/session.js"
 import { configuration } from "./config.js"
 import { IDENTITY, PACKAGE, SKILL } from "./identity.js"
-import { SERVICE } from "./sample/transport.js"
 
 const update = appUpdate({
   packageName: PACKAGE,
@@ -38,10 +39,18 @@ const update = appUpdate({
 
 const mcpCommand = () =>
   appMcpCommand(IDENTITY, configuration, {
-    name: SERVICE,
-    // SAMPLE: name the kinds of text other people wrote that your answers carry (WC-MCP-11).
-    untrusted: ["comment text", "author names"],
-    permissionExample: "comments.create=deny",
+    name: "Notion",
+    // Pages and databases are shared: other members write their text, titles and options (WC-MCP-11).
+    untrusted: [
+      "page text",
+      "page and database titles",
+      "database descriptions",
+      "property names and options",
+      "links",
+      "comment text",
+      "author names",
+    ],
+    permissionExample: "documents.get=deny",
     skill: SKILL,
     signedIn: (profile, env, keyring) =>
       new ProfileTokenStore({ app: IDENTITY, env, ...(keyring ? { keyring } : {}) }).signedIn(profile),
@@ -54,6 +63,8 @@ export const definition = (): ProgramDefinition => ({
   commands: () => [
     commandsCommand(IDENTITY),
     sessionCommand(),
+    documentsCommand(),
+    databasesCommand(),
     commentsCommand(),
     appDoctorCommand(IDENTITY, configuration, { packageName: PACKAGE }),
     skillCommand(IDENTITY, SKILL),

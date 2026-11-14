@@ -10,7 +10,7 @@ A profile is a name you choose for one account. It is the first word of every co
 notion personal config show
 ```
 
-`NOTION_PROFILE=personal` does the same for one shell session. No profile is ever assumed, not even the only one: a
+`WCNOTION_PROFILE=personal` does the same for one shell session. No profile is ever assumed, not even the only one: a
 command without one stops with exit code 2 and lists the profiles on this computer.
 
 ## Output for scripts

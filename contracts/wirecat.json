@@ -1,7 +1,7 @@
 {
   "wcat_manifest": 2,
   "name": "notion",
-  "description": "a new WireCat CLI, started from cli-template",
+  "description": "Notion pages and databases for you and your agent, read live with your own token",
   "docs_url": "https://github.com/WireCatLabs/notion-cli#readme",
   "package": "@wirecat/notion-cli",
   "bin": "wcat-notion",
@@ -32,7 +32,7 @@
         "session",
         "start"
       ],
-      "summary": "sign in to Example Comments with an API token",
+      "summary": "sign in to Notion with a personal access token or an internal connection's token",
       "effects": {
         "remote": "read",
         "local": "write"
@@ -70,6 +70,45 @@
         "remote": "none",
         "local": "read"
       }
+    },
+    {
+      "path": [
+        "documents",
+        "get"
+      ],
+      "summary": "read one page live from Notion, as Markdown",
+      "effects": {
+        "remote": "read",
+        "local": "read"
+      },
+      "permission": "documents.get",
+      "entity": "document_markdown"
+    },
+    {
+      "path": [
+        "databases",
+        "list"
+      ],
+      "summary": "list the databases this token can see, live, one row per data source",
+      "effects": {
+        "remote": "read",
+        "local": "read"
+      },
+      "permission": "databases.list",
+      "entity": "database"
+    },
+    {
+      "path": [
+        "databases",
+        "show"
+      ],
+      "summary": "show one database live: its data sources, their ids and properties",
+      "effects": {
+        "remote": "read",
+        "local": "read"
+      },
+      "permission": "databases.show",
+      "entity": "database"
     },
     {
       "path": [
@@ -383,6 +422,11 @@
     }
   ],
   "entities": {
+    "database": {
+      "fields": [
+        "title"
+      ]
+    },
     "comment": {
       "fields": [
         "author"
@@ -421,7 +465,7 @@
   },
   "network": {
     "hosts": [
-      "comments.example.invalid"
+      "api.notion.com"
     ]
   },
   "desktop": {
@@ -468,8 +512,8 @@
       "start"
     ],
     "signIn": {
-      "gives": "Lets your agent read and change your account through notion.",
-      "asks": "An API token or key from the service."
+      "gives": "Lets your agent read the Notion pages and databases your token can see.",
+      "asks": "A Notion personal access token, or the token of an internal connection you made in Notion."
     },
     "skill": {
       "status": [
@@ -550,7 +594,7 @@
     "storeReset": null,
     "storage": {
       "app": "notion-cli",
-      "env": "NOTION"
+      "env": "WCNOTION"
     },
     "settings": null
   }

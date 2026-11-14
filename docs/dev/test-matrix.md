@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**71 ✅ · 24 ⛔ · 0 ❌** — 34 commands, 61 options.
+**76 ✅ · 24 ⛔ · 0 ❌** — 37 commands, 63 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -19,6 +19,11 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `session status` | `--check` | ✅ |  |
 | `session end` |  | ✅ |  |
 | `session list` |  | ✅ |  |
+| `documents get` |  | ✅ |  |
+| `databases list` |  | ✅ |  |
+| `databases list` | `--limit` | ✅ |  |
+| `databases list` | `--cursor` | ✅ |  |
+| `databases show` |  | ✅ |  |
 | `comments list` |  | ✅ |  |
 | `comments list` | `--limit` | ✅ |  |
 | `comments list` | `--page` | ✅ |  |

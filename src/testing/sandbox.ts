@@ -8,11 +8,11 @@ const saved = { ...process.env }
 // cli-base's setup already gave this file a fresh TMPDIR and HOME, a keyring that throws and no network, and points
 // every folder and store variable at them (WC-TEST-1, WC-STORE-14). The config folder is set only because tests
 // write into it by name.
-process.env.NOTION_CONFIG_DIR = join(tmpdir(), "config")
-process.env.NOTION_NO_UPDATE_CHECK = "1"
-process.env.NOTION_TEST_ARGV_LOG = ARGV_LOG
-delete process.env.NOTION_PROFILE
-delete process.env.NOTION_READ_ONLY
+process.env.WCNOTION_CONFIG_DIR = join(tmpdir(), "config")
+process.env.WCNOTION_NO_UPDATE_CHECK = "1"
+process.env.WCNOTION_TEST_ARGV_LOG = ARGV_LOG
+delete process.env.WCNOTION_PROFILE
+delete process.env.WCNOTION_READ_ONLY
 delete process.env.AI_AGENT
 delete process.env.CLAUDECODE
 

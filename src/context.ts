@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import type { SleepLike } from "@wirecat/cli-base"
 import {
   type BaseEnvironment,
   baseContext,
@@ -6,17 +6,22 @@ import {
   environmentOf,
   type GlobalFlags,
   ProfileTokenStore,
+  refuseOffline,
 } from "@wirecat/cli-core/cli"
 import { Pacer, pacePathFor } from "@wirecat/cli-core/sends"
 import type { Command } from "commander"
 import { configuration } from "./config.js"
 import { IDENTITY } from "./identity.js"
+import { NOTION, PACE as NOTION_PACE, notionClient, QUERY_PACE } from "./notion/client.js"
+import { type LiveReads, liveReads } from "./notion/notion.js"
 import { type CommentsService, commentsService } from "./sample/comments.js"
 import { SERVICE, transport } from "./sample/transport.js"
 
 /** What a test hands `run()` beside cli-core's own: the fake service in place of the network (WC-ARCH-10). */
 export interface ServiceEnvironment extends BaseEnvironment {
   fetch?: typeof fetch
+  /** Notion's retry and pace waits; a test passes one that only counts them (WC-TEST-3). */
+  sleep?: SleepLike
 }
 
 // SAMPLE: your service's documented limit; this one is made up.
@@ -42,11 +47,6 @@ export const contextOf = (command: Command) => {
   }
 }
 
-export const refuseOffline = (flags: GlobalFlags) => {
-  if (flags.offline)
-    throw new CliError("permission_error", `this needs ${SERVICE}; leave out --offline`, { reason: "offline.refused" })
-}
-
 /** The service for one run, with the token it was given; `events` comes from `run()`, so each request is recorded. */
 export const serviceFor = (command: Command, token: string, events: EventSink) => {
   const { environment, env, profile } = contextOf(command)
@@ -62,10 +62,33 @@ export const serviceFor = (command: Command, token: string, events: EventSink) =
 }
 
 /** The profile's saved token, or an authentication error that says how to sign in. Read before any request. */
-export const tokenOf = (command: Command): string => {
-  const { flags, profile, tokens } = contextOf(command)
-  refuseOffline(flags)
+export const tokenOf = (command: Command, service = SERVICE): string => {
+  const { profile, tokens } = contextOf(command)
+  refuseOffline(command, service)
   return tokens.need(profile)
+}
+
+/** Notion for one run: the SDK over hostFetch, paced per profile, a slower pace of its own for data source queries. */
+export const notionFor = (command: Command, token: string, events: EventSink): LiveReads => {
+  const { environment, env, profile } = contextOf(command)
+  const pace = pacePathFor(IDENTITY, profile, env)
+  return liveReads(
+    notionClient({
+      token,
+      events,
+      signal: environment.signal,
+      fetch: environment.fetch,
+      pacer: new Pacer(pace, NOTION_PACE),
+      ...(environment.sleep ? { sleep: environment.sleep } : {}),
+      queryPacer: new Pacer(pace.replace(/\.json$/u, ".queries.json"), QUERY_PACE),
+    }),
+  )
+}
+
+/** Every Notion read goes through here, inside cli-core's run, as `withService` does for the sample. */
+export const withNotion = <T>(command: Command, body: (notion: LiveReads) => Promise<T>): Promise<T> => {
+  const token = tokenOf(command, NOTION)
+  return contextOf(command).run((events) => body(notionFor(command, token, events)))
 }
 
 /**

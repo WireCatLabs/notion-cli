@@ -71,7 +71,7 @@ it("doctor --online answers even when npm cannot be reached", async () => {
 })
 
 it("a denied command is offered as unavailable and refused before any request (WC-PERM-23)", async () => {
-  const file = join(process.env.NOTION_CONFIG_DIR ?? "", "config.json")
+  const file = join(process.env.WCNOTION_CONFIG_DIR ?? "", "config.json")
   mkdirSync(join(file, ".."), { recursive: true })
   writeFileSync(file, JSON.stringify({ profiles: { personal: { permissions: { "comments.list": "deny" } } } }))
   const service = fakeComments()

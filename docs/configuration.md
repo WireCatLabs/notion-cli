@@ -14,7 +14,7 @@ notion personal config unset limit
 ## Permissions
 
 `permissions` decides what a command may do for this profile: `allow`, `ask`, `readonly` or `deny`, per permission
-key. Over MCP there is no one to ask, so `ask` lets the command run. `NOTION_READ_ONLY=1` refuses every write, whatever
+key. Over MCP there is no one to ask, so `ask` lets the command run. `WCNOTION_READ_ONLY=1` refuses every write, whatever
 the permissions say.
 
 ## Run records

@@ -16,6 +16,7 @@ import {
   profilesHere,
   REMOTE_READ,
   refuseCommandName,
+  refuseOffline,
   refuseUnderReadOnly,
   rememberAccount,
   renderAnswer,
@@ -25,13 +26,15 @@ import {
 } from "@wirecat/cli-core/cli"
 import { Command } from "commander"
 import { configuration } from "../config.js"
-import { contextOf, refuseOffline, serviceFor, withService } from "../context.js"
+import { contextOf, notionFor, withNotion } from "../context.js"
 import { IDENTITY } from "../identity.js"
-import { SERVICE } from "../sample/transport.js"
+import { NOTION } from "../notion/client.js"
 
-// `session start | status | end | list` is every provider CLI's sign-in (WC-ACCT-12). Keep it; replace the token
-// prompt and the `me` check with your service's. A service with OAuth signs in through cli-core's oauth module
-// instead (WC-SECR-22); see gcal-cli's src/commands/session.ts.
+// `session start | status | end | list` is every provider CLI's sign-in (WC-ACCT-12). The token is a personal access
+// token or an internal connection's; both are checked with GET /v1/users/me
+// (https://developers.notion.com/reference/get-self). OAuth comes last (DESIGN.md, Sign-in).
+
+const SERVICE = NOTION
 
 const CLI = IDENTITY.command
 
@@ -51,10 +54,11 @@ const startCommand = () =>
       examples: [`${CLI} personal session start`, `${CLI} personal session start --credential-storage file`],
     }),
   )
-    .summary(`sign in to ${SERVICE} with an API token`)
+    .summary("sign in to Notion with a personal access token or an internal connection's token")
     .description(
-      `sign this profile in: the ${SERVICE} API token is asked hidden or read from stdin, never taken as an ` +
-        "argument, checked against the service, and only then kept in the keyring, or in a private file",
+      "sign this profile in: a Notion personal access token, which acts with your own rights, or an internal " +
+        "connection's token, which sees only the pages shared with that connection. It is asked hidden or read from " +
+        "stdin, never taken as an argument, checked with Notion, and only then kept in the keyring, or in a private file",
     )
     .option(
       "--credential-storage <storage>",
@@ -63,16 +67,17 @@ const startCommand = () =>
       "keyring" as TokenStorage,
     )
     .action(async function (this: Command, args: { credentialStorage: TokenStorage }) {
-      const { env, flags, profile, tokens, run } = contextOf(this)
+      const { env, profile, tokens, run } = contextOf(this)
       refuseCommandName(profile, commandWords(rootOf(this)), CLI)
-      refuseOffline(flags)
+      refuseOffline(this, SERVICE)
       // A secret is never an argument: it would land in shell history and in the run record (WC-SECR-5).
-      const token = (await readSecret(`${SERVICE} API token: `, secretInputOf(this))).trim()
+      const token = (await readSecret("Notion token: ", secretInputOf(this))).trim()
       if (!token) throw new CliError("validation_error", "no token was given")
-      const user = await run((events) => serviceFor(this, token, events).me())
+      const account = await run((events) => notionFor(this, token, events).me())
       const storedIn = tokens.write(profile, token, args.credentialStorage)
-      rememberAccount(IDENTITY, profile, user.id, env)
-      answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, user })
+      // Two profiles in one workspace see different pages, so the account is the workspace and the token's bot.
+      rememberAccount(IDENTITY, profile, `${account.workspace.id}:${account.user.id}`, env)
+      answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, ...account })
     })
 
 const statusCommand = () =>
@@ -91,7 +96,7 @@ const statusCommand = () =>
       const saved = tokens.read(profile)
       const status = { profile, state: saved ? "saved" : "missing", token_from: saved?.source ?? null }
       if (!args.check || !saved) return answer(this, { ...status, verified: false })
-      answer(this, { ...status, verified: true, user: await withService(this, (service) => service.me()) })
+      answer(this, { ...status, verified: true, ...(await withNotion(this, (notion) => notion.me())) })
     })
 
 const endCommand = () =>
@@ -103,7 +108,10 @@ const endCommand = () =>
     }),
   )
     .summary("forget this profile's token on this computer")
-    .description(`forget this profile's token on this computer; the token itself stays valid in ${SERVICE}`)
+    .description(
+      `forget this profile's token on this computer; the token itself stays valid in ${SERVICE}. Only this tool's ` +
+        "own entry goes: Notion's own CLI keeps its tokens under the same keyring name, and they stay",
+    )
     .action(function (this: Command) {
       refuseUnderReadOnly(this, "session end")
       const { profile, tokens } = contextOf(this)

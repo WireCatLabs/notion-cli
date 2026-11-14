@@ -11,7 +11,7 @@ if (!command) {
   process.exit(2)
 }
 const home = mkdtempSync(join(tmpdir(), "notion-sandbox-"))
-const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(XDG_|NOTION_)/.test(name)))
+const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(XDG_|WCNOTION_)/.test(name)))
 const run = spawnSync(command, args, {
   stdio: "inherit",
   shell: process.platform === "win32",
@@ -27,7 +27,7 @@ const run = spawnSync(command, args, {
     XDG_CACHE_HOME: join(home, ".cache"),
     MESSAGING_STORE: join(home, "store.db"),
     WIRECAT_STATE_DIR: join(home, "wirecat"),
-    NOTION_NO_UPDATE_CHECK: "1",
+    WCNOTION_NO_UPDATE_CHECK: "1",
     // A throwaway HOME does not hide the keyring: D-Bus still reaches it.
     DBUS_SESSION_BUS_ADDRESS: "disabled:",
   },

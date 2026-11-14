@@ -11,7 +11,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 const COMMAND = "notion"
-const PREFIX = "NOTION"
+const PREFIX = "WCNOTION"
 
 const runtime = "Bun" in globalThis ? "bun" : "node"
 const failures: string[] = []
