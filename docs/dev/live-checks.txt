@@ -1,0 +1,2 @@
+# version commit date script tree — one line per passed live check
+0.1.0 c429fae07498eb11c63b4dd7b22bfc1614f33937 2026-11-15 bin/notion-live v2:acc19100cf24f9ddbe1abef90ae2d64b3da18d04f6f16b27ef623b00dba9ca6d
