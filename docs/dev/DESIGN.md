@@ -1,7 +1,8 @@
 # notion — design
 
-Written by `npx @wirecat/cli-template new`, then filled in during design. Step 1 below is built: sign-in with a
-token, `doctor`, `documents get`, and `databases list|show`, read live.
+Written by `npx @wirecat/cli-template new`, then filled in during design. Steps 1 and 2 below are built: sign-in with
+a token, `doctor`, `documents get`, `databases list|show`, read live, and the sync into the shared store with search,
+the local reads and the knowledge commands.
 
 ## Answers
 
@@ -32,8 +33,8 @@ a folder of Markdown files and a Notion page tree in step, both ways.
 
 The work goes in this order, each step one pull request:
 
-1. Sign-in with a token, `doctor`, and reading one page live, as Markdown. No store.
-2. Sync into the shared store, search and MCP.
+1. ~~Sign-in with a token, `doctor`, and reading one page live, as Markdown. No store.~~ Done.
+2. ~~Sync into the shared store, search and MCP.~~ Done: cli-core's shared documents commands over Notion.
 3. Databases: their rows, with their properties.
 4. Search by a property (`status:Done`).
 5. Writes: create, update and delete a page.
@@ -113,7 +114,8 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
    - The account is one sign-in's view of a workspace: the workspace id plus the token's bot id. Two profiles in one
      workspace see different pages, so they are different accounts.
    - The record's external id is the page id. In the catalog a page is a `file` and a database a `folder`, with
-     Notion's type kept beside it. A page with child pages is both; that waits for a shared change in cli-core.
+     Notion's type kept beside it. Every page is a folder to the sync and a document too (cli-core's `isDocument`),
+     so pages under pages are copied and a page can be a chosen folder. A row is a plain file.
    - The page text is Notion's own Markdown export
      ([retrieve a page as Markdown](https://developers.notion.com/reference/retrieve-page-markdown), version 2). A
      row's properties go into its front matter, so they are searchable as words from step 3, and as fields from
@@ -124,8 +126,7 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
    change feed, so the position is a time mark:
    - The first sync walks everything the token sees, or only the chosen folders: the top of the workspace, and the
      rows of each database. WireCat Desktop offers the same choice.
-   - Pages under pages are not synced yet, and a page cannot be chosen as a folder: cli-core's sync engine needs a
-     node that is both a folder and a document first (its change C2). [SYNC.md](SYNC.md) has the details.
+   - ~~Pages under pages are not synced yet~~: done in step 2. [SYNC.md](SYNC.md) has the details.
    - Later syncs read the pages edited since the mark, with a two-minute overlap, because Notion's timestamps
      appear to be rounded to the minute (to be confirmed against the live API in step 2). They come from search
      sorted by `last_edited_time`, and from each chosen database filtered by `last_edited_time`.
@@ -135,12 +136,14 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
    - A database query stops at 10,000 rows and says so
      ([query a data source](https://developers.notion.com/reference/query-a-data-source)); the store's catalog takes
      at most 10,000 entries per scope. Every page of results is checked, and a folder that would pass a limit fails
-     with an error that names it, never a silent cut. Syncing a whole workspace needs the store's 10,000-entry bound
-     lifted first, a shared change in cli-core.
+     with an error that names it, never a silent cut. The store has no ceiling any more; one sync walks at most
+     10,000 entries under the chosen folders (`maxEntries`), and says so when a scope passes it.
    - Requests are paced below Notion's limit of 180 a minute per connection, with a second, slower pace for database
      queries ([request limits](https://developers.notion.com/reference/request-limits)), through cli-core's pacer.
      cli-base's retry waits for `Retry-After`; search and database queries are POST, so they are marked as reads.
-   - `sync --limit` bounds one run (WC-LIFE-16), and `status` answers in the shared shape (WC-LIFE-14).
+   - `sync --limit` bounds the pages saved in one run, and the source stops at 2,000 requests while it looks for
+     changes. `status` answers with `progress` in the shared shape (WC-LIFE-14). Not yet: a budget sized to the
+     deadline with a `next` step (WC-LIFE-16), which cli-core's shared `sync` command does not offer.
 3. **When Notion deletes a page.** It leaves the next full walk, is confirmed gone by asking Notion for it directly
    (a page missing from search is not proof), and is marked deleted in the store, never wiped.
 4. **Local deletion.** One account with `account remove`, as in drive-cli; the store's own commands cover the rest.

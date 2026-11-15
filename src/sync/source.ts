@@ -51,11 +51,16 @@ export interface NotionFile extends SourceFile {
 }
 
 /**
- * Until cli-core plans a page with children as both a folder and a document (C2), only the workspace and databases
- * are folders: the engine syncs top-level pages and database rows, not pages under pages.
+ * Every page may hold sub-pages, so every page is a folder; a root must be one too. A row stays a plain file: listing
+ * the children of every row would cost a request per row.
  */
-export const isNotionFolder = (file: NotionFile) =>
-  file.providerMetadata.kind === "workspace" || file.providerMetadata.kind === "database"
+export const isNotionFolder = (file: NotionFile) => file.providerMetadata.kind !== "row"
+
+/** A page is a folder and a document at once: the engine walks its children and imports its text. */
+export const isNotionDocument = (file: NotionFile) => file.providerMetadata.kind === "page"
+
+/** A page may have an empty title, and every catalog entry needs a name. */
+export const UNTITLED = "Untitled"
 
 export interface NotionSourceOptions {
   /** Chosen pages and databases; none means everything the token sees. */
@@ -75,7 +80,9 @@ export interface NotionSourceOptions {
 
 export interface SyncWarning {
   id?: string
-  code: string
+  code: CliError["code"]
+  /** What happened, as a dotted id: `meta.issues` names it. */
+  reason: string
   message: string
   retry_after_ms?: number
 }
@@ -184,7 +191,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     const row = page.parent.type === "data_source_id" || page.parent.type === "database_id"
     return {
       id: page.id,
-      name: titleOf(page.properties),
+      name: titleOf(page.properties).trim() || UNTITLED,
       mime: "application/vnd.notion.page",
       parents: [await containerOf(page.parent)],
       version: versionOf(page.last_edited_time),
@@ -206,7 +213,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     accessible.add(database.id)
     return {
       id: database.id,
-      name: text(database.title),
+      name: text(database.title).trim() || UNTITLED,
       mime: "application/vnd.notion.database",
       parents: [await containerOf(database.parent)],
       version: database.last_edited_time,
@@ -314,6 +321,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       if (isCut(page))
         warn({
           code: "provider_error",
+          reason: "notion.search-capped",
           message: `Notion's search gave only the ${results.length} most recently edited ${kind}s; a top-level one it left out is found once it is edited`,
         })
     } while (start)
@@ -326,7 +334,12 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       return await reads.retrieveDatabase(id)
     } catch (error) {
       if (!isItemError(error)) throw error
-      warn({ id, code: (error as CliError).code, message: "a database search listed could not be read" })
+      warn({
+        id,
+        code: (error as CliError).code,
+        reason: "notion.database-unreadable",
+        message: "a database search listed could not be read",
+      })
       return undefined
     }
   }
@@ -375,7 +388,12 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         if (!file.trashed) files.push(file)
       } catch (error) {
         if (!isItemError(error)) throw error
-        warn({ id, code: (error as CliError).code, message: "a child Notion would not give was left out" })
+        warn({
+          id,
+          code: (error as CliError).code,
+          reason: "notion.child-unreadable",
+          message: "a child Notion would not give was left out",
+        })
       }
     }
     for (const page of found.pages) await child(page, async () => pageFile(await reads.retrievePage(page)))
@@ -396,7 +414,12 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         if (isNotFound(error)) listing.gone.push(file.id)
         else if (isItemError(error)) {
           listing.files.push(file)
-          warn({ id: file.id, code: (error as CliError).code, message: "kept as it was: Notion would not say" })
+          warn({
+            id: file.id,
+            code: (error as CliError).code,
+            reason: "notion.kept-unconfirmed",
+            message: "kept as it was: Notion would not say",
+          })
         } else throw error
       }
     }
@@ -541,16 +564,22 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       }
     }
 
+    // The engine walks again every folder it is sent, so a held page is sent only when Notion changed it.
+    const changedPage = (file: NotionFile) => unheld(file) || known.get(file.id)?.version !== file.version
+
     const walk = async (id: string) => {
-      const kind = id === WORKSPACE_ROOT ? "workspace" : (known.get(id)?.providerMetadata.kind ?? "database")
-      // Pages under pages wait for cli-core's page-with-children (C2); listing them now would cost requests for nothing.
+      const kind =
+        id === WORKSPACE_ROOT
+          ? "workspace"
+          : (known.get(id)?.providerMetadata.kind ?? (await retrieve(id)).providerMetadata.kind)
       if (kind === "database") return walkDatabase(id)
-      if (kind !== "workspace") return
+      if (kind === "row") return
       const listing = await listChildren(id)
       for (const file of listing.moved) emit(file)
       for (const file of listing.files) {
-        if (!isNotionFolder(file) || unheld(file)) emit(file)
-        if (file.providerMetadata.kind === "database") pass.tasks.push({ t: "walk", id: file.id })
+        const page = file.providerMetadata.kind === "page"
+        if (page ? changedPage(file) : unheld(file)) emit(file)
+        if (page || file.providerMetadata.kind === "database") pass.tasks.push({ t: "walk", id: file.id })
       }
       for (const gid of listing.gone) gone(gid)
     }
@@ -566,7 +595,12 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         const failure = isCliError(error) ? error : new CliError("provider_error", String(error))
         const id = task.t === "rows" ? task.database : task.t === "walk" ? task.id : undefined
         if (isItemError(failure)) {
-          warn({ ...(id ? { id } : {}), code: failure.code, message: `left out of this sync: ${failure.message}` })
+          warn({
+            ...(id ? { id } : {}),
+            code: failure.code,
+            reason: "notion.left-out",
+            message: `left out of this sync: ${failure.message}`,
+          })
           pass.tasks.shift()
           done++
           continue
@@ -576,6 +610,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         warn({
           ...(id ? { id } : {}),
           code: failure.code,
+          reason: "notion.stopped-early",
           message: `the sync stopped here and goes on next time: ${failure.message}`,
           ...(typeof failure.details.retry_after_ms === "number"
             ? { retry_after_ms: failure.details.retry_after_ms }
@@ -607,6 +642,31 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return [...found.values()]
   }
 
+  const content = async (id: string, maxChars?: number): Promise<SourceContent<NotionFile>> => {
+    containers = new Map()
+    const page = await reads.retrievePage(id)
+    if (page.in_trash) throw new CliError("not_found", "the page is in Notion's trash")
+    const file = await pageFile(page)
+    const body = await pageText(reads, id)
+    const fields = frontMatter(page.properties)
+    const metadata: NotionFile = {
+      ...file,
+      providerMetadata: {
+        ...file.providerMetadata,
+        frontMatter: fields,
+        people: people(page),
+        ...(body.missing ? { missingBlocks: body.missing } : {}),
+      },
+    }
+    const searchable = [file.name, ...frontMatterLines(fields), body.markdown].filter(Boolean).join("\n\n")
+    if (maxChars !== undefined && searchable.length > maxChars)
+      throw new CliError("validation_error", "the page is longer than the text limit", {
+        reason: "source.text-limit",
+        text_limit: maxChars,
+      })
+    return { metadata, markdown: body.markdown, text: withoutSignedLinks(searchable).text, tabs: [] }
+  }
+
   return {
     async identity() {
       const self = await reads.self()
@@ -634,38 +694,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       return encodeCursor(cursor)
     },
     changes,
-    async content(id, maxChars) {
-      containers = new Map()
-      const page = await reads.retrievePage(id)
-      if (page.in_trash) throw new CliError("not_found", "the page is in Notion's trash")
-      const file = await pageFile(page)
-      const body = await pageText(reads, id)
-      const fields = frontMatter(page.properties)
-      const metadata: NotionFile = {
-        ...file,
-        providerMetadata: {
-          ...file.providerMetadata,
-          frontMatter: fields,
-          people: people(page),
-          ...(body.missing ? { missingBlocks: body.missing } : {}),
-        },
-      }
-      const searchable = [file.name, ...frontMatterLines(fields), body.markdown].filter(Boolean).join("\n\n")
-      if (maxChars !== undefined && searchable.length > maxChars)
-        throw new CliError("validation_error", "the page is longer than the text limit", {
-          reason: "source.text-limit",
-          text_limit: maxChars,
-        })
-      const content: SourceContent<NotionFile> = {
-        metadata,
-        markdown: body.markdown,
-        text: withoutSignedLinks(searchable).text,
-        tabs: [],
-      }
-      return content
-    },
-    async bytes() {
-      throw new CliError("validation_error", "a Notion page has no file to download")
-    },
+    content,
+    // A page has no file of its own; its Markdown is the nearest thing to one.
+    bytes: async (id) => new TextEncoder().encode((await content(id)).markdown),
   }
 }

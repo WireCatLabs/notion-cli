@@ -9,7 +9,8 @@ import { type Document, documentSchema } from "../notion/notion.js"
 
 const CLI = IDENTITY.command
 
-const getCommand = () =>
+/** `documents get`: one page live, beside the shared commands that read the local copy. */
+export const getCommand = () =>
   answerEntity(
     annotate(new Command("get"), {
       effects: REMOTE_READ,
@@ -51,6 +52,3 @@ const getCommand = () =>
       if (issues.length > 0 && output.format !== "json" && output.format !== "jsonl")
         output.renderer.warn(`the page is incomplete: ${why}`)
     })
-
-export const documentsCommand = (): Command =>
-  annotate(new Command("documents"), { effects: REMOTE_READ }).description("read Notion pages").addCommand(getCommand())

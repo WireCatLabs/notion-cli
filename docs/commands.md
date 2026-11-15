@@ -107,9 +107,174 @@ notion session list
 
 **Example:** `notion session list`, `notion session list --json`
 
+## `notion folders`
+
+choose the Notion pages and databases sync copies; none chosen copies everything the token sees
+
+### `notion folders add`
+
+import a folder and everything under it on the next sync
+
+**Changes something on this computer only.**
+
+```sh
+notion folders add <folder>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `folder` | required | page or database id, or its Notion link. |
+
+**Example:** `notion personal folders add FOLDER_ID`
+
+### `notion folders list`
+
+list the folder ids sync imports
+
+```sh
+notion folders list [query]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+**Returns:** selected folder — id; every field: notion commands info folders list
+
+**Example:** `notion personal folders list`
+
+### `notion folders browse`
+
+list Notion pages and databases one level at a time, live, to choose one for folders add
+
+```sh
+notion folders browse [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--parent <id>` | page id or Notion link to list inside; the top of the workspace without it. |
+
+**Returns:** notion folder — id, name, kind, url, chosen; every field: notion commands info folders browse
+
+**Example:** `notion personal folders browse`, `notion personal folders browse --parent PAGE_ID --json`
+
+### `notion folders remove`
+
+stop importing a folder; the next sync drops its documents
+
+**Changes something on this computer only.**
+
+```sh
+notion folders remove <folder>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `folder` | required | page or database id, or its Notion link. |
+
+**Example:** `notion personal folders remove FOLDER_ID`
+
+## `notion sync`
+
+import what changed in the chosen folders, and finish an unfinished sync; one sync reads at most 10000 entries under the chosen folders, and as many changes
+
+**Changes something on this computer only.**
+
+```sh
+notion sync [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | how many pages to read from Notion in this run. Default: `200`. |
+| `--rescan` | read every chosen folder again instead of only what changed. |
+| `--embed` | also index pending text for meaning search, with a model already downloaded. |
+
+**Example:** `notion personal sync`, `notion personal sync --rescan --limit 500`
+
+## `notion status`
+
+show the last sync, imported documents and pending work
+
+```sh
+notion status
+```
+
+**Example:** `notion personal status`
+
 ## `notion documents`
 
-read Notion pages
+read Notion pages, live or from the local copy
+
+### `notion documents list`
+
+list the synced pages and database rows with their Notion links
+
+```sh
+notion documents list [query] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | how many documents to return. Default: `50`. |
+| `--page <n>` | which page to return. Default: `1`. |
+
+**Next usually:** `notion documents show <document>`, `notion documents context <document>`, `notion tags list <document> [query]`
+
+**Example:** `notion personal documents list`, `notion personal documents list tag:budget`, `notion personal documents list person:PERSON_UID --limit 10`
+
+### `notion documents show`
+
+show an imported document's text, tabs and metadata
+
+```sh
+notion documents show <document>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page id, Notion link, or a search hit's document: ref. |
+
+**Example:** `notion personal documents show DOC_ID`, `notion personal documents show document:42 --offline`
+
+### `notion documents export`
+
+write an imported document to a new Markdown file
+
+**Changes something on this computer only.**
+
+```sh
+notion documents export <document> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page id, Notion link, or a search hit's document: ref. |
+
+| Option | What it does |
+|---|---|
+| `--output <file>` | path of the Markdown file to write; an existing file is refused. |
+
+**Example:** `notion personal documents export DOC_ID --output notes.md`
+
+### `notion documents context`
+
+show a document with its tags, relationships, notes, memories and editors
+
+```sh
+notion documents context <document>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+
+**Example:** `notion personal documents context DOC_ID`
 
 ### `notion documents get`
 
@@ -126,6 +291,698 @@ notion documents get <page>
 **Returns:** document markdown — id, markdown, truncated, missing_block_ids, signed_links_removed; every field: notion commands info documents get
 
 **Example:** `notion personal documents get https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef`, `notion personal documents get 0123456789abcdef0123456789abcdef --json`
+
+### `notion documents add`
+
+read one page live and keep its text among the sources added by hand, where memo and search all find it; adding it again keeps its new text as the next revision
+
+**Changes something on this computer only.**
+
+```sh
+notion documents add <page> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `page` | required | the page's id or its Notion link. |
+
+| Option | What it does |
+|---|---|
+| `--title <title>` | the title to keep it under; the page's own when omitted. |
+| `--subject <ref>` | a person, organization, project, task or meeting it is about; repeat to add more. |
+
+**Example:** `notion personal documents add https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef`, `notion personal documents add PAGE_ID --subject person:PERSON_UID`
+
+## `notion search`
+
+search imported documents by words, and by meaning when indexed
+
+```sh
+notion search <query> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | required | words to look for, and fields such as tag: and date: that every hit must match. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | how many results to return. Default: `20`. |
+| `--page <n>` | which page to return. Default: `1`. |
+| `--exact` | match the words exactly: no word forms, no meaning. |
+
+**Example:** `notion personal search budget`, `notion personal search "quarterly plan" --exact --limit 5`
+
+## `notion catalog`
+
+browse the synced pages and databases offline
+
+### `notion catalog import`
+
+put cached file and folder metadata into the shared database
+
+**Changes something on this computer only.**
+
+```sh
+notion catalog import
+```
+
+**Example:** `notion personal catalog import --offline`
+
+### `notion catalog show`
+
+show stored metadata and the stable file or folder reference
+
+```sh
+notion catalog show <file>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `file` | required | page or database id, or its Notion link. |
+
+**Next usually:** `notion documents show <document>`, `notion documents context <document>`, `notion tags list <document> [query]`
+
+**Example:** `notion personal catalog show FILE_ID --offline`
+
+### `notion catalog list`
+
+list cached files and folders using metadata queries
+
+```sh
+notion catalog list [query] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | optional | metadata query: kind, mime, name, parent, person, tag; AND, OR, NOT. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | how many entries to return (at most 1000). Default: `50`. |
+| `--page <n>` | which page to return. Default: `1`. |
+
+**Next usually:** `notion documents show <document>`, `notion documents context <document>`, `notion tags list <document> [query]`
+
+**Example:** `notion personal catalog list "parent:FOLDER_ID AND kind:file" --offline`
+
+### `notion catalog search`
+
+search cached names, descriptions, types and observed people
+
+```sh
+notion catalog search <query> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | required | metadata query: kind, mime, name, parent, person, tag; AND, OR, NOT. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | how many entries to return (at most 1000). Default: `50`. |
+| `--page <n>` | which page to return. Default: `1`. |
+
+**Next usually:** `notion documents show <document>`, `notion documents context <document>`, `notion tags list <document> [query]`
+
+**Example:** `notion personal catalog search "budget AND person:Rin*" --offline`
+
+### `notion catalog tree`
+
+show the cached hierarchy below a folder or all selected roots
+
+```sh
+notion catalog tree [folder] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `folder` | optional | page or database id or link; defaults to the chosen folders, or the whole workspace. |
+
+| Option | What it does |
+|---|---|
+| `--depth <n>` | maximum descendant depth, from 0 to 50. Default: `5`. |
+
+**Example:** `notion personal catalog tree --offline`, `notion personal catalog tree FOLDER_ID --depth 3 --offline`
+
+### `notion catalog tags`
+
+add owner tags to cached files or folders
+
+#### `notion catalog tags list`
+
+list local tags on a cached file or folder
+
+```sh
+notion catalog tags list <file> [query]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `file` | required | page or database id, or its Notion link. |
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+**Returns:** document tag — tag; every field: notion commands info catalog tags list
+
+**Example:** `notion personal catalog tags list FOLDER_ID --offline`
+
+#### `notion catalog tags add`
+
+add local tags on a cached file or folder
+
+**Changes something on this computer only.**
+
+```sh
+notion catalog tags add <file> <tags>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `file` | required | page or database id, or its Notion link. |
+| `tags` | required | local tag names. |
+
+**Example:** `notion personal catalog tags add FOLDER_ID project --offline`
+
+#### `notion catalog tags remove`
+
+remove local tags on a cached file or folder
+
+**Changes something on this computer only.**
+
+```sh
+notion catalog tags remove <file> <tags>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `file` | required | page or database id, or its Notion link. |
+| `tags` | required | local tag names. |
+
+**Example:** `notion personal catalog tags remove FOLDER_ID project --offline`
+
+## `notion tags`
+
+label imported documents; labels survive a sync
+
+### `notion tags list`
+
+list a document's tags
+
+```sh
+notion tags list <document> [query]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+**Returns:** document tag — tag; every field: notion commands info tags list
+
+**Example:** `notion personal tags list DOC_ID`
+
+### `notion tags add`
+
+tag a document
+
+**Changes something on this computer only.**
+
+```sh
+notion tags add <document> <tags>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `tags` | required | one or more tags. |
+
+**Example:** `notion personal tags add DOC_ID budget q3`
+
+### `notion tags remove`
+
+untag a document
+
+**Changes something on this computer only.**
+
+```sh
+notion tags remove <document> <tags>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `tags` | required | one or more tags. |
+
+**Example:** `notion personal tags remove DOC_ID budget q3`
+
+## `notion relationships`
+
+connect a document to people, projects, notes and other references
+
+### `notion relationships list`
+
+list a document's relationships
+
+```sh
+notion relationships list <document> [query]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+**Returns:** document relationship — id, from, to, kind, role, confirmed, origin; every field: notion commands info relationships list
+
+**Example:** `notion personal relationships list DOC_ID`
+
+### `notion relationships add`
+
+connect a document to another reference
+
+**Changes something on this computer only.**
+
+```sh
+notion relationships add <document> <reference> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `reference` | required | what it connects to, such as person:<uid>, project:<id> or note:<id>. |
+
+| Option | What it does |
+|---|---|
+| `--kind <kind>` | how the two relate. One of: `links-to`, `about`, `evidence`, `created-from`, `related-to`, `assigned-to`. Default: `related-to`. |
+| `--role <role>` | the part the reference plays, in a word or two. |
+| `--reason <text>` | why the two are connected. |
+
+**Example:** `notion personal relationships add DOC_ID project:PROJECT_ID --kind about`, `notion personal relationships add DOC_ID person:PERSON_UID --kind assigned-to --role reviewer`
+
+### `notion relationships remove`
+
+remove one of a document's relationships
+
+**Changes something on this computer only.**
+
+```sh
+notion relationships remove <document> <relationship-id>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `relationship-id` | required | id, as relationships list prints it. |
+
+**Example:** `notion personal relationships remove DOC_ID LINK_ID`
+
+## `notion notes`
+
+write notes about an imported document
+
+### `notion notes add`
+
+write a note about a document
+
+**Changes something on this computer only.**
+
+```sh
+notion notes add <document> <text> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `text` | required | the note's text. |
+
+| Option | What it does |
+|---|---|
+| `--title <title>` | a title for the note. |
+
+**Returns:** note — ref, id, source, folder_id, path, title, text, revision, and 15 more; every field: notion commands info notes add
+
+**Next usually:** `notion notes show <document> <note>`, `notion notes edit <document> <note> <text>`, `notion notes remove <document> <note>`
+
+**Example:** `notion personal notes add DOC_ID "Check the numbers" --title Review`
+
+### `notion notes list`
+
+list a document's notes
+
+```sh
+notion notes list <document> [query] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | how many notes to return. Default: `50`. |
+| `--page <n>` | which page to return. Default: `1`. |
+
+**Returns:** note — ref, id, source, folder_id, path, title, text, revision, and 15 more; every field: notion commands info notes list
+
+**Next usually:** `notion notes show <document> <note>`, `notion notes edit <document> <note> <text>`, `notion notes remove <document> <note>`
+
+**Example:** `notion personal notes list DOC_ID`, `notion personal notes list DOC_ID text:review --limit 10`
+
+### `notion notes show`
+
+show one note
+
+```sh
+notion notes show <document> <note>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `note` | required | note:<id> reference, as notes list prints it. |
+
+**Returns:** note — ref, id, source, folder_id, path, title, text, revision, and 15 more; every field: notion commands info notes show
+
+**Next usually:** `notion notes edit <document> <note> <text>`, `notion notes remove <document> <note>`
+
+**Example:** `notion personal notes show DOC_ID note:NOTE_ID`
+
+### `notion notes edit`
+
+replace a note's text
+
+**Changes something on this computer only.**
+
+```sh
+notion notes edit <document> <note> <text> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `note` | required | note:<id> reference, as notes list prints it. |
+| `text` | required | the note's new text. |
+
+| Option | What it does |
+|---|---|
+| `--revision <n>` | revision from notes show; a newer note is not overwritten. |
+
+**Returns:** note — ref, id, source, folder_id, path, title, text, revision, and 15 more; every field: notion commands info notes edit
+
+**Next usually:** `notion notes show <document> <note>`, `notion notes remove <document> <note>`
+
+**Example:** `notion personal notes edit DOC_ID note:NOTE_ID "Numbers checked" --revision 2`
+
+### `notion notes remove`
+
+delete one note
+
+**Changes something on this computer only.**
+
+```sh
+notion notes remove <document> <note>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `note` | required | note:<id> reference, as notes list prints it. |
+
+**Example:** `notion personal notes remove DOC_ID note:NOTE_ID`
+
+## `notion memories`
+
+keep what was learned from a document, with evidence; an agent's stay proposed
+
+### `notion memories add`
+
+record a memory about a document
+
+**Changes something on this computer only.**
+
+```sh
+notion memories add <document> <text> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `text` | required | what to remember. |
+
+| Option | What it does |
+|---|---|
+| `--scope <scope>` | whose memory it is: personal or work. One of: `personal`, `work`. |
+| `--kind <kind>` | what kind of memory it is. One of: `summary`, `digest`, `preference`. Default: `summary`. |
+| `--supersedes <ref>` | a memory:<id> about the same document that this one replaces. |
+
+**Example:** `notion personal memories add DOC_ID "The team prefers async reviews" --scope work --kind preference`
+
+### `notion memories list`
+
+list a document's memories
+
+```sh
+notion memories list <document> [query] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | how many memories to return. Default: `50`. |
+
+**Returns:** memory — ref, id, kind, text, subject, author, model, confidence, and 13 more; every field: notion commands info memories list
+
+**Example:** `notion personal memories list DOC_ID scope:work`, `notion personal memories list DOC_ID kind:preference status:confirmed`
+
+### `notion memories show`
+
+show one memory
+
+```sh
+notion memories show <document> <memory>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `memory` | required | memory:<id> reference, as memories list prints it. |
+
+**Example:** `notion personal memories show DOC_ID memory:MEMORY_ID`
+
+### `notion memories confirm`
+
+confirm a proposed memory as true
+
+**Changes something on this computer only.**
+
+```sh
+notion memories confirm <document> <memory>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `memory` | required | memory:<id> reference, as memories list prints it. |
+
+**Example:** `notion personal memories confirm DOC_ID memory:MEMORY_ID`
+
+### `notion memories stale`
+
+mark a memory as out of date
+
+**Changes something on this computer only.**
+
+```sh
+notion memories stale <document> <memory>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `memory` | required | memory:<id> reference, as memories list prints it. |
+
+**Example:** `notion personal memories stale DOC_ID memory:MEMORY_ID`
+
+### `notion memories search`
+
+search a document's memories by words
+
+```sh
+notion memories search <document> <query>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `query` | required | words to look for, and scope:personal or scope:work — the fields are below. |
+
+**Returns:** memory — ref, id, kind, text, subject, author, model, confidence, and 13 more; every field: notion commands info memories search
+
+**Example:** `notion personal memories search DOC_ID reviews scope:work`, `notion personal memories search DOC_ID "async reviews"`
+
+### `notion memories extract`
+
+send a document's text to the model and show the memories it proposes
+
+**Changes something in the service.**
+
+```sh
+notion memories extract <document> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+
+| Option | What it does |
+|---|---|
+| `--scope <scope>` | whose memories they become: personal or work. One of: `personal`, `work`. |
+| `--tab <id>` | send only this tab of the document. |
+| `--yes` | save the proposals, each with its quote and the document's version. |
+
+**Example:** `notion personal memories extract DOC_ID --scope work`, `notion personal memories extract DOC_ID --scope work --yes`
+
+## `notion facts`
+
+what happened, as a document shows it; an agent's stay proposed until confirmed
+
+### `notion facts add`
+
+record a fact a document shows
+
+**Changes something on this computer only.**
+
+```sh
+notion facts add <document> <statement> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `statement` | required | the fact, in one sentence. |
+
+| Option | What it does |
+|---|---|
+| `--type <type>` | what kind of fact it is. One of: `fact`, `statement`, `question`, `decision`, `promise`. Default: `fact`. |
+| `--scope <scope>` | whose fact it is: personal or work. One of: `personal`, `work`. |
+| `--supersedes <ref>` | a decision only: the decision this one replaces. |
+| `--occurred-time <time>` | when it happened, as the evidence shows, ISO 8601; a time without a zone is read in this computer's zone, a date alone as its midnight. |
+
+**Example:** `notion personal facts add DOC_ID "Budget approved" --type decision --scope work`
+
+### `notion facts list`
+
+list a document's facts
+
+```sh
+notion facts list <document> [query] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | how many facts to return. Default: `50`. |
+
+**Returns:** fact — ref, id, kind, text, status, project, subject, occurred_at, and 14 more; every field: notion commands info facts list
+
+**Example:** `notion personal facts list DOC_ID status:proposed`, `notion personal facts list DOC_ID kind:decision`
+
+### `notion facts show`
+
+show one fact
+
+```sh
+notion facts show <document> <fact>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `fact` | required | fact:<id> reference, as facts list prints it. |
+
+**Example:** `notion personal facts show DOC_ID fact:FACT_ID`
+
+### `notion facts confirm`
+
+confirm a proposed fact; a decision it supersedes stops holding
+
+**Changes something on this computer only.**
+
+```sh
+notion facts confirm <document> <fact>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `fact` | required | fact:<id> reference, as facts list prints it. |
+
+**Example:** `notion personal facts confirm DOC_ID fact:FACT_ID`
+
+### `notion facts reverse`
+
+an accepted decision no longer holds, and nothing replaced it
+
+**Changes something on this computer only.**
+
+```sh
+notion facts reverse <document> <fact>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `fact` | required | fact:<id> reference, as facts list prints it. |
+
+**Example:** `notion personal facts reverse DOC_ID fact:FACT_ID`
+
+## `notion identities`
+
+the Notion accounts seen on a document, and the people they belong to
+
+### `notion identities list`
+
+list the creator and last editor Notion shows for a page
+
+```sh
+notion identities list <document> [query]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+**Returns:** document identity — remote_id, provider, role, person; every field: notion commands info identities list
+
+**Example:** `notion personal identities list DOC_ID`
+
+### `notion identities link`
+
+record that a Notion account belongs to a known person
+
+**Changes something on this computer only.**
+
+```sh
+notion identities link <document> <notion-id> <person>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page or database id or Notion link in the local copy, or a document:<n> ref. |
+| `notion-id` | required | Notion account id, as identities list prints it. |
+| `person` | required | person:<uid> reference of someone already known. |
+
+**Example:** `notion personal identities link DOC_ID NOTION_ID person:PERSON_UID`
 
 ## `notion databases`
 

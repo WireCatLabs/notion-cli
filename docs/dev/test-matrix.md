@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**78 ✅ · 214 ⛔ · 0 ❌** — 96 commands, 196 options.
+**154 ✅ · 219 ⛔ · 0 ❌** — 141 commands, 232 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -19,7 +19,88 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `session status` | `--check` | ✅ |  |
 | `session end` |  | ✅ |  |
 | `session list` |  | ✅ |  |
+| `folders add` |  | ✅ |  |
+| `folders list` |  | ✅ |  |
+| `folders browse` |  | ✅ |  |
+| `folders browse` | `--parent` | ✅ |  |
+| `folders remove` |  | ✅ |  |
+| `sync` |  | ✅ |  |
+| `sync` | `--limit` | ✅ |  |
+| `sync` | `--rescan` | ✅ |  |
+| `sync` | `--embed` | ⛔ | needs a downloaded meaning model or a configured model provider; cli-core's documents kit tests the shared command with a fake model, and no test here downloads one |
+| `status` |  | ✅ |  |
+| `documents list` |  | ✅ |  |
+| `documents list` | `--limit` | ✅ |  |
+| `documents list` | `--page` | ✅ |  |
+| `documents show` |  | ✅ |  |
+| `documents export` |  | ✅ |  |
+| `documents export` | `--output` | ✅ |  |
+| `documents context` |  | ✅ |  |
 | `documents get` |  | ✅ |  |
+| `documents add` |  | ✅ |  |
+| `documents add` | `--title` | ✅ |  |
+| `documents add` | `--subject` | ✅ |  |
+| `search` |  | ✅ |  |
+| `search` | `--limit` | ✅ |  |
+| `search` | `--page` | ✅ |  |
+| `search` | `--exact` | ✅ |  |
+| `catalog import` |  | ✅ |  |
+| `catalog show` |  | ✅ |  |
+| `catalog list` |  | ✅ |  |
+| `catalog list` | `--limit` | ✅ |  |
+| `catalog list` | `--page` | ✅ |  |
+| `catalog search` |  | ✅ |  |
+| `catalog search` | `--limit` | ✅ |  |
+| `catalog search` | `--page` | ✅ |  |
+| `catalog tree` |  | ✅ |  |
+| `catalog tree` | `--depth` | ✅ |  |
+| `catalog tags list` |  | ✅ |  |
+| `catalog tags add` |  | ✅ |  |
+| `catalog tags remove` |  | ✅ |  |
+| `tags list` |  | ✅ |  |
+| `tags add` |  | ✅ |  |
+| `tags remove` |  | ✅ |  |
+| `relationships list` |  | ✅ |  |
+| `relationships add` |  | ✅ |  |
+| `relationships add` | `--kind` | ✅ |  |
+| `relationships add` | `--role` | ✅ |  |
+| `relationships add` | `--reason` | ✅ |  |
+| `relationships remove` |  | ✅ |  |
+| `notes add` |  | ✅ |  |
+| `notes add` | `--title` | ✅ |  |
+| `notes list` |  | ✅ |  |
+| `notes list` | `--limit` | ✅ |  |
+| `notes list` | `--page` | ✅ |  |
+| `notes show` |  | ✅ |  |
+| `notes edit` |  | ✅ |  |
+| `notes edit` | `--revision` | ✅ |  |
+| `notes remove` |  | ✅ |  |
+| `memories add` |  | ✅ |  |
+| `memories add` | `--scope` | ✅ |  |
+| `memories add` | `--kind` | ✅ |  |
+| `memories add` | `--supersedes` | ✅ |  |
+| `memories list` |  | ✅ |  |
+| `memories list` | `--limit` | ✅ |  |
+| `memories show` |  | ✅ |  |
+| `memories confirm` |  | ✅ |  |
+| `memories stale` |  | ✅ |  |
+| `memories search` |  | ✅ |  |
+| `memories extract` |  | ⛔ | needs a downloaded meaning model or a configured model provider; cli-core's documents kit tests the shared command with a fake model, and no test here downloads one |
+| `memories extract` | `--scope` | ⛔ | needs a downloaded meaning model or a configured model provider; cli-core's documents kit tests the shared command with a fake model, and no test here downloads one |
+| `memories extract` | `--tab` | ⛔ | needs a downloaded meaning model or a configured model provider; cli-core's documents kit tests the shared command with a fake model, and no test here downloads one |
+| `memories extract` | `--yes` | ⛔ | needs a downloaded meaning model or a configured model provider; cli-core's documents kit tests the shared command with a fake model, and no test here downloads one |
+| `facts add` |  | ✅ |  |
+| `facts add` | `--type` | ✅ |  |
+| `facts add` | `--scope` | ✅ |  |
+| `facts add` | `--supersedes` | ✅ |  |
+| `facts add` | `--occurred-time` | ✅ |  |
+| `facts list` |  | ✅ |  |
+| `facts list` | `--limit` | ✅ |  |
+| `facts show` |  | ✅ |  |
+| `facts confirm` |  | ✅ |  |
+| `facts reverse` |  | ✅ |  |
+| `identities list` |  | ✅ |  |
+| `identities link` |  | ✅ |  |
 | `databases list` |  | ✅ |  |
 | `databases list` | `--limit` | ✅ |  |
 | `databases list` | `--cursor` | ✅ |  |

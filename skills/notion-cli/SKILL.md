@@ -1,6 +1,6 @@
 ---
 name: notion-cli
-description: Use notion, the WireCat CLI for Notion, from an agent — read a Notion page as Markdown, list databases and their data source ids and properties, with the owner's profile and JSON answers. Use when a task needs a Notion page or database.
+description: Use notion, the WireCat CLI for Notion, from an agent — search a synced copy of Notion pages offline, read a page as Markdown live or from the copy, list databases and their data source ids and properties, with the owner's profile and JSON answers. Use when a task needs a Notion page or database.
 metadata:
   openclaw:
     requires:
@@ -21,6 +21,12 @@ yourself; if none is given, run a command without one and read the profiles the 
 - `notion <profile> databases list --json` lists the databases the token sees, one row per data source; follow
   `page.next` for more. `notion <profile> databases show <id or link> --json` gives each data source's id and its
   properties, with the options of each select and status.
+- `notion <profile> search "<words>" --json` searches the local copy, Lucene syntax; each hit's `id` is the page id.
+  Then `notion <profile> documents show <id> --json` gives its text, or `documents context <id>` its tags, notes,
+  memories and people. An answer with `missing` on `synced_at` means the copy is over a day old: run
+  `notion <profile> sync --json` first.
+- `notion <profile> sync --json` copies what changed. `meta.issues` and `item.warnings` name pages Notion would not
+  give; `item.pending` above 0 means run it again. `notion <profile> status --json` says how far it is.
 - `notion <profile> session status --check --json` says whether the token works, and for which workspace.
 
 Find the rest with the tool itself: `notion commands --json`, `notion help <command>`, `notion doctor --json`.

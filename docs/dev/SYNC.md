@@ -11,18 +11,16 @@ pages, keeps the checkpoint and resumes a cut batch. The reads it needs from Not
 
 - With no folder chosen: everything the token sees. The sync puts it under one folder that stands for the
   workspace (`notion-workspace`).
-- With folders chosen (`folders add`): only those databases and their rows.
-- A top-level page is a document. A database is a folder, and each of its rows is a document. A row's properties
-  become its front matter, and also lines of its searchable text, `Status: Done`.
+- With folders chosen (`folders add`): only those pages and databases, and everything under them.
+- A page is a folder and a document at once: the engine lists its children and saves its text (cli-core's
+  `isDocument`). A database is a folder, and each of its rows is a document. A row is a plain file, so the
+  children of a row are not listed. A row's properties become its front matter, and also lines of its searchable
+  text, `Status: Done`.
 - A page whose parent the token cannot see is filed at the top of the workspace.
 
-**Not yet: pages under pages.** cli-core's sync engine treats a folder and a document as two different things, and
-a Notion page with child pages is both. Until cli-core can plan such a page (its change C2), the sync does not
-store a page that sits under another page, or a database that sits in a page, and a page cannot be chosen as a
-folder. The walk does not list the children of pages either, so it spends no requests on them. The fix is in
-cli-core: `syncDocuments` takes an optional `isDocument(file)`, so a page with children is walked and also saved
-([cli-core#2941](https://github.com/WireCatLabs/cli-core/pull/2941), not released yet). The sync uses it once it
-is released.
+**The cost of pages as folders.** The engine lists the children of every folder it is sent. So a page is sent
+again only when Notion changed it, and a full walk asks for each page's children once. Listing a page's children
+reads every block that holds others (toggles, columns, lists), since a child page can sit inside one.
 
 ## The position between syncs
 
@@ -47,8 +45,8 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 2. **Each database in scope**, queried for rows edited on or after the mark minus the overlap
    ([timestamp filter](https://developers.notion.com/reference/filter-data-source-entries)). This does not depend on
    search, so a row search misses is still found.
-3. **Every 24 hours, a full walk** instead of step 2. It lists the top of the workspace from search, and every row
-   of every database by query. `sync --rescan` walks at once.
+3. **Every 24 hours, a full walk** instead of step 2. It lists the top of the workspace from search, the children
+   of every page, and every row of every database by query. `sync --rescan` walks at once.
 4. **Before anything is removed**, the sync asks Notion for it directly
    ([retrieve a page](https://developers.notion.com/reference/retrieve-a-page)). It is removed only when Notion
    answers that it is in the trash, or answers 404 (deleted, or no longer shared with the token). A page that is
@@ -83,7 +81,7 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 
 What the sync does not promise:
 
-- Pages under pages, as above, until cli-core's C2.
+- The children of a database row: a row is not listed as a folder.
 - In the default scope, the top of the walk comes from search. A top-level page that search has never returned
   and the sync has never held is found only once search returns it.
 - Search counts database rows as pages and stops at 10,000 results. In a workspace with more pages and rows than
@@ -92,6 +90,13 @@ What the sync does not promise:
   that the sync never held is found once it is edited.
 - A block the token may not see stays out of the text. Notion lists those blocks with the cut ones and does not
   say which is which, so each is asked for once and counted when Notion refuses it.
+
+## Warnings in the answer
+
+Each item or step the source leaves out calls `warn`. `sync` answers every warning in `item.warnings`, with the id
+and the words, and once per kind in `meta.issues` (`code`, `reason`, `source: notion`), such as
+`notion.child-unreadable` for a linked database view. A warning does not make the answer partial: the next sync
+would leave the same item out.
 
 ## Bounds and errors
 

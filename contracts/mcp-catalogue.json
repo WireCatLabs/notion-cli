@@ -1,6 +1,7 @@
 {
   "session status": "read",
   "session list": "read",
+  "folders browse": "read",
   "documents get": "read",
   "databases list": "read",
   "databases show": "read",

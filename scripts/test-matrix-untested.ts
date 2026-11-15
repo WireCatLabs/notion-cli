@@ -20,7 +20,14 @@ const SHARED_MCP =
 const SHARED_REPORTS = "cli-core's appDoctorCommand; its app-mcp-command test creates and shows a report"
 const LONG_RUNNING = `starts an HTTP server or a background process that runs until stopped; ${SHARED_MCP}`
 
+const MODEL =
+  "needs a downloaded meaning model or a configured model provider; cli-core's documents kit tests the shared command " +
+  "with a fake model, and no test here downloads one"
+
 export const UNTESTED: { command: string; option?: string; reason: string }[] = [
+  { command: "sync", option: "--embed", reason: MODEL },
+  { command: "memories extract", reason: MODEL },
+  ...["--scope", "--tab", "--yes"].map((option) => ({ command: "memories extract", option, reason: MODEL })),
   { command: "api *", reason: GENERATED },
   ...generatedOptions.map((option) => ({ command: "api *", option, reason: GENERATED })),
   {

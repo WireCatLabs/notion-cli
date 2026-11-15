@@ -3,9 +3,9 @@
 `notion` reads your Notion pages and databases for you and your AI agent: in the terminal, in scripts and through
 MCP. It signs in with your own Notion token, kept in your system keyring.
 
-**Status: in development.** It signs in and reads live from Notion today. Next it keeps a copy of the pages you
-choose on your computer, searchable offline with the rest of WireCat, then writes pages, and later keeps a folder of
-Markdown files in step with a Notion page tree. The order of work is in [docs/dev/DESIGN.md](docs/dev/DESIGN.md).
+**Status: in development.** It signs in, reads live from Notion, and keeps a copy of your pages on your computer,
+searchable offline with the rest of WireCat. Next it searches database rows by their properties, then writes pages,
+and later keeps a folder of Markdown files in step with a Notion page tree. The order of work is in [docs/dev/DESIGN.md](docs/dev/DESIGN.md).
 
 ## What it does now
 
@@ -13,7 +13,13 @@ Markdown files in step with a Notion page tree. The order of work is in [docs/de
   - a [personal access token](https://developers.notion.com/guides/connections-and-tokens/personal-access-tokens),
     which acts with your own rights;
   - or an internal connection's token, which sees only the pages shared with that connection.
-- `notion personal documents get <page id or link>` prints one page as Markdown.
+- `notion personal documents get <page id or link>` prints one page as Markdown, live.
+- `notion personal sync` copies the pages, the pages under them, the databases and their rows into WireCat's shared
+  store. With no folder chosen it copies everything the token sees. `folders add <page or database>` narrows it, and
+  `folders browse` shows what there is to choose, one level at a time.
+- `notion personal search <words>` searches the copy offline, in Lucene syntax. `documents list|show|export|context`
+  read it, `status` says how far the sync is, and `tags`, `notes`, `memories` and `facts` keep your own notes on a
+  page. `memo search` and `search all` find the pages too.
 - `notion personal databases list` lists the databases the token sees; `databases show <id or link>` gives each data
   source's id and its properties.
 - `notion doctor`, `notion personal mcp serve` and the other commands every WireCat CLI shares.
