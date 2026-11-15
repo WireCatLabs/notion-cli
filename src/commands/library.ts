@@ -274,7 +274,7 @@ export const libraryCommands = (): Command[] => {
       diagnostic: (text) => outputFor(command()).streams.diagnostic(text),
       profile,
       maxEntries: MAX_ENTRIES,
-      sync: async ({ limit, rescan, embed }) => {
+      sync: async ({ limit, rescan, embed, budget, deadline }) => {
         refuseOffline(command(), "Notion")
         warnings = []
         const name = profile()
@@ -309,6 +309,8 @@ export const libraryCommands = (): Command[] => {
                 storeVersion: VERSION,
                 ...(context().environment.signal ? { signal: context().environment.signal } : {}),
                 ...(rescan ? { rescan } : {}),
+                ...(budget ? { budget } : {}),
+                ...(deadline ? { deadline } : {}),
               })
               if (!embed) return synced
               const { embedNotes } = await import("@wirecat/cli-core/services")

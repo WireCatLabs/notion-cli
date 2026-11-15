@@ -177,7 +177,7 @@ notion folders remove <folder>
 
 ## `notion sync`
 
-import what changed in the chosen folders, and finish an unfinished sync; one sync reads at most 10000 entries under the chosen folders, and as many changes
+import what changed in the chosen folders, and finish an unfinished sync; one sync walks about 10000 entries under the chosen folders, saves where it stopped, and the next sync goes on from there
 
 **Changes something on this computer only.**
 
@@ -188,7 +188,7 @@ notion sync [options]
 | Option | What it does |
 |---|---|
 | `--limit <n>` | how many pages to read from Notion in this run. Default: `200`. |
-| `--rescan` | read every chosen folder again instead of only what changed. |
+| `--rescan` | read every chosen folder again instead of only what changed; each --rescan starts the walk over, so run it once and continue with a plain sync. |
 | `--embed` | also index pending text for meaning search, with a model already downloaded. |
 
 **Example:** `notion personal sync`, `notion personal sync --rescan --limit 500`

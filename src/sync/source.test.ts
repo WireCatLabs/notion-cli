@@ -477,6 +477,22 @@ describe("the Notion source under cli-core's sync engine", () => {
     )
   })
 
+  it("skips a block inside a page whose children Notion will not list (404), and reads the rest", async () => {
+    notion.blocks.set("synced", under("a"))
+    notion.blocks.set("col", under("a"))
+    notion.addPage({ id: "in-col", title: "In a column", parent: { type: "block_id", block_id: "col" } })
+    const run = harness(notion)
+    notion.failNext("blockChildren", new CliError("not_found", "the original is not shared", { status: 404 }), "synced")
+    const first = await run.sync()
+    expect(first.errors).toEqual([])
+    expect([...run.saved.keys()]).toEqual(expect.arrayContaining(["a", "a1", "in-col"]))
+    expect(run.warnings).toContainEqual(expect.objectContaining({ id: "synced", reason: "notion.left-out" }))
+    notion.failNext("blockChildren", new CliError("not_found", "the original is not shared", { status: 404 }), "synced")
+    const again = await run.sync(true)
+    expect(again.removed).toBe(0)
+    expect(run.saved.has("in-col")).toBe(true)
+  })
+
   it("keeps a database and its rows when Notion refuses to read it (403); only a 404 removes", async () => {
     const run = harness(notion)
     await run.sync()
@@ -680,6 +696,11 @@ describe.each([
       change: async () => {
         notion.advance(HOUR)
         notion.edit("a2", { markdown: "deep v2" })
+      },
+      addNested: async () => {
+        notion.advance(HOUR)
+        notion.addPage({ id: "a3", title: "Added deep", parent: under("a2"), markdown: "new" })
+        return { file: "a3", folder: "a2" }
       },
     }
   }))

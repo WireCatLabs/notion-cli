@@ -144,8 +144,9 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
    - A database query stops at 10,000 rows and says so
      ([query a data source](https://developers.notion.com/reference/query-a-data-source)); the store's catalog takes
      at most 10,000 entries per scope. Every page of results is checked, and a folder that would pass a limit fails
-     with an error that names it, never a silent cut. The store has no ceiling any more; one sync walks at most
-     10,000 entries under the chosen folders (`maxEntries`), and says so when a scope passes it.
+     with an error that names it, never a silent cut. The store has no ceiling any more, and neither has the sync: one
+     sync walks at most 10,000 entries (`maxEntries`) and its run's budget, saves where it stopped, and the next sync
+     goes on.
    - Requests are paced below Notion's limit of 180 a minute per connection, with a second, slower pace for database
      queries ([request limits](https://developers.notion.com/reference/request-limits)), through cli-core's pacer.
      cli-base's retry waits for `Retry-After`; search and database queries are POST, so they are marked as reads.

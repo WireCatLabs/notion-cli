@@ -127,13 +127,12 @@ describe("sync over the shared store", () => {
     expect(inside.items.map((item) => item.id).sort()).toEqual([CHILD, TASKS].sort())
   })
 
-  it("names what Notion would not give in meta.issues and the answer's warnings, and exits 6 for now", async () => {
+  it("names what Notion would not give in meta.issues and the answer's warnings, and exits 0", async () => {
     const notion = workspace()
     notion.addDatabase({ id: VIEW, title: "Linked view", parent: under(ROADMAP), sources: [id(9)], unreadable: true })
     const { run } = cli(notion)
     const ran = await run(["sync"])
-    // 0 once cli-core's shared sync declares `partial`; the contract forbids notion to declare it (WC-OUT-7).
-    expect(ran.code).toBe(6)
+    expect(ran.code).toBe(0)
     const synced = ran.json() as {
       item: { warnings: { id: string; reason: string }[] }
       meta: { issues: unknown[]; complete: boolean }
@@ -274,16 +273,29 @@ describe("sync over the shared store", () => {
     })
   })
 
-  it("syncs a page with 200 pages under it: the pace waits on the run's clock, not the wall's", async () => {
+  it("syncs a page with 60 pages under it over several runs, the pace waiting on the run's clock", async () => {
     const notion = new FakeNotion()
     notion.addPage({ id: id(100), title: "Hub", parent: top, markdown: "hub" })
-    for (let n = 0; n < 200; n++)
+    for (let n = 0; n < 60; n++)
       notion.addPage({ id: id(200 + n), title: `Leaf ${n}`, parent: under(id(100)), markdown: "leaf" })
     const { run } = cli(notion)
-    const synced = await run(["sync", "--limit", "500"])
-    expect(synced.code, synced.err).toBe(0)
-    expect(synced.waits.length).toBeGreaterThan(0)
-    expect(synced.json()).toMatchObject({ item: { saved: 201 } })
+    const first = await run(["sync", "--limit", "500"])
+    expect(first.code, first.err).toBe(0)
+    expect(first.json()).toMatchObject({
+      item: { complete: false, stopped: "requests" },
+      next: [{ command: "sync", safe_to_auto_execute: true }],
+    })
+    let saved = (first.json() as { item: { saved: number } }).item.saved
+    let waits = first.waits.length
+    for (let round = 0; round < 3; round++) {
+      const again = await run(["sync", "--limit", "500", "--timeout", "10m"])
+      expect(again.code, again.err).toBe(0)
+      saved += (again.json() as { item: { saved: number } }).item.saved
+      waits += again.waits.length
+      if ((again.json() as { meta: { complete: boolean } }).meta.complete) break
+    }
+    expect(saved).toBe(61)
+    expect(waits).toBeGreaterThan(0)
   })
 
   it("reads the local copy without Notion, and says to sync when there is none", async () => {

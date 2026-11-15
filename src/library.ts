@@ -41,11 +41,6 @@ export const openStore = (env: NodeJS.ProcessEnv, write: boolean): Promise<Messa
     readOnly: !write || readOnlyLockOf(IDENTITY, env) !== undefined,
   })
 
-/**
- * A write leaves the search index caught up: a page is indexed only when a writable search drains what was written,
- * so a read-only search right after a sync found it by title but not by its words. cli-core's `drainNoteIndex` is not
- * exported; `embedded` drains before it looks.
- */
 export const withStore = async <T>(
   env: NodeJS.ProcessEnv,
   write: boolean,
@@ -53,9 +48,7 @@ export const withStore = async <T>(
 ): Promise<T> => {
   const store = await openStore(env, write)
   try {
-    const value = await fn(store)
-    if (write && readOnlyLockOf(IDENTITY, env) === undefined) await store.notes.embedded("", {})
-    return value
+    return await fn(store)
   } finally {
     await store.close()
   }
