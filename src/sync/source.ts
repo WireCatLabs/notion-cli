@@ -1,7 +1,9 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
+import { type Deadline, deadlineMargin } from "@wirecat/cli-core/background"
 import type { DocumentSource, SourceChange, SourceContent, SourceFile } from "@wirecat/cli-core/documents"
 import { withoutSignedLinks } from "../notion/links.js"
 import type {
+  NotionBlock,
   NotionDatabase,
   NotionDataSource,
   NotionList,
@@ -51,16 +53,24 @@ export interface NotionFile extends SourceFile {
 }
 
 /**
- * Until cli-core plans a page with children as both a folder and a document (C2), only the workspace and databases
- * are folders: the engine syncs top-level pages and database rows, not pages under pages.
+ * Every page may hold sub-pages, so every page is a folder; a root must be one too. A row stays a plain file: listing
+ * the children of every row would cost a request per row.
  */
-export const isNotionFolder = (file: NotionFile) =>
-  file.providerMetadata.kind === "workspace" || file.providerMetadata.kind === "database"
+export const isNotionFolder = (file: NotionFile) => file.providerMetadata.kind !== "row"
+
+/** A page is a folder and a document at once: the engine walks its children and imports its text. */
+export const isNotionDocument = (file: NotionFile) => file.providerMetadata.kind === "page"
+
+/** A page may have an empty title, and every catalog entry needs a name. */
+export const UNTITLED = "Untitled"
 
 export interface NotionSourceOptions {
   /** Chosen pages and databases; none means everything the token sees. */
   roots?: string[]
-  /** What the sync already holds (the state's documents and folders), to tell a missed page from a deleted one. */
+  /**
+   * What the sync already holds (the state's documents and folders), to tell a missed page from a deleted one. Read
+   * once: a source serves one sync run.
+   */
   known?: () => Iterable<NotionFile>
   /** How far back each pass reads before the mark; at least two minutes. */
   overlapMs?: number
@@ -71,11 +81,19 @@ export interface NotionSourceOptions {
   now?: () => number
   /** An item or a step left out of this sync, and why; the sync went on without it. */
   warn?: (warning: SyncWarning) => void
+  /**
+   * The run's hard limit: `changes()` stops before it, less its margin and the slowest request so far, and saves the
+   * pass for the next sync. Read on `clock`, the wall clock by default.
+   */
+  deadline?: Deadline
+  clock?: () => number
 }
 
 export interface SyncWarning {
   id?: string
-  code: string
+  code: CliError["code"]
+  /** What happened, as a dotted id: `meta.issues` names it. */
+  reason: string
   message: string
   retry_after_ms?: number
 }
@@ -100,6 +118,8 @@ const isNotFound = (error: unknown) => isCliError(error) && error.code === "not_
 /** Answers about one item, not the sync: a linked database view answers 404 by design, a restricted page 403. */
 const isItemError = (error: unknown) =>
   isCliError(error) && (error.code === "not_found" || error.code === "permission_error")
+/** A request Notion refused as sent (400), such as a list position it no longer takes. */
+const isRefused = (error: unknown) => isCliError(error) && error.code === "validation_error"
 const text = (parts: { plain_text: string }[]) => parts.map((part) => part.plain_text).join("")
 
 interface Listing {
@@ -110,6 +130,11 @@ interface Listing {
   moved: NotionFile[]
 }
 
+const OUT_OF_TIME = new Error("the run's deadline is near")
+
+/** Whether a Notion pass is still under way: the next `changes()` goes on with its tasks. */
+export const passUnderWay = (token: string | undefined) => token !== undefined && decodeCursor(token).pass !== undefined
+
 export const notionSource = (notion: NotionReads, options: NotionSourceOptions = {}): DocumentSource<NotionFile> => {
   const overlapMs = options.overlapMs ?? DEFAULTS.overlapMs
   if (overlapMs < MIN_OVERLAP_MS) throw new CliError("validation_error", "the sync overlap must be two minutes or more")
@@ -119,13 +144,25 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
   const now = options.now ?? Date.now
 
   const warn = options.warn ?? (() => undefined)
+  const clock = options.clock ?? Date.now
+  const deadline = options.deadline
+  const margin = deadline ? deadlineMargin(deadline) : 0
 
   let requests = 0
+  /** Set while `changes()` runs: a request that could end past the deadline is not sent. */
+  let timed = false
+  let slowest = 0
   const counted =
     <A extends unknown[], R>(call: (...args: A) => Promise<R>) =>
-    (...args: A) => {
+    async (...args: A) => {
+      const started = clock()
+      if (timed && deadline && started + slowest + margin >= deadline.endsAt) throw OUT_OF_TIME
       requests++
-      return call.apply(notion, args)
+      try {
+        return await call.apply(notion, args)
+      } finally {
+        slowest = Math.max(slowest, clock() - started)
+      }
     }
   const reads: NotionReads = {
     self: counted(notion.self),
@@ -138,14 +175,16 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     pageMarkdown: counted(notion.pageMarkdown),
   }
 
-  // Read once per call: the state the engine holds does not change while the source lists.
+  // The state the engine holds does not change while the source lists, and parsing it costs as much as a request.
+  let held: Map<string, NotionFile> | undefined
   let known = new Map<string, NotionFile>()
   // Containers resolved within one call; a page's parent is re-read on the next one, as it may have moved.
   let containers = new Map<string, string>()
   let accessible = new Set<string>()
   let newestSeen = Number.NEGATIVE_INFINITY
   const fresh = () => {
-    known = new Map([...(options.known?.() ?? [])].map((file) => [file.id, file]))
+    held ??= new Map([...(options.known?.() ?? [])].map((file) => [file.id, file]))
+    known = held
     containers = new Map()
     accessible = new Set(known.keys())
   }
@@ -184,7 +223,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     const row = page.parent.type === "data_source_id" || page.parent.type === "database_id"
     return {
       id: page.id,
-      name: titleOf(page.properties),
+      name: titleOf(page.properties).trim() || UNTITLED,
       mime: "application/vnd.notion.page",
       parents: [await containerOf(page.parent)],
       version: versionOf(page.last_edited_time),
@@ -202,11 +241,38 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
   }
 
+  /**
+   * A page as its parent's listing gives it, with no read of its own. A page under a page has only its title for
+   * properties, and the block names it, its times and its authors (https://developers.notion.com/reference/block).
+   */
+  const childPageFile = (block: NotionBlock, container: string): NotionFile => {
+    accessible.add(block.id)
+    return {
+      id: block.id,
+      name: block.child_page?.title.trim() || UNTITLED,
+      mime: "application/vnd.notion.page",
+      parents: [container],
+      version: versionOf(block.last_edited_time),
+      modifiedAt: block.last_edited_time,
+      createdAt: block.created_time,
+      // The block has no link; the page's own comes when its text is read.
+      url: known.get(block.id)?.url ?? "",
+      trashed: block.in_trash ?? false,
+      canDownload: true,
+      providerMetadata: {
+        kind: "page",
+        parent: { type: block.parent.type, id: parentId(block.parent) },
+        ...(block.created_by ? { createdBy: block.created_by.id } : {}),
+        ...(block.last_edited_by ? { lastEditedBy: block.last_edited_by.id } : {}),
+      },
+    }
+  }
+
   const databaseFile = async (database: NotionDatabase): Promise<NotionFile> => {
     accessible.add(database.id)
     return {
       id: database.id,
-      name: text(database.title),
+      name: text(database.title).trim() || UNTITLED,
       mime: "application/vnd.notion.database",
       parents: [await containerOf(database.parent)],
       version: database.last_edited_time,
@@ -245,23 +311,28 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
   }
 
-  /** One `created_time` window of a data source; Notion stops a query at 10,000 rows and says so. */
-  const rowWindow = async (database: string, source: string, after: string | undefined, since: string | null) => {
+  /** One page of a data source's rows, oldest first: created from `after` on, and edited since `since`. */
+  const rowPage = (source: string, after: string | undefined, since: string | null, start: string | undefined) => {
     const filters = [
       ...(since ? [{ timestamp: "last_edited_time" as const, last_edited_time: { on_or_after: since } }] : []),
       ...(after ? [{ timestamp: "created_time" as const, created_time: { on_or_after: after } }] : []),
     ]
     const filter = filters.length > 1 ? { and: filters } : filters[0]
+    return reads.queryDataSource(source, {
+      ...(filter ? { filter } : {}),
+      sorts: [{ timestamp: "created_time", direction: "ascending" }],
+      page_size: PAGE_SIZE,
+      ...(start ? { start_cursor: start } : {}),
+    })
+  }
+
+  /** One `created_time` window of a data source; Notion stops a query at 10,000 rows and says so. */
+  const rowWindow = async (database: string, source: string, after: string | undefined, since: string | null) => {
     const rows: NotionPage[] = []
     let incomplete = false
     let start: string | undefined
     do {
-      const page = await reads.queryDataSource(source, {
-        ...(filter ? { filter } : {}),
-        sorts: [{ timestamp: "created_time", direction: "ascending" }],
-        page_size: PAGE_SIZE,
-        ...(start ? { start_cursor: start } : {}),
-      })
+      const page = await rowPage(source, after, since, start)
       for (const result of page.results) rows.push(result)
       if (page.request_status?.type === "incomplete") incomplete = true
       start = page.has_more && page.next_cursor ? page.next_cursor : undefined
@@ -278,15 +349,29 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return { rows, next }
   }
 
+  /**
+   * Every row of a database. A data source Notion will not query is left out with a warning: its rows the sync holds
+   * are each read directly before any counts as gone.
+   */
   const allRows = async (database: NotionDatabase) => {
     const files = new Map<string, NotionFile>()
     for (const source of database.data_sources) {
       let after: string | undefined
-      do {
-        const window = await rowWindow(database.id, source.id, after, null)
-        for (const row of window.rows) if (!row.in_trash) files.set(row.id, await pageFile(row))
-        after = window.next
-      } while (after)
+      try {
+        do {
+          const window = await rowWindow(database.id, source.id, after, null)
+          for (const row of window.rows) if (!row.in_trash) files.set(row.id, await pageFile(row))
+          after = window.next
+        } while (after)
+      } catch (error) {
+        if (!isItemError(error)) throw error
+        warn({
+          id: source.id,
+          code: (error as CliError).code,
+          reason: "notion.left-out",
+          message: `a data source of database ${database.id} was left out: Notion would not query it`,
+        })
+      }
     }
     return [...files.values()]
   }
@@ -314,30 +399,58 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       if (isCut(page))
         warn({
           code: "provider_error",
+          reason: "notion.search-capped",
           message: `Notion's search gave only the ${results.length} most recently edited ${kind}s; a top-level one it left out is found once it is edited`,
         })
     } while (start)
     return results
   }
 
-  /** A database search named, or undefined when Notion will not give it: search entries can be stale. */
-  const readDatabase = async (id: string) => {
+  /**
+   * A database, or why Notion will not give it: `gone` on a 404 (search entries can be stale, a linked view always
+   * answers so), `unreadable` on a 403, which says nothing about whether it is still there.
+   */
+  const readDatabase = async (id: string): Promise<NotionDatabase | "gone" | "unreadable"> => {
     try {
       return await reads.retrieveDatabase(id)
     } catch (error) {
       if (!isItemError(error)) throw error
-      warn({ id, code: (error as CliError).code, message: "a database search listed could not be read" })
-      return undefined
+      if (isNotFound(error)) {
+        warn({ id, code: "not_found", reason: "notion.database-unreadable", message: "a database could not be read" })
+        return "gone"
+      }
+      warn({
+        id,
+        code: (error as CliError).code,
+        reason: "notion.kept-unconfirmed",
+        message: "kept as it was: Notion would not show the database",
+      })
+      return "unreadable"
     }
   }
+  const isGone = (database: NotionDatabase | "gone" | "unreadable") =>
+    database === "gone" || (database !== "unreadable" && database.in_trash)
 
-  const childPages = async (blockId: string, found: { pages: string[]; databases: string[] }) => {
+  const childPages = async (blockId: string, found: { pages: NotionBlock[]; databases: string[] }) => {
     let start: string | undefined
     do {
-      const page = await reads.blockChildren(blockId, start)
+      let page: Awaited<ReturnType<NotionReads["blockChildren"]>>
+      try {
+        page = await reads.blockChildren(blockId, start)
+      } catch (error) {
+        // The known children it hides are read one by one before any counts as gone.
+        if (!isItemError(error)) throw error
+        warn({
+          id: blockId,
+          code: (error as CliError).code,
+          reason: "notion.left-out",
+          message: "the blocks inside were left out of this sync: Notion would not list them",
+        })
+        return found
+      }
       for (const block of page.results) {
         if (block.in_trash) continue
-        if (block.type === "child_page") found.pages.push(block.id)
+        if (block.type === "child_page") found.pages.push(block)
         else if (block.type === "child_database") found.databases.push(block.id)
         else if (block.has_children) await childPages(block.id, found)
       }
@@ -357,7 +470,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         accessible.add(id)
         if (databases.has(id) || source.in_trash) continue
         const database = await readDatabase(id)
-        if (database) databases.set(id, database)
+        if (typeof database === "object") databases.set(id, database)
       }
       const files: NotionFile[] = []
       for (const page of pages) if (!page.in_trash) files.push(await pageFile(page))
@@ -365,7 +478,10 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       return files.filter((file) => file.parents[0] === WORKSPACE_ROOT)
     }
     const kind = known.get(id)?.providerMetadata.kind ?? (await retrieve(id)).providerMetadata.kind
-    if (kind === "database") return allRows(await reads.retrieveDatabase(id))
+    if (kind === "database") {
+      const database = await readDatabase(id)
+      return typeof database === "object" ? allRows(database) : []
+    }
     if (kind === "row") return []
     const found = await childPages(id, { pages: [], databases: [] })
     const files: NotionFile[] = []
@@ -375,10 +491,15 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         if (!file.trashed) files.push(file)
       } catch (error) {
         if (!isItemError(error)) throw error
-        warn({ id, code: (error as CliError).code, message: "a child Notion would not give was left out" })
+        warn({
+          id,
+          code: (error as CliError).code,
+          reason: "notion.child-unreadable",
+          message: "a child Notion would not give was left out",
+        })
       }
     }
-    for (const page of found.pages) await child(page, async () => pageFile(await reads.retrievePage(page)))
+    for (const page of found.pages) if (!page.in_trash) files.push(childPageFile(page, id))
     for (const database of found.databases)
       await child(database, async () => databaseFile(await reads.retrieveDatabase(database)))
     return files
@@ -396,7 +517,12 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         if (isNotFound(error)) listing.gone.push(file.id)
         else if (isItemError(error)) {
           listing.files.push(file)
-          warn({ id: file.id, code: (error as CliError).code, message: "kept as it was: Notion would not say" })
+          warn({
+            id: file.id,
+            code: (error as CliError).code,
+            reason: "notion.kept-unconfirmed",
+            message: "kept as it was: Notion would not say",
+          })
         } else throw error
       }
     }
@@ -424,6 +550,17 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
 
   const startPass = (cursor: SyncCursor): SyncPass => {
     const walk = now() - cursor.walkedAt >= walkEveryMs
+    if (walk && roots.includes(WORKSPACE_ROOT)) {
+      // The workspace is listed by search a page at a time, so that a walk too long for one run goes on in the next.
+      const top = [...known.values()].filter((file) => file.parents[0] === WORKSPACE_ROOT).map((file) => file.id)
+      const tasks: SyncTask[] = [
+        { t: "search", kind: "page", full: true },
+        { t: "search", kind: "data_source", full: true },
+        ...roots.filter((id) => id !== WORKSPACE_ROOT).map((id) => ({ t: "walk" as const, id })),
+        { t: "confirm", container: WORKSPACE_ROOT, ids: top },
+      ]
+      return { next: cursor.mark, startedAt: now(), walk, tasks }
+    }
     const tasks: SyncTask[] = [
       { t: "search", kind: "page" },
       { t: "search", kind: "data_source" },
@@ -439,6 +576,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     fresh()
     requests = 0
     const pass = cursor.pass ?? startPass(cursor)
+    containers = new Map(Object.entries(pass.parents ?? {}))
+    const resolved = containers.size
     const since = cursor.mark ? minus(cursor.mark, overlapMs) : null
     const items = new Map<string, SourceChange<NotionFile>>()
     const emit = (file: NotionFile) => items.set(file.id, { id: file.id, removed: false, file })
@@ -448,145 +587,332 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       const before = known.get(file.id)
       return !before || before.name !== file.name || before.parents[0] !== file.parents[0]
     }
+    /** Work this run keeps even when the deadline cuts its step: a direct read or a resolved kind. */
+    let kept = 0
+    // A saved position Notion no longer takes (it answers 400) starts that listing again, so it cannot fail every run.
+    const restart = (task: SyncTask, what: string) => {
+      warn({
+        code: "validation_error",
+        reason: "notion.listing-restarted",
+        message: `${what} started again from its top`,
+      })
+      pass.tasks.splice(1, 0, task)
+    }
+    // A confirm task stays last: it reads directly only what the rest of the pass did not show.
+    const queue = (task: SyncTask) => {
+      const last = pass.tasks.at(-1)
+      if (last?.t === "confirm") pass.tasks.splice(-1, 0, task)
+      else pass.tasks.push(task)
+    }
+    const shown = (id: string) => {
+      for (const task of pass.tasks) if (task.t === "confirm") task.ids = task.ids.filter((item) => item !== id)
+    }
     const addSource = (database: string, source: string) => {
       if (!cursor.sources.some((item) => item.source === source)) cursor.sources.push({ database, source })
     }
 
-    const search = async (kind: "page" | "data_source") => {
-      let start: string | undefined
-      do {
-        const page = await searchPage(kind, start)
-        start = page.has_more && page.next_cursor ? page.next_cursor : undefined
-        let reachedMark = false
-        for (const result of page.results) {
-          if (since && Date.parse(result.last_edited_time) < Date.parse(since)) {
-            start = undefined
-            reachedMark = true
-            break
-          }
-          // Only what this pass saw before it began counts towards the next mark; later edits must stay inside it.
-          if (kind === "page") pass.next = later(pass.next, result.last_edited_time)
-          if (result.object === "page") {
-            emit(await pageFile(result))
-            continue
-          }
-          const id = result.parent.database_id
-          // A database outside the chosen folders is not read; one inside them is held already, or comes by a walk.
-          if (!roots.includes(WORKSPACE_ROOT) && !known.has(id)) continue
-          const database = await readDatabase(id)
-          if (!database) continue
-          const file = await databaseFile(database)
-          if (file.trashed) gone(id)
-          else if (unheld(file)) emit(file)
-        }
-        // Search has no time filter to split a cut answer by, so edits past the cut fail the sync instead of passing.
-        if (isCut(page) && !reachedMark)
-          throw new CliError("provider_error", `Notion cut the search for edited ${kind}s short`, {
-            reason: "notion.search-incomplete",
-            ...(page.request_status?.incomplete_reason
-              ? { incomplete_reason: page.request_status.incomplete_reason }
-              : {}),
-          })
-      } while (start)
-    }
-
-    const rows = async (task: Extract<SyncTask, { t: "rows" }>) => {
-      let window: Awaited<ReturnType<typeof rowWindow>>
+    // One page of the answer per task, so that a pass cut short by the deadline goes on from the page it reached.
+    const search = async (task: Extract<SyncTask, { t: "search" }>) => {
+      const { kind } = task
+      let page: Awaited<ReturnType<typeof searchPage>>
       try {
-        window = await rowWindow(task.database, task.source, task.after, task.full ? null : since)
+        page = await searchPage(kind, task.start)
       } catch (error) {
-        if (!isNotFound(error)) throw error
-        cursor.sources = cursor.sources.filter((item) => item.source !== task.source)
-        const database = await readDatabase(task.database)
-        if (!database || database.in_trash) gone(task.database)
+        if (!task.start || !isRefused(error)) throw error
+        return restart({ ...task, start: undefined }, `the search for ${kind}s`)
+      }
+      let start = page.has_more && page.next_cursor ? page.next_cursor : undefined
+      if (task.full) {
+        await searchTop(page)
+        if (isCut(page))
+          warn({
+            code: "provider_error",
+            reason: "notion.search-capped",
+            message: `Notion's search gave only the most recently edited ${kind}s; a top-level one it left out is found once it is edited`,
+          })
+        if (start) pass.tasks.splice(1, 0, { ...task, start })
         return
       }
-      const seen = new Set<string>()
-      for (const row of window.rows) {
-        seen.add(row.id)
-        emit(await pageFile(row))
+      let reachedMark = false
+      for (const result of page.results) {
+        if (since && Date.parse(result.last_edited_time) < Date.parse(since)) {
+          start = undefined
+          reachedMark = true
+          break
+        }
+        // Only what this pass saw before it began counts towards the next mark; later edits must stay inside it.
+        if (kind === "page") pass.next = later(pass.next, result.last_edited_time)
+        if (result.object === "page") {
+          emit(await pageFile(result))
+          continue
+        }
+        const id = result.parent.database_id
+        // A database outside the chosen folders is not read; one inside them is held already, or comes by a walk.
+        if (!roots.includes(WORKSPACE_ROOT) && !known.has(id)) continue
+        if (!pass.tasks.some((item) => item.t === "database" && item.id === id)) queue({ t: "database", id })
       }
+      // Search has no time filter to split a cut answer by, so edits past the cut fail the sync instead of passing.
+      if (isCut(page) && !reachedMark)
+        throw new CliError("provider_error", `Notion cut the search for edited ${kind}s short`, {
+          reason: "notion.search-incomplete",
+          ...(page.request_status?.incomplete_reason
+            ? { incomplete_reason: page.request_status.incomplete_reason }
+            : {}),
+        })
+      if (start) pass.tasks.splice(1, 0, { t: "search", kind, start })
+    }
+
+    const searchTop = async (page: NotionList<NotionPage | NotionDataSource>) => {
+      for (const result of page.results) {
+        if (result.in_trash) continue
+        if (result.object === "data_source") {
+          const id = result.parent.database_id
+          const queued = pass.tasks.find((item) => item.t === "database" && item.id === id)
+          if (queued?.t === "database") queued.walk = true
+          else queue({ t: "database", id, walk: true })
+          continue
+        }
+        pass.next = later(pass.next, result.last_edited_time)
+        if (result.parent.type !== "workspace") continue
+        const file = await pageFile(result)
+        shown(file.id)
+        if (changedPage(file)) emit(file)
+        queue({ t: "walk", id: file.id })
+      }
+    }
+
+    const database = async (task: Extract<SyncTask, { t: "database" }>) => {
+      const found = await readDatabase(task.id)
+      if (typeof found !== "object") return
+      const file = await databaseFile(found)
+      if (file.trashed) gone(task.id)
+      else if (unheld(file)) emit(file)
+      if (task.walk && !file.trashed && file.parents[0] === WORKSPACE_ROOT) {
+        shown(file.id)
+        queue({ t: "walk", id: file.id })
+      }
+    }
+
+    const confirmEach = async (task: Extract<SyncTask, { t: "confirm" }>) => {
+      while (task.ids.length) {
+        const file = known.get(task.ids[0] as string)
+        if (file) {
+          const listing: Listing = { files: [], gone: [], moved: [] }
+          await confirm([file], task.container, listing)
+          for (const found of [...listing.files, ...listing.moved]) if (changedPage(found)) emit(found)
+          for (const id of listing.gone) gone(id)
+        }
+        task.ids.shift()
+        kept++
+      }
+    }
+
+    // One page of rows per step. The next step reads from the last row's minute on, as Notion rounds created_time
+    // to the minute; only when a whole page shares one minute does it go on by the query's own position instead.
+    const rows = async (task: Extract<SyncTask, { t: "rows" }>) => {
+      let page: NotionList<NotionPage>
+      try {
+        page = await rowPage(task.source, task.after, task.full ? null : since, task.start)
+      } catch (error) {
+        if (task.start && isRefused(error))
+          return restart({ ...task, start: undefined, seen: undefined }, `the rows of database ${task.database}`)
+        if (!isNotFound(error)) throw error
+        cursor.sources = cursor.sources.filter((item) => item.source !== task.source)
+        if (isGone(await readDatabase(task.database))) gone(task.database)
+        return
+      }
+      for (const row of page.results) emit(await pageFile(row))
+      const last = page.results.at(-1)?.created_time
+      const more = page.has_more && page.next_cursor && last ? { cursor: page.next_cursor, last } : undefined
+      const dense = more && task.after !== undefined && Date.parse(more.last) <= Date.parse(task.after)
+      const seen = [...(task.seen ?? []), ...page.results.map((row) => row.id)]
+      if (dense && isCut(page))
+        throw new CliError(
+          "validation_error",
+          `database ${task.database} has more than 10000 rows created in one minute`,
+          { reason: "notion.window-too-dense", database: task.database },
+        )
+      const next: SyncTask[] = []
       if (task.full) {
-        // A window covers the rows created from its start up to the next window's start; a known row of that span
-        // the window did not return is read directly before it counts as gone.
+        // This page holds every row created from the step's start up to its last row's minute; a known row of that
+        // span it did not return is read directly before it counts as gone.
         const from = task.after ? Date.parse(task.after) : Number.NEGATIVE_INFINITY
-        const to = window.next ? Date.parse(window.next) : Number.POSITIVE_INFINITY
+        const to = more ? Date.parse(more.last) : Number.POSITIVE_INFINITY
+        const shown = new Set(seen)
         const missing = [...known.values()].filter((file) => {
           const created = Date.parse(file.createdAt ?? "")
           return (
             file.providerMetadata.kind === "row" &&
             file.providerMetadata.parent?.id === task.source &&
-            !seen.has(file.id) &&
+            !shown.has(file.id) &&
             created >= from &&
             created < to
           )
         })
-        const listing: Listing = { files: [], gone: [], moved: [] }
-        await confirm(missing, task.database, listing)
-        for (const file of [...listing.files, ...listing.moved]) emit(file)
-        for (const id of listing.gone) gone(id)
+        if (missing.length) next.push({ t: "confirm", container: task.database, ids: missing.map((file) => file.id) })
       }
-      if (window.next) pass.tasks.push({ ...task, after: window.next })
+      if (dense) next.push({ ...task, start: more.cursor, seen })
+      else if (more) next.push({ ...task, after: more.last, start: undefined, seen: undefined })
+      pass.tasks.splice(1, 0, ...next)
+    }
+
+    const child = async (task: Extract<SyncTask, { t: "child" }>) => {
+      let file: NotionFile
+      try {
+        file = await databaseFile(await reads.retrieveDatabase(task.id))
+      } catch (error) {
+        if (!isItemError(error)) throw error
+        warn({
+          id: task.id,
+          code: (error as CliError).code,
+          reason: "notion.child-unreadable",
+          message: "a child Notion would not give was left out",
+        })
+        return
+      }
+      if (file.trashed) return
+      if (unheld(file)) emit(file)
+      queue({ t: "walk", id: file.id, kind: "database" })
     }
 
     const walkDatabase = async (id: string) => {
       const database = await readDatabase(id)
-      if (!database || database.in_trash) {
+      if (database === "unreadable") return
+      if (database === "gone" || database.in_trash) {
         if (!roots.includes(id)) gone(id)
         return
       }
       for (const source of database.data_sources) {
         addSource(id, source.id)
-        pass.tasks.push({ t: "rows", database: id, source: source.id, full: true })
+        queue({ t: "rows", database: id, source: source.id, full: true })
       }
     }
 
-    const walk = async (id: string) => {
-      const kind = id === WORKSPACE_ROOT ? "workspace" : (known.get(id)?.providerMetadata.kind ?? "database")
-      // Pages under pages wait for cli-core's page-with-children (C2); listing them now would cost requests for nothing.
-      if (kind === "database") return walkDatabase(id)
-      if (kind !== "workspace") return
-      const listing = await listChildren(id)
+    // The engine walks again every folder it is sent, so a held page is sent only when Notion changed it.
+    const changedPage = (file: NotionFile) => unheld(file) || known.get(file.id)?.version !== file.version
+
+    // A page's children a page of blocks per step, from where the last step stopped.
+    const walkPage = async (task: Extract<SyncTask, { t: "walk" }>) => {
+      const blocks = task.blocks ?? [{ id: task.id }]
+      const seen = task.seen ?? []
+      const head = blocks[0] as { id: string; start?: string }
+      try {
+        const page = await reads.blockChildren(head.id, head.start)
+        for (const block of page.results) {
+          if (block.in_trash) continue
+          if (block.type === "child_page") {
+            seen.push(block.id)
+            const file = childPageFile(block, task.id)
+            if (changedPage(file)) emit(file)
+            const holds = [...known.values()].some((item) => item.parents[0] === block.id)
+            if (block.has_children || holds) queue({ t: "walk", id: block.id, kind: "page" })
+          } else if (block.type === "child_database") {
+            seen.push(block.id)
+            queue({ t: "child", id: block.id, container: task.id })
+          } else if (block.has_children) blocks.push({ id: block.id })
+        }
+        if (page.has_more && page.next_cursor) blocks[0] = { id: head.id, start: page.next_cursor }
+        else blocks.shift()
+      } catch (error) {
+        if (head.start && isRefused(error))
+          return restart({ t: "walk", id: task.id, kind: "page" }, `the listing of page ${task.id}`)
+        if (!isItemError(error)) throw error
+        // The known children it hides are read one by one before any counts as gone.
+        warn({
+          id: head.id,
+          code: (error as CliError).code,
+          reason: "notion.left-out",
+          message: "the blocks inside were left out of this sync: Notion would not list them",
+        })
+        blocks.shift()
+      }
+      if (blocks.length) return void pass.tasks.splice(1, 0, { ...task, blocks, seen })
+      const listed = new Set(seen)
+      const missing = [...known.values()].filter((file) => file.parents[0] === task.id && !listed.has(file.id))
+      if (missing.length)
+        pass.tasks.splice(1, 0, { t: "confirm", container: task.id, ids: missing.map((file) => file.id) })
+    }
+
+    const walk = async (task: Extract<SyncTask, { t: "walk" }>) => {
+      if (task.id === WORKSPACE_ROOT) return walkWorkspace()
+      if (!task.kind) {
+        task.kind = known.get(task.id)?.providerMetadata.kind ?? (await retrieve(task.id)).providerMetadata.kind
+        kept++
+      }
+      if (task.kind === "database") return walkDatabase(task.id)
+      if (task.kind === "page") return walkPage(task)
+    }
+
+    // Only a pass a 0.1.0 sync saved still holds the workspace as one step.
+    const walkWorkspace = async () => {
+      const listing = await listChildren(WORKSPACE_ROOT)
       for (const file of listing.moved) emit(file)
       for (const file of listing.files) {
-        if (!isNotionFolder(file) || unheld(file)) emit(file)
-        if (file.providerMetadata.kind === "database") pass.tasks.push({ t: "walk", id: file.id })
+        const page = file.providerMetadata.kind === "page"
+        if (page ? changedPage(file) : unheld(file)) emit(file)
+        if (page || file.providerMetadata.kind === "database") queue({ t: "walk", id: file.id })
       }
       for (const gid of listing.gone) gone(gid)
     }
 
     let done = 0
-    while (pass.tasks.length && requests < maxRequests) {
-      const task = pass.tasks[0] as SyncTask
-      try {
-        if (task.t === "search") await search(task.kind)
-        else if (task.t === "rows") await rows(task)
-        else await walk(task.id)
-      } catch (error) {
-        const failure = isCliError(error) ? error : new CliError("provider_error", String(error))
-        const id = task.t === "rows" ? task.database : task.t === "walk" ? task.id : undefined
-        if (isItemError(failure)) {
-          warn({ ...(id ? { id } : {}), code: failure.code, message: `left out of this sync: ${failure.message}` })
-          pass.tasks.shift()
-          done++
-          continue
+    timed = true
+    try {
+      while (pass.tasks.length && requests < maxRequests) {
+        const task = pass.tasks[0] as SyncTask
+        try {
+          if (task.t === "search") await search(task)
+          else if (task.t === "database") await database(task)
+          else if (task.t === "confirm") await confirmEach(task)
+          else if (task.t === "rows") await rows(task)
+          else if (task.t === "child") await child(task)
+          else await walk(task)
+        } catch (error) {
+          // The task is done again from its start next time: what it emitted is sent twice, which the engine allows.
+          if (error === OUT_OF_TIME) {
+            // cli-core ends the command at the deadline, so a run that saves nothing would only be asked again.
+            if (!done && !kept && containers.size === resolved)
+              throw new CliError(
+                "timeout",
+                "the time left was too short for one step of the Notion sync; run it again with a longer --timeout",
+                { reason: "notion.timeout-too-short" },
+              )
+            break
+          }
+          const failure = isCliError(error) ? error : new CliError("provider_error", String(error))
+          const id =
+            task.t === "rows" ? task.database : task.t === "search" || task.t === "confirm" ? undefined : task.id
+          if (isItemError(failure)) {
+            warn({
+              ...(id ? { id } : {}),
+              code: failure.code,
+              reason: "notion.left-out",
+              message: `left out of this sync: ${failure.message}`,
+            })
+            pass.tasks.shift()
+            done++
+            continue
+          }
+          // With nothing done yet the error is the answer; otherwise the work so far is kept and the next sync goes on.
+          if (!done) throw failure
+          warn({
+            ...(id ? { id } : {}),
+            code: failure.code,
+            reason: "notion.stopped-early",
+            message: `the sync stopped here and goes on next time: ${failure.message}`,
+            ...(typeof failure.details.retry_after_ms === "number"
+              ? { retry_after_ms: failure.details.retry_after_ms }
+              : {}),
+          })
+          break
         }
-        // With nothing done yet the error is the answer; otherwise the work so far is kept and the next sync goes on.
-        if (!done) throw failure
-        warn({
-          ...(id ? { id } : {}),
-          code: failure.code,
-          message: `the sync stopped here and goes on next time: ${failure.message}`,
-          ...(typeof failure.details.retry_after_ms === "number"
-            ? { retry_after_ms: failure.details.retry_after_ms }
-            : {}),
-        })
-        break
+        pass.tasks.shift()
+        done++
       }
-      pass.tasks.shift()
-      done++
+    } finally {
+      timed = false
     }
-    if (pass.tasks.length) cursor.pass = pass
+    if (pass.tasks.length) cursor.pass = { ...pass, parents: Object.fromEntries(containers) }
     else {
       cursor.mark = later(cursor.mark, pass.next)
       if (pass.walk) cursor.walkedAt = pass.startedAt
@@ -607,14 +933,54 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return [...found.values()]
   }
 
-  return {
-    async identity() {
-      const self = await reads.self()
-      if (!self.bot?.workspace_id)
-        throw new CliError("invalid_response", "Notion did not name the token's workspace", {
-          reason: "notion.no-workspace",
+  const content = async (id: string, maxChars?: number): Promise<SourceContent<NotionFile>> => {
+    containers = new Map()
+    const page = await reads.retrievePage(id)
+    if (page.in_trash) throw new CliError("not_found", "the page is in Notion's trash")
+    const file = await pageFile(page)
+    const body = await pageText(reads, id, (block, code) => {
+      if (code === "permission_error")
+        warn({
+          id: block,
+          code,
+          reason: "notion.left-out",
+          message: `a block of page ${id} was left out of its text: the token may not read it`,
         })
-      return `${self.bot.workspace_id}:${self.id}`
+    })
+    const fields = frontMatter(page.properties)
+    const metadata: NotionFile = {
+      ...file,
+      providerMetadata: {
+        ...file.providerMetadata,
+        frontMatter: fields,
+        people: people(page),
+        ...(body.missing ? { missingBlocks: body.missing } : {}),
+      },
+    }
+    const searchable = [file.name, ...frontMatterLines(fields), body.markdown].filter(Boolean).join("\n\n")
+    if (maxChars !== undefined && searchable.length > maxChars)
+      throw new CliError("validation_error", "the page is longer than the text limit", {
+        reason: "source.text-limit",
+        text_limit: maxChars,
+      })
+    return { metadata, markdown: body.markdown, text: withoutSignedLinks(searchable).text, tabs: [] }
+  }
+
+  let account: Promise<string> | undefined
+  const identity = async () => {
+    const self = await reads.self()
+    if (!self.bot?.workspace_id)
+      throw new CliError("invalid_response", "Notion did not name the token's workspace", {
+        reason: "notion.no-workspace",
+      })
+    return `${self.bot.workspace_id}:${self.id}`
+  }
+
+  return {
+    // One sync run asks once: the CLI checks the account before it takes the lock, and the engine asks again.
+    identity() {
+      account ??= identity()
+      return account
     },
     async metadata(id) {
       fresh()
@@ -634,38 +1000,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       return encodeCursor(cursor)
     },
     changes,
-    async content(id, maxChars) {
-      containers = new Map()
-      const page = await reads.retrievePage(id)
-      if (page.in_trash) throw new CliError("not_found", "the page is in Notion's trash")
-      const file = await pageFile(page)
-      const body = await pageText(reads, id)
-      const fields = frontMatter(page.properties)
-      const metadata: NotionFile = {
-        ...file,
-        providerMetadata: {
-          ...file.providerMetadata,
-          frontMatter: fields,
-          people: people(page),
-          ...(body.missing ? { missingBlocks: body.missing } : {}),
-        },
-      }
-      const searchable = [file.name, ...frontMatterLines(fields), body.markdown].filter(Boolean).join("\n\n")
-      if (maxChars !== undefined && searchable.length > maxChars)
-        throw new CliError("validation_error", "the page is longer than the text limit", {
-          reason: "source.text-limit",
-          text_limit: maxChars,
-        })
-      const content: SourceContent<NotionFile> = {
-        metadata,
-        markdown: body.markdown,
-        text: withoutSignedLinks(searchable).text,
-        tabs: [],
-      }
-      return content
-    },
-    async bytes() {
-      throw new CliError("validation_error", "a Notion page has no file to download")
-    },
+    content,
+    // A page has no file of its own; its Markdown is the nearest thing to one.
+    bytes: async (id) => new TextEncoder().encode((await content(id)).markdown),
   }
 }

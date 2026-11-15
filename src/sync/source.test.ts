@@ -7,11 +7,20 @@ import {
   type SourceWalk,
   syncDocuments,
 } from "@wirecat/cli-core/documents"
+import { documentSourceContract } from "@wirecat/cli-core/documents/testing"
 import { beforeEach, describe, expect, it } from "vitest"
 import type { NotionParent } from "../notion/reads.js"
 import { FakeNotion } from "../testing/fake-notion-reads.js"
-import { decodeCursor } from "./cursor.js"
-import { isNotionFolder, type NotionFile, notionSource, type SyncWarning, WORKSPACE_ROOT } from "./source.js"
+import { decodeCursor, encodeCursor } from "./cursor.js"
+import {
+  isNotionDocument,
+  isNotionFolder,
+  type NotionFile,
+  notionSource,
+  passUnderWay,
+  type SyncWarning,
+  WORKSPACE_ROOT,
+} from "./source.js"
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -75,19 +84,23 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
   const roots = settings.roots ?? [WORKSPACE_ROOT]
   const warnings: SyncWarning[] = []
   const reads = { known: 0 }
-  const source = notionSource(notion, {
-    roots,
-    known: () => {
-      reads.known++
-      return [...Object.values(state.documents).map((doc) => doc.metadata), ...Object.values(state.folders)]
-    },
-    now: () => notion.now + (settings.skew ?? 0),
-    warn: (warning) => warnings.push(warning),
-    ...(settings.maxRequests ? { maxRequests: settings.maxRequests } : {}),
-  })
-  const sync = (rescan = false) =>
-    syncDocuments<NotionFile>({
-      source,
+  // One source serves one sync run, as the CLI builds it.
+  const sourceOf = () =>
+    notionSource(notion, {
+      roots,
+      known: () => {
+        reads.known++
+        return [...Object.values(state.documents).map((doc) => doc.metadata), ...Object.values(state.folders)]
+      },
+      now: () => notion.now + (settings.skew ?? 0),
+      warn: (warning) => warnings.push(warning),
+      ...(settings.maxRequests ? { maxRequests: settings.maxRequests } : {}),
+    })
+  const run = { source: sourceOf() }
+  const sync = (rescan = false) => {
+    run.source = sourceOf()
+    return syncDocuments<NotionFile>({
+      source: run.source,
       index,
       state: port,
       principal: PRINCIPAL,
@@ -96,6 +109,7 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
       max: settings.max ?? 100_000,
       maxEntries: 100_000,
       isFolder: isNotionFolder,
+      isDocument: isNotionDocument,
       skipReason: () => undefined,
       retryable: () => false,
       errorOf: (error) => (isCliError(error) ? error : new CliError("provider_error", String(error))),
@@ -104,7 +118,19 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
       rescan,
       now: () => notion.now,
     })
-  return { source, sync, saved, snapshots, warnings, reads, state: () => state }
+  }
+  return {
+    get source() {
+      return run.source
+    },
+    sourceOf,
+    sync,
+    saved,
+    snapshots,
+    warnings,
+    reads,
+    state: () => state,
+  }
 }
 
 const workspace = () => {
@@ -137,7 +163,7 @@ describe("the Notion source under cli-core's sync engine", () => {
     const run = harness(notion)
     const result = await run.sync()
     expect(result.errors).toEqual([])
-    expect([...run.saved.keys()].sort()).toEqual(["a", "b", "r1", "r2", "r3"])
+    expect([...run.saved.keys()].sort()).toEqual(["a", "a1", "b", "r1", "r2", "r3"])
     expect(run.saved.get("r1")?.text).toContain("Status: Open")
     expect(run.saved.get("a")?.metadata.providerMetadata.people).toEqual([
       { id: "u1", role: "author" },
@@ -294,6 +320,7 @@ describe("the Notion source under cli-core's sync engine", () => {
     expect(run.warnings).toContainEqual(expect.objectContaining({ code: "rate_limited", retry_after_ms: 30_000 }))
     expect(decodeCursor(run.state().cursor as string).pass?.tasks).toEqual([
       { t: "rows", database: "db", source: "ds" },
+      { t: "database", id: "db" },
     ])
     const searches = notion.calls.search
     await run.sync()
@@ -330,7 +357,7 @@ describe("the Notion source under cli-core's sync engine", () => {
     const done = decodeCursor(run.state().cursor as string)
     expect(done.pass).toBeUndefined()
     expect(done.walkedAt).toBe(cut.pass?.startedAt)
-    expect([...run.saved.keys()].sort()).toEqual(["a", "b", "r1", "r2", "r3"])
+    expect([...run.saved.keys()].sort()).toEqual(["a", "a1", "b", "r1", "r2", "r3"])
   })
 
   it("does not take a 404 on one child for the parent's removal", async () => {
@@ -429,16 +456,99 @@ describe("the Notion source under cli-core's sync engine", () => {
     expect(JSON.stringify([[...run.saved.values()], [...run.snapshots.values()]])).not.toMatch(/X-Amz-/i)
   })
 
-  it("reads what the sync holds once per call, not once per listing", async () => {
+  it("reads what the sync holds once per sync run, not once per listing", async () => {
     const run = harness(notion)
     await run.sync()
     notion.advance(25 * HOUR)
     run.reads.known = 0
-    await run.sync()
-    expect(run.reads.known).toBeLessThanOrEqual(2)
+    await run.sync(true)
+    expect(run.reads.known).toBe(1)
   })
 
-  it.todo("syncs pages under pages, and a page chosen as a folder, once cli-core plans a page with children (C2)")
+  it("keeps a page's children when Notion refuses to list them (403), and syncs the rest", async () => {
+    notion.addPage({ id: "a2", title: "Alpha grandchild", parent: under("a1"), markdown: "deep text" })
+    const run = harness(notion)
+    await run.sync()
+    notion.failNext("blockChildren", new CliError("permission_error", "restricted", { status: 403 }), "a1")
+    const result = await run.sync(true)
+    expect(result.errors).toEqual([])
+    expect(result.removed).toBe(0)
+    expect([...run.saved.keys()].sort()).toEqual(["a", "a1", "a2", "b", "r1", "r2", "r3"])
+    expect(run.warnings).toContainEqual(
+      expect.objectContaining({ id: "a1", code: "permission_error", reason: "notion.left-out" }),
+    )
+  })
+
+  it("skips a block inside a page whose children Notion will not list (404), and reads the rest", async () => {
+    notion.blocks.set("synced", under("a"))
+    notion.blocks.set("col", under("a"))
+    notion.addPage({ id: "in-col", title: "In a column", parent: { type: "block_id", block_id: "col" } })
+    const run = harness(notion)
+    notion.failNext("blockChildren", new CliError("not_found", "the original is not shared", { status: 404 }), "synced")
+    const first = await run.sync()
+    expect(first.errors).toEqual([])
+    expect([...run.saved.keys()]).toEqual(expect.arrayContaining(["a", "a1", "in-col"]))
+    expect(run.warnings).toContainEqual(expect.objectContaining({ id: "synced", reason: "notion.left-out" }))
+    notion.failNext("blockChildren", new CliError("not_found", "the original is not shared", { status: 404 }), "synced")
+    const again = await run.sync(true)
+    expect(again.removed).toBe(0)
+    expect(run.saved.has("in-col")).toBe(true)
+  })
+
+  it("keeps a database and its rows when Notion refuses to read it (403); only a 404 removes", async () => {
+    const run = harness(notion)
+    await run.sync()
+    const database = notion.databases.get("db")
+    if (database) database.restricted = true
+    notion.advance(25 * HOUR)
+    const result = await run.sync()
+    expect(result.removed).toBe(0)
+    expect([...run.saved.keys()]).toEqual(expect.arrayContaining(["r1", "r2", "r3"]))
+    expect(run.warnings).toContainEqual(expect.objectContaining({ id: "db", reason: "notion.kept-unconfirmed" }))
+    if (database) {
+      database.restricted = false
+      database.shared = false
+    }
+    notion.advance(25 * HOUR)
+    await run.sync()
+    expect(run.saved.has("r1")).toBe(false)
+  })
+
+  it("syncs pages under pages, a database in a page, and a page chosen as a folder", async () => {
+    notion.addPage({ id: "a2", title: "Alpha grandchild", parent: under("a1"), markdown: "deep text" })
+    notion.addDatabase({ id: "inner", title: "Inner", parent: under("a1"), sources: ["inner-ds"] })
+    notion.addPage({ id: "ir", title: "Inner row", parent: row("inner", "inner-ds") })
+    const whole = harness(notion)
+    await whole.sync()
+    expect([...whole.saved.keys()].sort()).toEqual(["a", "a1", "a2", "b", "ir", "r1", "r2", "r3"])
+    const chosen = harness(notion, { roots: ["a1"] })
+    await chosen.sync()
+    expect([...chosen.saved.keys()].sort()).toEqual(["a1", "a2", "ir"])
+    expect(chosen.saved.get("a2")?.metadata.parents).toEqual(["a1"])
+  })
+
+  it("finds an edit and a removal deep under a page, and sends a held page again only when it changed", async () => {
+    notion.addPage({ id: "a2", title: "Alpha grandchild", parent: under("a1"), markdown: "v1" })
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(HOUR)
+    notion.edit("a2", { markdown: "v2" })
+    await run.sync()
+    expect(run.saved.get("a2")?.markdown).toBe("v2")
+    notion.advance(25 * HOUR)
+    notion.edit("a1", { trashed: true })
+    const before = notion.calls.blockChildren
+    await run.sync()
+    expect(run.saved.has("a1")).toBe(false)
+    expect(run.saved.has("a2")).toBe(false)
+    expect(notion.calls.blockChildren - before).toBeLessThanOrEqual(3)
+  })
+
+  it("names an untitled page so every entry has a name", async () => {
+    notion.addPage({ id: "blank", title: "", parent: top })
+    const source = notionSource(notion, { now: () => notion.now })
+    expect((await source.metadata("blank")).name).toBe("Untitled")
+  })
 
   it("keeps no signed file link in any stored field", async () => {
     notion.edit("a", {
@@ -466,20 +576,186 @@ describe("changes()", () => {
     notion.advance(HOUR)
     notion.edit("r1", { title: "edited" })
     const cursor = run.state().cursor as string
-    const first = await run.source.changes(cursor)
+    const source = run.sourceOf()
+    const first = await source.changes(cursor)
     const partial = decodeCursor(first.cursor)
     expect(partial.pass?.tasks.length).toBeGreaterThan(0)
     expect(partial.mark).toBe(decodeCursor(cursor).mark)
     const searches = notion.calls.search
     let next = first
-    for (let round = 0; decodeCursor(next.cursor).pass && round < 10; round++)
-      next = await run.source.changes(next.cursor)
+    for (let round = 0; decodeCursor(next.cursor).pass && round < 10; round++) next = await source.changes(next.cursor)
     expect(notion.calls.search).toBe(searches)
     const done = decodeCursor(next.cursor)
     expect(done.pass).toBeUndefined()
     expect(Date.parse(done.mark as string)).toBeGreaterThan(Date.parse(decodeCursor(cursor).mark as string))
     const all = [first, next].flatMap((page) => page.items.map((item) => item.id))
     expect(all).toContain("r1")
+  })
+
+  /** Runs of changes() with a deadline each, on a clock where every Notion request takes `perCall` ms. */
+  const timedRuns = async (
+    notion: FakeNotion,
+    run: ReturnType<typeof harness>,
+    { perCall = 1000, ms = 10_000, most = 30 } = {},
+  ) => {
+    let clock = 0
+    const timed = new Proxy(notion, {
+      get: (target, name, receiver) => {
+        const value = Reflect.get(target, name, receiver)
+        if (typeof value !== "function" || name === "serverTime") return value
+        return (...args: unknown[]) => {
+          clock += perCall
+          return value.apply(target, args)
+        }
+      },
+    })
+    let cursor = run.state().cursor as string
+    const items: { id: string; removed: boolean }[] = []
+    let runs = 0
+    do {
+      clock = 0
+      runs++
+      const source = notionSource(timed, {
+        now: () => notion.now,
+        known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+        deadline: { endsAt: ms, ms },
+        clock: () => clock,
+        warn: (warning) => run.warnings.push(warning),
+      })
+      const page = await source.changes(cursor)
+      expect(clock).toBeLessThanOrEqual(ms)
+      items.push(...page.items)
+      cursor = page.cursor
+    } while (passUnderWay(cursor) && runs < most)
+    return { runs, cursor, items, seen: items.map((item) => item.id) }
+  }
+
+  it.each([
+    ["an hourly pass", HOUR],
+    ["the daily full walk", 25 * HOUR],
+  ])("stops %s before the run's deadline with the pass saved, and the next runs finish it", async (_, later) => {
+    const notion = workspace()
+    for (const id of ["db2", "db3", "db4"]) notion.addDatabase({ id, title: id, parent: top, sources: [`${id}-ds`] })
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(later)
+    notion.edit("r3", { title: "edited" })
+    const walkedAt = decodeCursor(run.state().cursor as string).walkedAt
+    const { runs, cursor, seen } = await timedRuns(notion, run)
+    expect(runs).toBeGreaterThan(1)
+    expect(passUnderWay(cursor)).toBe(false)
+    expect(seen).toContain("r3")
+    expect(decodeCursor(cursor).walkedAt > walkedAt).toBe(later > 24 * HOUR)
+  })
+
+  it("walks a 10,000-row database over a few 30 s runs, a page of rows per step, and removes none", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "Big", parent: top, sources: ["ds"] })
+    for (let r = 0; r < 10_000; r++)
+      notion.addPage({ id: `r${r}`, title: `R${r}`, parent: row("db", "ds"), created: notion.now + r * 1000 })
+    const run = harness(notion, { max: 20_000 })
+    await run.sync()
+    notion.advance(25 * HOUR)
+    const { runs, cursor, items } = await timedRuns(notion, run, { perCall: 350, ms: 30_000 })
+    expect(passUnderWay(cursor)).toBe(false)
+    expect(runs).toBeLessThan(5)
+    expect(items.filter((item) => item.removed)).toEqual([])
+  }, 30_000)
+
+  it("goes on by the query's position when more than a page of rows share one minute", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "Dense", parent: top, sources: ["ds"] })
+    for (let r = 0; r < 250; r++) notion.addPage({ id: `d${r}`, title: `D${r}`, parent: row("db", "ds") })
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(25 * HOUR)
+    notion.edit("d200", { trashed: true })
+    const { cursor, items } = await timedRuns(notion, run)
+    expect(passUnderWay(cursor)).toBe(false)
+    expect(items.filter((item) => item.removed).map((item) => item.id)).toEqual(["d200"])
+  })
+
+  it("walks a page with 100 child pages from its listing, without reading each child", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: "hub", title: "Hub", parent: top })
+    for (let c = 0; c < 100; c++) notion.addPage({ id: `c${c}`, title: `C${c}`, parent: under("hub") })
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(25 * HOUR)
+    notion.edit("c7", { title: "C7 renamed" })
+    const retrieved = notion.calls.retrievePage
+    const { runs, cursor, items } = await timedRuns(notion, run, { perCall: 350, ms: 30_000 })
+    expect(passUnderWay(cursor)).toBe(false)
+    expect(runs).toBeLessThan(5)
+    expect(notion.calls.retrievePage).toBe(retrieved)
+    expect(items).toContainEqual(
+      expect.objectContaining({ id: "c7", file: expect.objectContaining({ name: "C7 renamed" }) }),
+    )
+    expect(items.filter((item) => item.removed)).toEqual([])
+  }, 30_000)
+
+  it("starts a listing again when Notion no longer takes its saved position", async () => {
+    const notion = workspace()
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(HOUR)
+    notion.edit("a", { title: "Alpha renamed" })
+    const cursor = decodeCursor(run.state().cursor as string)
+    const stale = encodeCursor({
+      ...cursor,
+      pass: {
+        next: cursor.mark,
+        startedAt: notion.now,
+        walk: false,
+        tasks: [{ t: "search", kind: "page", start: "c3RhbGU" }],
+      },
+    })
+    const source = notionSource(notion, {
+      now: () => notion.now,
+      known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+      warn: (warning) => run.warnings.push(warning),
+    })
+    const page = await source.changes(stale)
+    expect(passUnderWay(page.cursor)).toBe(false)
+    expect(page.items).toContainEqual(expect.objectContaining({ id: "a" }))
+    expect(run.warnings).toContainEqual(expect.objectContaining({ reason: "notion.listing-restarted" }))
+  })
+
+  it("refuses a run too short for one step rather than saving nothing and asking again", async () => {
+    const notion = workspace()
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(HOUR)
+    const source = notionSource(notion, {
+      now: () => notion.now,
+      known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+      deadline: { endsAt: 4_000, ms: 4_000 },
+      clock: () => 0,
+    })
+    await expect(source.changes(run.state().cursor as string)).rejects.toMatchObject({
+      code: "timeout",
+      details: { reason: "notion.timeout-too-short" },
+    })
+  })
+
+  it("finishes a workspace walk that a 0.1.0 sync saved halfway", async () => {
+    const notion = workspace()
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(HOUR)
+    notion.edit("a", { title: "Alpha renamed" })
+    const cursor = decodeCursor(run.state().cursor as string)
+    const old = encodeCursor({
+      ...cursor,
+      pass: { next: cursor.mark, startedAt: notion.now, walk: true, tasks: [{ t: "walk", id: WORKSPACE_ROOT }] },
+    })
+    const source = notionSource(notion, {
+      now: () => notion.now,
+      known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+    })
+    const page = await source.changes(old)
+    expect(passUnderWay(page.cursor)).toBe(false)
+    expect(page.items).toContainEqual(expect.objectContaining({ id: "a", removed: false }))
   })
 
   it("reads a 25,000-row database whole through the engine, in created_time windows of at most 10,000", async () => {
@@ -568,6 +844,33 @@ describe("content()", () => {
     const source = notionSource(notion, { now: () => notion.now })
     await expect(source.content("long", 100)).rejects.toMatchObject({ details: { text_limit: 100 } })
     await expect(source.content("gone")).rejects.toMatchObject({ code: "not_found" })
-    await expect(source.bytes("long")).rejects.toMatchObject({ code: "validation_error" })
+    expect(new TextDecoder().decode(await source.bytes("long"))).toBe("x".repeat(500))
   })
+})
+
+describe.each([
+  ["the whole workspace", WORKSPACE_ROOT],
+  ["a page chosen as a folder", "a"],
+])("cli-core's documents source contract over the strict fake, from %s", (_, root) => {
+  for (const c of documentSourceContract(() => {
+    const notion = workspace()
+    notion.addPage({ id: "a2", title: "", parent: under("a1"), markdown: "deep" })
+    return {
+      source: notionSource(notion, { now: () => notion.now }),
+      root,
+      isFolder: isNotionFolder,
+      isDocument: isNotionDocument,
+      missing: "absent",
+      change: async () => {
+        notion.advance(HOUR)
+        notion.edit("a2", { markdown: "deep v2" })
+      },
+      addNested: async () => {
+        notion.advance(HOUR)
+        notion.addPage({ id: "a3", title: "Added deep", parent: under("a2"), markdown: "new" })
+        return { file: "a3", folder: "a2" }
+      },
+    }
+  }))
+    it(c.name, c.run)
 })

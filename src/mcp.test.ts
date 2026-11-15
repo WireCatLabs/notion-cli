@@ -96,3 +96,26 @@ it("a denied command is offered as unavailable and refused before any request (W
     rmSync(file, { force: true })
   }
 })
+
+it("mcp serve offers the shared documents commands by what they read and write", async () => {
+  const mcp = await mcpOverStdio((streams) =>
+    run(["personal", "mcp", "serve"], { tty: false, keyring: signedIn(), fetch: fakeNotion().fetch, ...streams }),
+  )
+  try {
+    const writes = async (query: string) => {
+      const found = (await mcp.call("notion_tools_search", { query })).body as {
+        items: { command: string; writes: boolean }[]
+      }
+      return Object.fromEntries(found.items.map((item) => [item.command, item.writes]))
+    }
+    expect(await writes("tags")).toMatchObject({ "tags add": true, "tags list": false })
+    expect(await writes("sync")).toMatchObject({ sync: false, "folders remove": true })
+    expect(await writes("folders")).toMatchObject({ "folders add": true, "folders browse": false })
+    expect(await writes("documents")).toMatchObject({ "documents list": false, "documents get": false })
+    const listed = await mcp.call("notion_read", { command: "folders list" })
+    expect(listed.body).toMatchObject({ items: [{ id: "notion-workspace" }] })
+    expect(JSON.stringify((await mcp.call("notion_read", { command: "tags add" })).body)).toMatch(/notion_write|write/u)
+  } finally {
+    expect(await mcp.close()).toBe(0)
+  }
+})

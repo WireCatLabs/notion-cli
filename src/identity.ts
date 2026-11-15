@@ -25,6 +25,7 @@ export const DESKTOP: ManifestIdentity = {
   // Every host the CLI contacts (WC-CMD-32).
   hosts: ["api.notion.com"],
   tagline: "Notion pages and databases, searchable on your computer",
+  syncs: "Notion pages and database rows",
   signIn: {
     gives: "Lets your agent read the Notion pages and databases your token can see.",
     asks: "A Notion personal access token, or the token of an internal connection you made in Notion.",

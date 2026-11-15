@@ -134,6 +134,10 @@ export interface NotionBlock {
   has_children: boolean
   in_trash?: boolean
   parent: NotionParent
+  created_time: string
+  last_edited_time: string
+  created_by?: NotionUser
+  last_edited_by?: NotionUser
   child_page?: { title: string }
   child_database?: { title: string }
 }

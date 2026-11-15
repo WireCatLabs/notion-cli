@@ -15,12 +15,16 @@ import { IDENTITY } from "./identity.js"
 import { notionClient, notionFetch, PACE, QUERY_PACE } from "./notion/client.js"
 import { NOTION } from "./notion/errors.js"
 import { type LiveReads, liveReads } from "./notion/notion.js"
+import { notionClock, notionPort } from "./notion/port.js"
+import type { NotionReads } from "./notion/reads.js"
 
 /** What a test hands `run()` beside cli-core's own: the fake Notion in place of the network (WC-ARCH-10). */
 export interface ServiceEnvironment extends BaseEnvironment {
   fetch?: typeof fetch
   /** Notion's retry and pace waits; a test passes one that only counts them (WC-TEST-3). */
   sleep?: SleepLike
+  /** The clock those waits run on, in ms; a test's `sleep` moves it, or the pace would wait on real time. */
+  now?: () => number
 }
 
 /**
@@ -51,22 +55,31 @@ export const tokenOf = (command: Command): string => {
 }
 
 /** Notion's transport for one run: hostFetch, paced per profile, a slower pace of its own for data source queries. */
-const transportOf = (command: Command, events: EventSink | undefined) => {
+const transportOf = (command: Command, events: EventSink | undefined, onAnswer?: (response: Response) => void) => {
   const { environment, env, profile } = contextOf(command)
   const pace = pacePathFor(IDENTITY, profile, env)
+  const now = environment.now ?? Date.now
   return {
     events,
+    ...(onAnswer ? { onAnswer } : {}),
     signal: environment.signal,
     fetch: environment.fetch,
-    pacer: new Pacer(pace, PACE),
+    pacer: new Pacer(pace, PACE, now),
     ...(environment.sleep ? { sleep: environment.sleep } : {}),
-    queryPacer: new Pacer(pace.replace(/\.json$/u, ".queries.json"), QUERY_PACE),
+    ...(environment.now ? { now: () => new Date(now()) } : {}),
+    queryPacer: new Pacer(pace.replace(/\.json$/u, ".queries.json"), QUERY_PACE, now),
   }
 }
 
 /** Notion for one run: the SDK over the run's transport. */
 export const notionFor = (command: Command, token: string, events: EventSink): LiveReads =>
   liveReads(notionClient({ token, ...transportOf(command, events) }))
+
+/** The sync's read port: Notion's clock comes from the Date header of every answer, never from this computer's. */
+export const notionReadsFor = (command: Command, token: string, events: EventSink): NotionReads => {
+  const clock = notionClock()
+  return notionPort(notionClient({ token, ...transportOf(command, events, clock.observe) }), clock)
+}
 
 /** The same transport for the generated `api` commands, each attempt recorded in the run, as the SDK's are. */
 export const notionFetchFor = (command: Command) => notionFetch(transportOf(command, undefined))

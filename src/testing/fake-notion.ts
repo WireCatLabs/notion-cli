@@ -3,6 +3,10 @@
 // No answer here was captured from a live workspace; docs/dev/DESIGN.md, "Live check", lists what the owner checks.
 // Visibly fake data only (WC-TEST-8).
 
+import { isCliError } from "@wirecat/cli-base"
+import type { NotionQueryRequest, NotionSearchRequest } from "../notion/reads.js"
+import type { FakeNotion as FakeWorkspace } from "./fake-notion-reads.js"
+
 /** Spelled so gitleaks lets it through; never a real token. */
 export const FAKE_TOKEN = "wirecatfake0token42"
 export const NOTION_VERSION_SENT = "2026-03-11"
@@ -34,7 +38,7 @@ interface Route {
   query: readonly string[]
   /** The body's documented fields; a route without it takes no body. */
   body?: readonly string[]
-  answer: (id: string, call: FakeCall) => Answer
+  answer: (id: string, call: FakeCall) => Answer | Promise<Answer>
 }
 
 export interface FakePage {
@@ -50,11 +54,19 @@ export interface FakeNotionOptions {
   /** `users/me` without `bot.workspace_id`, as the docs' own example shows it. */
   noWorkspaceId?: boolean
   owner?: "user" | "workspace"
+  /** The token's bot, as another connection to the same workspace has; it takes its own token. */
+  botId?: string
+  token?: string
   /** Each request in turn is answered with the next of these, then normally. */
   failures?: Answer[]
   /** Every request is answered with this. */
   failWith?: Answer
   dataSources?: number
+  /**
+   * A whole workspace behind the same strict routes: search, pages, databases, queries and blocks answer from it, so
+   * a sync runs against one data model with the request checks of this fake.
+   */
+  workspace?: FakeWorkspace
 }
 
 const text = (content: string) => [
@@ -122,6 +134,84 @@ const dataSource = (id: string, title: string) => ({
   },
 })
 
+const NOTION_CODES: Record<string, [number, string]> = {
+  not_found: [404, "object_not_found"],
+  validation_error: [400, "validation_error"],
+  permission_error: [403, "restricted_resource"],
+  rate_limited: [429, "rate_limited"],
+  provider_unavailable: [503, "service_unavailable"],
+}
+
+/** The workspace's answer, or its refusal as Notion's error body. */
+const fromWorkspace = async (read: () => Promise<unknown>): Promise<Answer> => {
+  try {
+    return { status: 200, body: await read() }
+  } catch (error) {
+    if (!isCliError(error)) throw error
+    const [status, code] = NOTION_CODES[error.code] ?? [500, "internal_server_error"]
+    return notionError(typeof error.details.status === "number" ? error.details.status : status, code)
+  }
+}
+
+const workspaceRoutes = (workspace: FakeWorkspace): Route[] => [
+  {
+    method: "POST",
+    path: /^\/v1\/search$/u,
+    query: [],
+    body: ["query", "filter", "sort", "start_cursor", "page_size"],
+    answer: (_, { body }) =>
+      fromWorkspace(async () => ({
+        object: "list",
+        ...(await workspace.search(body as unknown as NotionSearchRequest)),
+      })),
+  },
+  {
+    method: "GET",
+    path: new RegExp(`^/v1/pages/(${UUID})/markdown$`, "u"),
+    query: ["markdown_version", "include_transcript"],
+    answer: (id, { query }) =>
+      query.markdown_version !== "v2"
+        ? notionError(400, "validation_error")
+        : fromWorkspace(async () => ({ object: "page_markdown", id, ...(await workspace.pageMarkdown(id)) })),
+  },
+  {
+    method: "GET",
+    path: new RegExp(`^/v1/pages/(${UUID})$`, "u"),
+    query: ["filter_properties"],
+    answer: (id) => fromWorkspace(() => workspace.retrievePage(id)),
+  },
+  {
+    method: "GET",
+    path: new RegExp(`^/v1/databases/(${UUID})$`, "u"),
+    query: [],
+    answer: (id) => fromWorkspace(() => workspace.retrieveDatabase(id)),
+  },
+  {
+    method: "POST",
+    path: new RegExp(`^/v1/data_sources/(${UUID})/query$`, "u"),
+    query: ["filter_properties"],
+    body: ["filter", "sorts", "start_cursor", "page_size"],
+    answer: (id, { body }) =>
+      fromWorkspace(async () => ({
+        object: "list",
+        ...(await workspace.queryDataSource(id, (body ?? {}) as NotionQueryRequest)),
+      })),
+  },
+  {
+    method: "GET",
+    path: new RegExp(`^/v1/blocks/(${UUID})$`, "u"),
+    query: [],
+    answer: (id) => fromWorkspace(() => workspace.retrieveBlock(id)),
+  },
+  {
+    method: "GET",
+    path: new RegExp(`^/v1/blocks/(${UUID})/children$`, "u"),
+    query: ["start_cursor", "page_size"],
+    answer: (id, { query }) =>
+      fromWorkspace(async () => ({ object: "list", ...(await workspace.blockChildren(id, query.start_cursor)) })),
+  },
+]
+
 /** Notion, answering through `fetch`. `calls` holds every request; `refusals` every one it turned away and why. */
 export const fakeNotion = (options: FakeNotionOptions = {}) => {
   const pages: Record<string, FakePage> = options.pages ?? {
@@ -135,6 +225,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
   )
 
   const routes: Route[] = [
+    ...(options.workspace ? workspaceRoutes(options.workspace) : []),
     {
       // https://developers.notion.com/reference/get-self
       method: "GET",
@@ -144,7 +235,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
         status: 200,
         body: {
           object: "user",
-          id: BOT_ID,
+          id: options.botId ?? BOT_ID,
           name: "Test Connection",
           avatar_url: null,
           type: "bot",
@@ -337,8 +428,8 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
     return answer
   }
 
-  const answerOf = (call: FakeCall): Answer => {
-    if (call.headers.authorization !== `Bearer ${FAKE_TOKEN}`) return notionError(401, "unauthorized")
+  const answerOf = async (call: FakeCall): Promise<Answer> => {
+    if (call.headers.authorization !== `Bearer ${options.token ?? FAKE_TOKEN}`) return notionError(401, "unauthorized")
     if (call.headers["notion-version"] !== NOTION_VERSION_SENT)
       return refuse(`version ${call.headers["notion-version"]}`, notionError(400, "missing_version"))
     const route = routes.find((one) => one.method === call.method && one.path.test(call.path))
@@ -369,10 +460,12 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
       headers,
     }
     calls.push(call)
-    const answer = answerOf(call)
+    const answer = await answerOf(call)
+    const workspace = options.workspace
+    const date: Record<string, string> = workspace?.dateHeader ? { date: new Date(workspace.now).toUTCString() } : {}
     return new Response(JSON.stringify(answer.body), {
       status: answer.status,
-      headers: { "content-type": "application/json", ...answer.headers },
+      headers: { "content-type": "application/json", ...date, ...answer.headers },
     })
   }
 

@@ -4,16 +4,40 @@ import * as v from "valibot"
 const PREFIX = "notion1."
 
 const Task = v.variant("t", [
-  v.object({ t: v.literal("search"), kind: v.picklist(["page", "data_source"]) }),
+  v.object({
+    t: v.literal("search"),
+    kind: v.picklist(["page", "data_source"]),
+    start: v.optional(v.string()),
+    /** Everything search gives, for the top of a workspace walk, not only what was edited since the mark. */
+    full: v.optional(v.boolean()),
+  }),
+  v.object({ t: v.literal("database"), id: v.string(), walk: v.optional(v.boolean()) }),
+  /** Known children of a container that its listing has not shown yet, each read directly at the end of the pass. */
+  v.object({ t: v.literal("confirm"), container: v.string(), ids: v.array(v.string()) }),
   v.object({
     t: v.literal("rows"),
     database: v.string(),
     source: v.string(),
+    /** The next query reads the rows created from this time on. */
     after: v.optional(v.string()),
+    /** Only while more than a page of rows share the minute `after`: the query's own position inside it. */
+    start: v.optional(v.string()),
+    /** The rows of that minute read so far. */
+    seen: v.optional(v.array(v.string())),
     /** Every row, not only those edited since the mark: part of a full walk. */
     full: v.optional(v.boolean()),
   }),
-  v.object({ t: v.literal("walk"), id: v.string() }),
+  v.object({
+    t: v.literal("walk"),
+    id: v.string(),
+    kind: v.optional(v.picklist(["page", "database", "row", "workspace"])),
+    /** Blocks still to list, the page first, then the blocks inside it that hold more; each from its own position. */
+    blocks: v.optional(v.array(v.object({ id: v.string(), start: v.optional(v.string()) }))),
+    /** The children listed so far; a known child not among them is read directly once the listing ends. */
+    seen: v.optional(v.array(v.string())),
+  }),
+  /** A database a page's listing named, read on its own: a linked view of a database elsewhere answers 404. */
+  v.object({ t: v.literal("child"), id: v.string(), container: v.string() }),
 ])
 
 const Cursor = v.object({
@@ -31,6 +55,8 @@ const Cursor = v.object({
       startedAt: v.number(),
       walk: v.boolean(),
       tasks: v.array(Task),
+      /** The containers resolved so far, so that a step the deadline cut does not read them again. */
+      parents: v.optional(v.record(v.string(), v.string())),
     }),
   ),
 })

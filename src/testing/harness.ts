@@ -5,6 +5,9 @@ import type { ServiceEnvironment } from "../context.js"
 import { run } from "../program.js"
 import { FAKE_TOKEN, type FakeNotion, fakeNotion } from "./fake-notion.js"
 
+// One clock for every run in a process: a pace file keeps the times the last run reserved, past the wall clock.
+let clock = 0
+
 /** A keyring where profile `personal` is already signed in to the fake service; never the real one (WC-TEST-2). */
 export const signedIn = (): KeyringStore => memoryKeyring({ "notion-cli:token:personal": FAKE_TOKEN })
 
@@ -12,7 +15,7 @@ export interface Ran {
   code: number
   out: string
   err: string
-  /** Every retry or pace wait, in ms; nothing really waits. */
+  /** Every retry or pace wait, in ms; nothing really waits, the run's clock moves on by it instead. */
   waits: number[]
   /** stdout parsed, or the error object from stderr. */
   json: () => Record<string, unknown>
@@ -42,6 +45,7 @@ export const runCli = async (
   const out: string[] = []
   const waits: number[] = []
   const err: string[] = []
+  clock = Math.max(clock, Date.now())
   const options: RunOptions & ServiceEnvironment = {
     streams: { data: (text) => out.push(text), diagnostic: (text) => err.push(text) },
     tty,
@@ -49,7 +53,9 @@ export const runCli = async (
     fetch: notion.fetch,
     sleep: async (ms) => {
       waits.push(ms)
+      clock += ms
     },
+    now: () => clock,
     ...(env ? { env: { ...process.env, ...env } } : {}),
     ...(answer ? { answer } : {}),
     ...(stdin === undefined ? {} : { stdin: Object.assign(Readable.from([stdin]), { isTTY: false }) }),

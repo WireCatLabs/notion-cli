@@ -11,18 +11,21 @@ pages, keeps the checkpoint and resumes a cut batch. The reads it needs from Not
 
 - With no folder chosen: everything the token sees. The sync puts it under one folder that stands for the
   workspace (`notion-workspace`).
-- With folders chosen (`folders add`): only those databases and their rows.
-- A top-level page is a document. A database is a folder, and each of its rows is a document. A row's properties
-  become its front matter, and also lines of its searchable text, `Status: Done`.
+- With folders chosen (`folders add`): only those pages and databases, and everything under them.
+- A page is a folder and a document at once: the engine lists its children and saves its text (cli-core's
+  `isDocument`). A database is a folder, and each of its rows is a document. A row is a plain file, so the
+  children of a row are not listed. A row's properties become its front matter, and also lines of its searchable
+  text, `Status: Done`.
 - A page whose parent the token cannot see is filed at the top of the workspace.
 
-**Not yet: pages under pages.** cli-core's sync engine treats a folder and a document as two different things, and
-a Notion page with child pages is both. Until cli-core can plan such a page (its change C2), the sync does not
-store a page that sits under another page, or a database that sits in a page, and a page cannot be chosen as a
-folder. The walk does not list the children of pages either, so it spends no requests on them. The fix is in
-cli-core: `syncDocuments` takes an optional `isDocument(file)`, so a page with children is walked and also saved
-([cli-core#2941](https://github.com/WireCatLabs/cli-core/pull/2941), not released yet). The sync uses it once it
-is released.
+**The cost of pages as folders.** The engine lists the children of every folder it is sent. So a page is sent
+again only when Notion changed it, and a full walk asks for each page's children once. Listing a page's children
+reads every block that holds others (toggles, columns, lists), since a child page can sit inside one. A child page
+comes from its `child_page` block, which names its id, title, times and authors
+([block](https://developers.notion.com/reference/block)), so a page of 100 children costs one request, not 101. A
+page under a page has only its title for properties, so nothing is lost. Not yet checked against the live API: that
+a `child_page` block's `last_edited_time` is the page's. If it is not, a walk sends such pages again each day. A
+child database is still read on its own, for its data sources.
 
 ## The position between syncs
 
@@ -47,8 +50,9 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 2. **Each database in scope**, queried for rows edited on or after the mark minus the overlap
    ([timestamp filter](https://developers.notion.com/reference/filter-data-source-entries)). This does not depend on
    search, so a row search misses is still found.
-3. **Every 24 hours, a full walk** instead of step 2. It lists the top of the workspace from search, and every row
-   of every database by query. `sync --rescan` walks at once.
+3. **Every 24 hours, a full walk** instead of step 2. It lists the top of the workspace from search, one page of
+   results at a time, the children of every page, and every row of every database by query. The known top-level
+   pages search did not show are read directly at the end. `sync --rescan` walks at once.
 4. **Before anything is removed**, the sync asks Notion for it directly
    ([retrieve a page](https://developers.notion.com/reference/retrieve-a-page)). It is removed only when Notion
    answers that it is in the trash, or answers 404 (deleted, or no longer shared with the token). A page that is
@@ -83,7 +87,7 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 
 What the sync does not promise:
 
-- Pages under pages, as above, until cli-core's C2.
+- The children of a database row: a row is not listed as a folder.
 - In the default scope, the top of the walk comes from search. A top-level page that search has never returned
   and the sync has never held is found only once search returns it.
 - Search counts database rows as pages and stops at 10,000 results. In a workspace with more pages and rows than
@@ -93,18 +97,60 @@ What the sync does not promise:
 - A block the token may not see stays out of the text. Notion lists those blocks with the cut ones and does not
   say which is which, so each is asked for once and counted when Notion refuses it.
 
+## Warnings in the answer
+
+Each item or step the source leaves out calls `warn`. `sync` answers every warning in `item.warnings`, with the id
+and the words, and once per kind in `meta.issues` (`code`, `reason`, `source: notion`), such as
+`notion.child-unreadable` for a linked database view. An answer with issues says `meta.complete: false` and exits 0:
+the rest was synced, and the next sync is likely to leave the same item out. cli-core's shared `sync` declares
+`partial` (WC-OUT-7).
+
 ## Bounds and errors
 
 - One sync makes at most 2,000 requests while it looks for changes. Then it saves where it stopped, and the next
   sync goes on. Saving the pages has its own bound, `sync --limit`.
+- **A walk goes on over several syncs.** cli-core's engine asks the run's budget before each listing and each page
+  it reads. The budget comes from the run's deadline, at about 2 s a step. Since cli-core 0.671.0 the shared `sync`
+  is cooperative: its deadline is 15 minutes in a terminal and 45 seconds over MCP, unless `--timeout` sets one. A
+  sync that stops answers `complete: false`,
+  `stopped` and `walk`, exits 0, and names `sync` as its next step. `--rescan` starts the walk over, so it is run once
+  and continued with plain `sync` runs. There is no cap on the size of the chosen folders.
+- **A pass stops before the run's deadline.** Each step of the pass costs one request: one page of a search, one
+  database, one page of rows, one page of a page's blocks, or one direct read. A step that needs a page's container
+  may read it too, and keeps what it read. Before each request the source checks that the slowest request so far,
+  plus cli-core's margin (`deadlineMargin`), still fits before the deadline. If not, it saves the step it reached in
+  the position. The answer then says `complete: false` and names `sync` (with the same `--timeout`) as its next
+  step, and the next sync goes on from that step. This holds for the hourly pass and for the daily walk. A run that
+  could keep nothing fails with `timeout` (`notion.timeout-too-short`) instead of asking for the same run again; run
+  it with a longer `--timeout`.
+  - Rows go a page at a time. The next page is read from the last row's minute on, as Notion rounds `created_time`
+    to the minute. Only when a whole page of rows shares one minute does the step go on by the query's own position.
+  - A saved position Notion no longer takes (a 400) starts that search or listing again from its top, with a
+    `notion.listing-restarted` warning.
+- **The change feed names each changed page.** A round of changes lists only the direct children of a page the feed
+  names, so the feed names every page and row that changed, not only an ancestor (checked by cli-core's
+  `documentSourceContract`, `addNested`). A page new to the scope is walked in full.
 - **One item Notion refuses** (403, or 404 for a database search still lists, or a linked database view) is left
-  out of that sync with a warning. The sync goes on with the rest.
+  out of that sync with a warning. The sync goes on with the rest. This holds for the blocks inside a page too, at
+  any depth: a synced block whose original is not shared with the token answers 404 for its children. That block is
+  skipped with a `notion.left-out` warning, and the rest of the page is read. The pages the sync holds under a
+  skipped block are read one by one instead. A block Notion answers 403 for while the page's Markdown is read is
+  skipped the same way, with a warning, and the page keeps the rest of its text. A data source of a database that
+  Notion will not query (404 or 403) is left out with a warning; the database's other data sources still sync, and
+  the rows already held are read one by one before any counts as gone.
+- **Only a 404 or the trash removes.** A 403 on a page or a database the sync holds keeps it and its rows as they
+  were, with a `notion.kept-unconfirmed` warning: a 403 says nothing about whether the item is still there.
 - **A failure partway** (a 429 after the client's retries, Notion down) ends the pass early. The work done is
   kept, a warning names the failure and the wait Notion asked for, and the next sync goes on from that step. When
   nothing was done yet, the sync fails with that error (`rate_limited` and the wait), and the position does not
   move.
 - **Search cut short while it looks for edits** (more than 10,000 edited since the mark) fails the sync. Search has
   no time filter to split the question by, so going on would quietly miss edits.
+
+## The search index
+
+At the end of a sync cli-core's engine indexes the words of what it wrote, so a read-only search finds a page by the
+words of its text right after the sync. Reads open the store read-only.
 
 ## Secrets
 
