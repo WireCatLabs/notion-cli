@@ -67,6 +67,13 @@ is given). Nothing is kept on a WireCat server.
     Either cli-core gets a fixed local port, which the person registers with their own connection, or the browser
     returns to a fixed relay page that forwards the code to the local port and stores nothing, as bitrix24-cli does.
 
+**One connection, one profile.** The account is the workspace id and the token's bot id. Two profiles on one token
+would be one account in the shared store, and each sync would remove the pages of the other. So `session start` and
+`sync` refuse a connection another profile signed in to uses (`profile.account-taken`), and name that profile: use
+it, or run `session end` there first. A profile whose copy was synced from one connection refuses a token of another
+(`profile.other-account`), at sign-in and at sync; the token it had stays. The other connection goes to a new profile.
+Removing a profile's copy (`account remove`) is not built yet.
+
 `session status`, `session list` and `session end` work as in the template sample. `session end` removes only this
 tool's own entries. Notion's own CLI keeps its tokens under the same keyring service name, `notion-cli`, with a
 workspace id as the account; this tool never lists, reads or removes an account it did not write.
@@ -110,9 +117,10 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
 ### Storing, indexing, syncing and deleting
 
 1. **What is kept.** Each page and each database row is a `documents` record through cli-core's document ingestion,
-   under the provider `notion` (kind `documents`, registered on every run that opens the store).
+   under the provider `notion` (kind `documents`, registered on every run that writes the store; a read opens it
+   read-only).
    - The account is one sign-in's view of a workspace: the workspace id plus the token's bot id. Two profiles in one
-     workspace see different pages, so they are different accounts.
+     workspace with tokens of their own see different pages, so they are different accounts.
    - The record's external id is the page id. In the catalog a page is a `file` and a database a `folder`, with
      Notion's type kept beside it. Every page is a folder to the sync and a document too (cli-core's `isDocument`),
      so pages under pages are copied and a page can be a chosen folder. A row is a plain file.
@@ -182,6 +190,9 @@ below; the rest a person reads in its output:
   least one signed link and prints no `X-Amz-` or `signature=` query. Use such a page for the check: it fails on a
   page with no file. The form of a signed link in Markdown v2 is not documented; `src/notion/links.ts` cuts every query
   that carries a signature, plain or percent-encoded, wherever the link around it ends.
+- A renewed personal access token, or a new token of the same connection, keeps the bot id. If it does not, a
+  profile refuses its own renewed token as another connection (`profile.other-account`), and the account must become
+  the workspace id alone, or the bot's owner.
 - `bot.owner.type` is `user` for a personal access token and `workspace` for an internal connection's token.
 - On a page past about 20,000 blocks, the `<unknown url="…"/>` tag names its block id, so the fetched part lands in
   place; otherwise it is added after the page.

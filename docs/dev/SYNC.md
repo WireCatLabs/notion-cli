@@ -95,21 +95,43 @@ What the sync does not promise:
 
 Each item or step the source leaves out calls `warn`. `sync` answers every warning in `item.warnings`, with the id
 and the words, and once per kind in `meta.issues` (`code`, `reason`, `source: notion`), such as
-`notion.child-unreadable` for a linked database view. A warning does not make the answer partial: the next sync
-would leave the same item out.
+`notion.child-unreadable` for a linked database view. An answer with issues says `meta.complete: false`: the rest
+was synced, and the next sync is likely to leave the same item out.
+
+`sync` should then exit 0, as a command that declares `partial` does (WC-OUT-7). Today it exits with the first
+issue's code, 6 for `not_found`. `partial` belongs to cli-core's shared `sync` command, and the shared contract does
+not let notion add it.
 
 ## Bounds and errors
 
 - One sync makes at most 2,000 requests while it looks for changes. Then it saves where it stopped, and the next
   sync goes on. Saving the pages has its own bound, `sync --limit`.
 - **One item Notion refuses** (403, or 404 for a database search still lists, or a linked database view) is left
-  out of that sync with a warning. The sync goes on with the rest.
+  out of that sync with a warning. The sync goes on with the rest. This holds for the blocks inside a page too: when
+  Notion will not list them, the pages the sync holds under it are read one by one instead.
+- **Only a 404 or the trash removes.** A 403 on a page or a database the sync holds keeps it and its rows as they
+  were, with a `notion.kept-unconfirmed` warning: a 403 says nothing about whether the item is still there.
 - **A failure partway** (a 429 after the client's retries, Notion down) ends the pass early. The work done is
   kept, a warning names the failure and the wait Notion asked for, and the next sync goes on from that step. When
   nothing was done yet, the sync fails with that error (`rate_limited` and the wait), and the position does not
   move.
 - **Search cut short while it looks for edits** (more than 10,000 edited since the mark) fails the sync. Search has
   no time filter to split the question by, so going on would quietly miss edits.
+
+## Current limits of the shared engine
+
+These are cli-core's to fix. notion does not work around them.
+
+- **`--rescan` starts over each time.** Every run with `--rescan` throws away the walk an earlier run saved. A
+  workspace too big for one run is finished by plain `sync` runs after the first `--rescan`.
+- **10,000 entries per walk.** One walk stops with an error past 10,000 pages, databases and rows under the chosen
+  folders. Choose smaller folders with `folders add` until the cap moves.
+- **A changed page is walked again whole.** The engine lists again the whole subtree of every page or database the
+  change feed sends. An edit to a page high in the tree costs a request for every page under it.
+- **The search index is caught up by hand.** The engine writes pages but leaves their words unindexed until the next
+  writable search, so a read-only search found a page by its title only. notion catches the index up at the end of
+  every run that writes. cli-core's `drainNoteIndex` is not exported, so it calls `notes.embedded`, which drains
+  first.
 
 ## Secrets
 

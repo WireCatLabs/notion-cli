@@ -83,19 +83,23 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
   const roots = settings.roots ?? [WORKSPACE_ROOT]
   const warnings: SyncWarning[] = []
   const reads = { known: 0 }
-  const source = notionSource(notion, {
-    roots,
-    known: () => {
-      reads.known++
-      return [...Object.values(state.documents).map((doc) => doc.metadata), ...Object.values(state.folders)]
-    },
-    now: () => notion.now + (settings.skew ?? 0),
-    warn: (warning) => warnings.push(warning),
-    ...(settings.maxRequests ? { maxRequests: settings.maxRequests } : {}),
-  })
-  const sync = (rescan = false) =>
-    syncDocuments<NotionFile>({
-      source,
+  // One source serves one sync run, as the CLI builds it.
+  const sourceOf = () =>
+    notionSource(notion, {
+      roots,
+      known: () => {
+        reads.known++
+        return [...Object.values(state.documents).map((doc) => doc.metadata), ...Object.values(state.folders)]
+      },
+      now: () => notion.now + (settings.skew ?? 0),
+      warn: (warning) => warnings.push(warning),
+      ...(settings.maxRequests ? { maxRequests: settings.maxRequests } : {}),
+    })
+  const run = { source: sourceOf() }
+  const sync = (rescan = false) => {
+    run.source = sourceOf()
+    return syncDocuments<NotionFile>({
+      source: run.source,
       index,
       state: port,
       principal: PRINCIPAL,
@@ -113,7 +117,19 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
       rescan,
       now: () => notion.now,
     })
-  return { source, sync, saved, snapshots, warnings, reads, state: () => state }
+  }
+  return {
+    get source() {
+      return run.source
+    },
+    sourceOf,
+    sync,
+    saved,
+    snapshots,
+    warnings,
+    reads,
+    state: () => state,
+  }
 }
 
 const workspace = () => {
@@ -438,22 +454,46 @@ describe("the Notion source under cli-core's sync engine", () => {
     expect(JSON.stringify([[...run.saved.values()], [...run.snapshots.values()]])).not.toMatch(/X-Amz-/i)
   })
 
-  it("reads what the sync holds once per call, not once per listing", async () => {
+  it("reads what the sync holds once per sync run, not once per listing", async () => {
     const run = harness(notion)
     await run.sync()
     notion.advance(25 * HOUR)
     run.reads.known = 0
-    const calls = { n: 0 }
-    for (const name of ["metadata", "children", "changes"] as const) {
-      const call = run.source[name] as (id: string) => Promise<unknown>
-      ;(run.source as unknown as Record<string, unknown>)[name] = (id: string) => {
-        calls.n++
-        return call(id)
-      }
-    }
+    await run.sync(true)
+    expect(run.reads.known).toBe(1)
+  })
+
+  it("keeps a page's children when Notion refuses to list them (403), and syncs the rest", async () => {
+    notion.addPage({ id: "a2", title: "Alpha grandchild", parent: under("a1"), markdown: "deep text" })
+    const run = harness(notion)
     await run.sync()
-    expect(run.reads.known).toBeGreaterThan(0)
-    expect(run.reads.known).toBeLessThanOrEqual(calls.n)
+    notion.failNext("blockChildren", new CliError("permission_error", "restricted", { status: 403 }), "a1")
+    const result = await run.sync(true)
+    expect(result.errors).toEqual([])
+    expect(result.removed).toBe(0)
+    expect([...run.saved.keys()].sort()).toEqual(["a", "a1", "a2", "b", "r1", "r2", "r3"])
+    expect(run.warnings).toContainEqual(
+      expect.objectContaining({ id: "a1", code: "permission_error", reason: "notion.left-out" }),
+    )
+  })
+
+  it("keeps a database and its rows when Notion refuses to read it (403); only a 404 removes", async () => {
+    const run = harness(notion)
+    await run.sync()
+    const database = notion.databases.get("db")
+    if (database) database.restricted = true
+    notion.advance(25 * HOUR)
+    const result = await run.sync()
+    expect(result.removed).toBe(0)
+    expect([...run.saved.keys()]).toEqual(expect.arrayContaining(["r1", "r2", "r3"]))
+    expect(run.warnings).toContainEqual(expect.objectContaining({ id: "db", reason: "notion.kept-unconfirmed" }))
+    if (database) {
+      database.restricted = false
+      database.shared = false
+    }
+    notion.advance(25 * HOUR)
+    await run.sync()
+    expect(run.saved.has("r1")).toBe(false)
   })
 
   it("syncs pages under pages, a database in a page, and a page chosen as a folder", async () => {
@@ -518,14 +558,14 @@ describe("changes()", () => {
     notion.advance(HOUR)
     notion.edit("r1", { title: "edited" })
     const cursor = run.state().cursor as string
-    const first = await run.source.changes(cursor)
+    const source = run.sourceOf()
+    const first = await source.changes(cursor)
     const partial = decodeCursor(first.cursor)
     expect(partial.pass?.tasks.length).toBeGreaterThan(0)
     expect(partial.mark).toBe(decodeCursor(cursor).mark)
     const searches = notion.calls.search
     let next = first
-    for (let round = 0; decodeCursor(next.cursor).pass && round < 10; round++)
-      next = await run.source.changes(next.cursor)
+    for (let round = 0; decodeCursor(next.cursor).pass && round < 10; round++) next = await source.changes(next.cursor)
     expect(notion.calls.search).toBe(searches)
     const done = decodeCursor(next.cursor)
     expect(done.pass).toBeUndefined()

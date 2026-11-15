@@ -18,7 +18,6 @@ import {
   refuseCommandName,
   refuseOffline,
   refuseUnderReadOnly,
-  rememberAccount,
   renderAnswer,
   rootOf,
   secretInputOf,
@@ -28,6 +27,7 @@ import { Command } from "commander"
 import { configuration } from "../config.js"
 import { contextOf, notionFor, withNotion } from "../context.js"
 import { IDENTITY } from "../identity.js"
+import { claimAccount } from "../library.js"
 import { NOTION } from "../notion/errors.js"
 
 // `session start | status | end | list` is every provider CLI's sign-in (WC-ACCT-12). The token is a personal access
@@ -74,9 +74,9 @@ const startCommand = () =>
       const token = (await readSecret("Notion token: ", secretInputOf(this))).trim()
       if (!token) throw new CliError("validation_error", "no token was given")
       const account = await run((events) => notionFor(this, token, events).me())
-      const storedIn = tokens.write(profile, token, args.credentialStorage)
       // Two profiles in one workspace see different pages, so the account is the workspace and the token's bot.
-      rememberAccount(IDENTITY, profile, `${account.workspace.id}:${account.user.id}`, env)
+      claimAccount(env, profile, `${account.workspace.id}:${account.user.id}`, tokens)
+      const storedIn = tokens.write(profile, token, args.credentialStorage)
       answer(this, { profile, state: "saved", stored_in: storedIn, verified: true, ...account })
     })
 

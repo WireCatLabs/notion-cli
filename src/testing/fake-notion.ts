@@ -54,6 +54,9 @@ export interface FakeNotionOptions {
   /** `users/me` without `bot.workspace_id`, as the docs' own example shows it. */
   noWorkspaceId?: boolean
   owner?: "user" | "workspace"
+  /** The token's bot, as another connection to the same workspace has; it takes its own token. */
+  botId?: string
+  token?: string
   /** Each request in turn is answered with the next of these, then normally. */
   failures?: Answer[]
   /** Every request is answered with this. */
@@ -232,7 +235,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
         status: 200,
         body: {
           object: "user",
-          id: BOT_ID,
+          id: options.botId ?? BOT_ID,
           name: "Test Connection",
           avatar_url: null,
           type: "bot",
@@ -426,7 +429,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
   }
 
   const answerOf = async (call: FakeCall): Promise<Answer> => {
-    if (call.headers.authorization !== `Bearer ${FAKE_TOKEN}`) return notionError(401, "unauthorized")
+    if (call.headers.authorization !== `Bearer ${options.token ?? FAKE_TOKEN}`) return notionError(401, "unauthorized")
     if (call.headers["notion-version"] !== NOTION_VERSION_SENT)
       return refuse(`version ${call.headers["notion-version"]}`, notionError(400, "missing_version"))
     const route = routes.find((one) => one.method === call.method && one.path.test(call.path))

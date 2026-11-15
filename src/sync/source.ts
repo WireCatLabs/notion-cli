@@ -65,7 +65,10 @@ export const UNTITLED = "Untitled"
 export interface NotionSourceOptions {
   /** Chosen pages and databases; none means everything the token sees. */
   roots?: string[]
-  /** What the sync already holds (the state's documents and folders), to tell a missed page from a deleted one. */
+  /**
+   * What the sync already holds (the state's documents and folders), to tell a missed page from a deleted one. Read
+   * once: a source serves one sync run.
+   */
   known?: () => Iterable<NotionFile>
   /** How far back each pass reads before the mark; at least two minutes. */
   overlapMs?: number
@@ -145,14 +148,16 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     pageMarkdown: counted(notion.pageMarkdown),
   }
 
-  // Read once per call: the state the engine holds does not change while the source lists.
+  // The state the engine holds does not change while the source lists, and parsing it costs as much as a request.
+  let held: Map<string, NotionFile> | undefined
   let known = new Map<string, NotionFile>()
   // Containers resolved within one call; a page's parent is re-read on the next one, as it may have moved.
   let containers = new Map<string, string>()
   let accessible = new Set<string>()
   let newestSeen = Number.NEGATIVE_INFINITY
   const fresh = () => {
-    known = new Map([...(options.known?.() ?? [])].map((file) => [file.id, file]))
+    held ??= new Map([...(options.known?.() ?? [])].map((file) => [file.id, file]))
+    known = held
     containers = new Map()
     accessible = new Set(known.keys())
   }
@@ -328,26 +333,48 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return results
   }
 
-  /** A database search named, or undefined when Notion will not give it: search entries can be stale. */
-  const readDatabase = async (id: string) => {
+  /**
+   * A database, or why Notion will not give it: `gone` on a 404 (search entries can be stale, a linked view always
+   * answers so), `unreadable` on a 403, which says nothing about whether it is still there.
+   */
+  const readDatabase = async (id: string): Promise<NotionDatabase | "gone" | "unreadable"> => {
     try {
       return await reads.retrieveDatabase(id)
     } catch (error) {
       if (!isItemError(error)) throw error
+      if (isNotFound(error)) {
+        warn({ id, code: "not_found", reason: "notion.database-unreadable", message: "a database could not be read" })
+        return "gone"
+      }
       warn({
         id,
         code: (error as CliError).code,
-        reason: "notion.database-unreadable",
-        message: "a database search listed could not be read",
+        reason: "notion.kept-unconfirmed",
+        message: "kept as it was: Notion would not show the database",
       })
-      return undefined
+      return "unreadable"
     }
   }
+  const isGone = (database: NotionDatabase | "gone" | "unreadable") =>
+    database === "gone" || (database !== "unreadable" && database.in_trash)
 
   const childPages = async (blockId: string, found: { pages: string[]; databases: string[] }) => {
     let start: string | undefined
     do {
-      const page = await reads.blockChildren(blockId, start)
+      let page: Awaited<ReturnType<NotionReads["blockChildren"]>>
+      try {
+        page = await reads.blockChildren(blockId, start)
+      } catch (error) {
+        // The known children it hides are read one by one before any counts as gone.
+        if (!isItemError(error)) throw error
+        warn({
+          id: blockId,
+          code: (error as CliError).code,
+          reason: "notion.left-out",
+          message: "the blocks inside were left out of this sync: Notion would not list them",
+        })
+        return found
+      }
       for (const block of page.results) {
         if (block.in_trash) continue
         if (block.type === "child_page") found.pages.push(block.id)
@@ -370,7 +397,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         accessible.add(id)
         if (databases.has(id) || source.in_trash) continue
         const database = await readDatabase(id)
-        if (database) databases.set(id, database)
+        if (typeof database === "object") databases.set(id, database)
       }
       const files: NotionFile[] = []
       for (const page of pages) if (!page.in_trash) files.push(await pageFile(page))
@@ -378,7 +405,10 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       return files.filter((file) => file.parents[0] === WORKSPACE_ROOT)
     }
     const kind = known.get(id)?.providerMetadata.kind ?? (await retrieve(id)).providerMetadata.kind
-    if (kind === "database") return allRows(await reads.retrieveDatabase(id))
+    if (kind === "database") {
+      const database = await readDatabase(id)
+      return typeof database === "object" ? allRows(database) : []
+    }
     if (kind === "row") return []
     const found = await childPages(id, { pages: [], databases: [] })
     const files: NotionFile[] = []
@@ -497,7 +527,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
           // A database outside the chosen folders is not read; one inside them is held already, or comes by a walk.
           if (!roots.includes(WORKSPACE_ROOT) && !known.has(id)) continue
           const database = await readDatabase(id)
-          if (!database) continue
+          if (typeof database !== "object") continue
           const file = await databaseFile(database)
           if (file.trashed) gone(id)
           else if (unheld(file)) emit(file)
@@ -520,8 +550,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       } catch (error) {
         if (!isNotFound(error)) throw error
         cursor.sources = cursor.sources.filter((item) => item.source !== task.source)
-        const database = await readDatabase(task.database)
-        if (!database || database.in_trash) gone(task.database)
+        if (isGone(await readDatabase(task.database))) gone(task.database)
         return
       }
       const seen = new Set<string>()
@@ -554,7 +583,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
 
     const walkDatabase = async (id: string) => {
       const database = await readDatabase(id)
-      if (!database || database.in_trash) {
+      if (database === "unreadable") return
+      if (database === "gone" || database.in_trash) {
         if (!roots.includes(id)) gone(id)
         return
       }

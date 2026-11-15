@@ -1,5 +1,6 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { annotate, metaOf } from "@wirecat/cli-base/commands"
+import type { NextStep } from "@wirecat/cli-base/standards"
 import { progressOf } from "@wirecat/cli-core/background"
 import {
   actorOf,
@@ -13,6 +14,7 @@ import {
   refuseOffline,
   renderAnswer,
   resolveAISettings,
+  writesOwnerFiles,
 } from "@wirecat/cli-core/cli"
 import { catalogFiles, syncDocuments } from "@wirecat/cli-core/documents"
 import { addDocumentCommands, type DocumentWords } from "@wirecat/cli-core/documents/cli"
@@ -24,7 +26,8 @@ import { IDENTITY } from "../identity.js"
 import { ingestionOf, knowledgeOf } from "../knowledge.js"
 import {
   chosenFolders,
-  confirmPrincipal,
+  claimAccount,
+  foldersChangedAt,
   knownOf,
   MAX_ENTRIES,
   PROVIDER,
@@ -34,10 +37,12 @@ import {
   saveFolders,
   syncState,
   TEXT_LIMIT,
+  walkUnderWay,
   withProfileLock,
   withStore,
 } from "../library.js"
 import { notionId } from "../notion/ids.js"
+import { decodeCursor } from "../sync/cursor.js"
 import {
   isNotionDocument,
   isNotionFolder,
@@ -125,12 +130,15 @@ export const libraryCommands = (): Command[] => {
   const profile = () => context().profile
   const state = () => syncState(env(), profile(), principalOf(env(), profile())).read()
   let warnings: SyncWarning[] = []
+  let next: NextStep[] | undefined
 
   const output = (body: Body) => {
     const issues = issuesOf(warnings)
-    const answer = issues.length
-      ? { ...body, meta: { ...body.meta, issues: [...(body.meta?.issues ?? []), ...issues] } }
-      : body
+    const answer = {
+      ...body,
+      ...(next ? { next } : {}),
+      ...(issues.length ? { meta: { ...body.meta, issues: [...(body.meta?.issues ?? []), ...issues] } } : {}),
+    }
     renderAnswer(command(), outputFor(command()), answer)
   }
 
@@ -213,11 +221,23 @@ export const libraryCommands = (): Command[] => {
           throw new CliError("not_found", `${id} is not a chosen folder; folders list shows them`, {
             reason: "folder.not-chosen",
           })
-        saveFolders(
-          env(),
-          profile(),
-          roots.filter((root) => root !== id),
-        )
+        const left = roots.filter((root) => root !== id)
+        saveFolders(env(), profile(), left)
+        if (!left.length) {
+          outputFor(command()).renderer.warn(
+            "no folder is chosen now, so the next sync copies the whole workspace the token sees",
+          )
+          next = [
+            {
+              kind: "command",
+              step: "folders.browse",
+              command: "folders browse",
+              args: {},
+              why: "the next sync copies the whole workspace; choose a page or database to keep it narrow",
+              safe_to_auto_execute: true,
+            },
+          ]
+        }
         return id
       },
       browse: (folders) => {
@@ -261,10 +281,10 @@ export const libraryCommands = (): Command[] => {
         const roots = rootsOf(env(), name)
         const result = await withNotionReads(async (reads) => {
           const live = await sourceFor(reads).identity()
-          confirmPrincipal(env(), name, live)
+          claimAccount(env(), name, live, context().tokens)
           const source = sourceFor(reads, live)
           return withProfileLock(env(), name, (assertHeld) =>
-            withStore(env(), async (store) => {
+            withStore(env(), true, async (store) => {
               const ingestion = ingestionOf(store)
               const synced = await syncDocuments<NotionFile>({
                 source,
@@ -306,6 +326,14 @@ export const libraryCommands = (): Command[] => {
         const held = syncState(env(), name, "").read()
         const documents = Object.keys(held.documents).length
         const pending = held.pending?.jobs.length ?? 0
+        const queued = new Set(held.pending?.jobs.map((job) => job.id))
+        const done = Object.keys(held.documents).filter((id) => !queued.has(id)).length
+        const changed = foldersChangedAt(env(), name)
+        // Until the plan is made, or while Notion's own pass goes on, nothing says how much is left.
+        const unplanned =
+          walkUnderWay(env(), name) ||
+          (held.cursor !== undefined && decodeCursor(held.cursor).pass !== undefined) ||
+          (changed !== undefined && (!held.lastSync || Date.parse(changed) > Date.parse(held.lastSync)))
         return {
           profile: name,
           selected_folders: chosenFolders(env(), name),
@@ -317,9 +345,10 @@ export const libraryCommands = (): Command[] => {
           progress: progressOf({
             job: "sync",
             profile: name,
-            done: documents,
+            done,
+            ...(unplanned || (!held.lastSync && !held.pending) ? {} : { total: done + pending }),
             ...(held.lastSync ? { updatedAt: held.lastSync } : {}),
-            complete: Boolean(held.lastSync) && !held.pending,
+            complete: Boolean(held.lastSync) && !held.pending && !unplanned,
           }),
           coverage: "pages, pages under pages and database rows, as Notion Markdown; files inside pages are not copied",
           remote_checked: false,
@@ -327,9 +356,9 @@ export const libraryCommands = (): Command[] => {
       },
     },
     documents: {
-      list: (query, page) =>
-        withStore(env(), async (store) => {
-          const principal = principalOf(env(), profile())
+      list: (query, page) => {
+        const principal = principalOf(env(), profile())
+        return withStore(env(), false, async (store) => {
           const found = await knowledgeOf(store, principal).documents(principal, query, page)
           const held = state().documents
           return {
@@ -340,7 +369,8 @@ export const libraryCommands = (): Command[] => {
             }),
             hasMore: found.hasMore,
           }
-        }),
+        })
+      },
       document: (input) => {
         const { id, metadata, snapshot } = imported(input)
         return { id, metadata, snapshot }
@@ -348,9 +378,9 @@ export const libraryCommands = (): Command[] => {
       lastSync: () => syncState(env(), profile(), "").read().lastSync,
     },
     search: {
-      search: (query, options) =>
-        withStore(env(), async (store) => {
-          const principal = principalOf(env(), profile())
+      search: (query, options) => {
+        const principal = principalOf(env(), profile())
+        return withStore(env(), false, async (store) => {
           const folder = await ingestionOf(store).collection(principal, false)
           if (!folder) return { query, by: "words", hits: [], has_more: false }
           const { searchNotes } = await import("@wirecat/cli-core/services")
@@ -366,7 +396,8 @@ export const libraryCommands = (): Command[] => {
             has_more: hasMore,
             ...(nextOffset === undefined ? {} : { next_offset: nextOffset }),
           }
-        }),
+        })
+      },
       // The whole workspace is the scope when no folder is chosen, so there is always something chosen.
       imported: () => ({
         profile: profile(),
@@ -375,10 +406,10 @@ export const libraryCommands = (): Command[] => {
       }),
     },
     catalog: {
-      run: (fn, write) =>
-        withStore(env(), (store) =>
+      run: (fn, write) => {
+        const principal = principalOf(env(), profile())
+        return withStore(env(), write, (store) =>
           locked(write, async (assertHeld) => {
-            const principal = principalOf(env(), profile())
             const ingestion = ingestionOf(store)
             assertHeld()
             const value = await fn(
@@ -399,16 +430,17 @@ export const libraryCommands = (): Command[] => {
             assertHeld()
             return value
           }),
-        ),
+        )
+      },
       id: (input) => idOf(input),
       roots: () => rootsOf(env(), profile()),
     },
     knowledge: {
       run: (input, fn) => {
         const write = writes()
-        return withStore(env(), (store) =>
+        const principal = principalOf(env(), profile())
+        return withStore(env(), write, (store) =>
           locked(write, async (assertHeld) => {
-            const principal = principalOf(env(), profile())
             const ref = await refOf(store, principal, input)
             assertHeld()
             const value = await fn(knowledgeOf(store, principal), principal, ref)
@@ -466,7 +498,7 @@ export const libraryCommands = (): Command[] => {
     .action(async (input: string, args: { title?: string; subject?: string[] }) => {
       const id = notionId(input)
       const content = await withNotionReads((reads) => sourceFor(reads).content(id, TEXT_LIMIT))
-      const added = await withStore(env(), (store) =>
+      const added = await withStore(env(), true, (store) =>
         store.notes.saveAddedSource({
           kind: "page",
           text: content.text,
@@ -480,9 +512,16 @@ export const libraryCommands = (): Command[] => {
       )
       output(itemOf(added))
     })
+  const find = (group: Command, name: string) => group.commands.find((one) => one.name() === name) as Command
+  const folders = find(holder, "folders")
+  // Choosing a folder changes what the next sync keeps and removes, so an agent asks for it through the write tool.
+  writesOwnerFiles(find(folders, "add"))
+  annotate(find(folders, "browse"), { partial: true })
   for (const group of holder.commands)
     group.hook("preAction", (_group, action) => {
       running = action
+      warnings = []
+      next = undefined
     })
   return [...holder.commands]
 }

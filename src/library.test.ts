@@ -1,6 +1,7 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
+import { join } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import { memoryKeyring } from "@wirecat/cli-base"
 import { accountFileFor } from "@wirecat/cli-core/cli"
 import { documentCommandsContract } from "@wirecat/cli-core/documents/testing"
@@ -126,14 +127,18 @@ describe("sync over the shared store", () => {
     expect(inside.items.map((item) => item.id).sort()).toEqual([CHILD, TASKS].sort())
   })
 
-  it("names what Notion would not give in meta.issues, and the page in the answer's warnings", async () => {
+  it("names what Notion would not give in meta.issues and the answer's warnings, and exits 6 for now", async () => {
     const notion = workspace()
     notion.addDatabase({ id: VIEW, title: "Linked view", parent: under(ROADMAP), sources: [id(9)], unreadable: true })
     const { run } = cli(notion)
-    const synced = (await run(["sync"])).json() as {
+    const ran = await run(["sync"])
+    // 0 once cli-core's shared sync declares `partial`; the contract forbids notion to declare it (WC-OUT-7).
+    expect(ran.code).toBe(6)
+    const synced = ran.json() as {
       item: { warnings: { id: string; reason: string }[] }
-      meta: { issues: unknown[] }
+      meta: { issues: unknown[]; complete: boolean }
     }
+    expect(synced.meta.complete).toBe(false)
     expect(synced.meta.issues).toContainEqual({
       code: "not_found",
       reason: "notion.child-unreadable",
@@ -164,15 +169,121 @@ describe("sync over the shared store", () => {
     const keyring = memoryKeyring()
     const signed = await runCli(["personal", "session", "start", "--json"], { notion, keyring, env, stdin: FAKE_TOKEN })
     expect(signed.code).toBe(0)
+    for (const argv of [
+      ["search", "roadmap"],
+      ["documents", "list"],
+      ["catalog", "list"],
+    ])
+      expect((await runCli(["personal", ...argv, "--json"], { notion, keyring, env })).json()).toMatchObject({
+        error: { reason: "profile.not-synced" },
+      })
     expect((await runCli(["personal", "sync", "--json"], { notion, keyring, env })).code).toBe(0)
   })
 
-  it("refuses to sync another account into a profile's copy", async () => {
-    const { run, env } = cli()
+  it("refuses another Notion connection on a profile that holds a copy, at sign-in and at sync", async () => {
+    const { run, env, notion, http } = cli()
+    await run(["sync"])
     const file = accountFileFor(IDENTITY, "personal", { ...process.env, ...env })
-    mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, '{"account":"other:bot"}')
-    expect((await run(["sync"])).json()).toMatchObject({ error: { reason: "profile.wrong-account" } })
+    const before = readFileSync(file, "utf8")
+    const other = fakeNotion({ workspace: notion, botId: id(77), token: "wirecatfake0other7" })
+    const keyring = memoryKeyring({ "notion-cli:token:personal": FAKE_TOKEN })
+    const signIn = await runCli(["personal", "session", "start", "--json"], {
+      notion: other,
+      keyring,
+      env,
+      stdin: "wirecatfake0other7",
+    })
+    expect(signIn.code).not.toBe(0)
+    expect(signIn.json()).toMatchObject({ error: { code: "conflict", reason: "profile.other-account" } })
+    expect(signIn.json().error).toMatchObject({ message: expect.stringContaining("session start") })
+    expect(keyring.entries.get("notion-cli:token:personal")).toBe(FAKE_TOKEN)
+    expect(readFileSync(file, "utf8")).toBe(before)
+    const otherKeyring = memoryKeyring({ "notion-cli:token:personal": "wirecatfake0other7" })
+    const synced = await runCli(["personal", "sync", "--json"], { notion: other, keyring: otherKeyring, env })
+    expect(synced.json()).toMatchObject({ error: { reason: "profile.other-account" } })
+    expect((await runCli(["personal", "sync", "--json"], { notion: http, keyring, env })).code).toBe(0)
+  })
+
+  it("lets one Notion connection be one profile: a second is refused until the first signs out", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "notion-profiles-"))
+    const env = { MESSAGING_STORE: join(dir, "wirecat.db"), WCNOTION_STATE_DIR: join(dir, "state") }
+    const notion = workspace()
+    const http = fakeNotion({ workspace: notion })
+    const keyring = memoryKeyring({ "notion-cli:token:personal": FAKE_TOKEN, "notion-cli:token:work": FAKE_TOKEN })
+    const as = (profile: string, argv: string[], stdin?: string) =>
+      runCli([profile, ...argv, "--json"], { notion: http, keyring, env, ...(stdin ? { stdin } : {}) })
+    expect((await as("personal", ["sync"])).code).toBe(0)
+    const work = await as("work", ["sync"])
+    expect(work.json()).toMatchObject({ error: { code: "conflict", reason: "profile.account-taken" } })
+    expect(work.json().error).toMatchObject({ message: expect.stringContaining("personal session end") })
+    expect((await as("work", ["session", "start"], FAKE_TOKEN)).json()).toMatchObject({
+      error: { reason: "profile.account-taken" },
+    })
+    const hits = async (profile: string) =>
+      ((await as(profile, ["search", "quarterly"])).json() as { item: { hits: { id: string }[] } }).item.hits
+    expect((await hits("personal")).map((hit) => hit.id)).toEqual([ROADMAP])
+    expect((await as("personal", ["session", "end"])).code).toBe(0)
+    expect((await as("work", ["session", "start"], FAKE_TOKEN)).code).toBe(0)
+    expect((await as("work", ["sync"])).code).toBe(0)
+  })
+
+  it("finds a page by the words of its body under the read-only lock right after a sync", async () => {
+    const { run, env } = cli()
+    await run(["sync"])
+    const db = new DatabaseSync(env.MESSAGING_STORE, { readOnly: true })
+    const pending = db.prepare("SELECT count(*) AS n FROM document_index_pending").get() as { n: number }
+    db.close()
+    expect(pending.n).toBe(0)
+    const found = await runCli(["personal", "search", "deepest", "--json"], {
+      notion: fakeNotion({ workspace: workspace() }),
+      env: { ...env, WCNOTION_READ_ONLY: "1" },
+    })
+    expect((found.json() as { item: { hits: { id: string }[] } }).item.hits.map((hit) => hit.id)).toEqual([GRANDCHILD])
+  })
+
+  it("removing the last chosen folder says the next sync copies the whole workspace, and it does", async () => {
+    const { run } = cli()
+    await run(["folders", "add", CHILD])
+    await run(["sync"])
+    const removed = await run(["folders", "remove", CHILD])
+    expect(removed.code).toBe(0)
+    expect(removed.json()).toMatchObject({
+      item: { id: CHILD, removed: true },
+      next: [{ kind: "command", command: "folders browse" }],
+    })
+    expect(removed.err).toContain("whole workspace")
+    expect((await run(["status"])).json()).toMatchObject({ item: { progress: { state: "partial", total: null } } })
+    await run(["sync"])
+    const listed = (await run(["documents", "list"])).json() as { items: { id: string }[] }
+    expect(listed.items.map((item) => item.id).sort()).toEqual([ROADMAP, CHILD, GRANDCHILD, ROW, LONELY].sort())
+  })
+
+  it("status counts what is left from the plan, and is not complete after the folders change", async () => {
+    const { run } = cli()
+    await run(["sync", "--limit", "2"])
+    expect((await run(["status"])).json()).toMatchObject({
+      item: { progress: { done: 2, total: 5, remaining: 3, state: "partial" } },
+    })
+    await run(["sync"])
+    expect((await run(["status"])).json()).toMatchObject({
+      item: { progress: { done: 5, total: 5, remaining: 0, state: "complete" } },
+    })
+    await run(["folders", "add", CHILD])
+    expect((await run(["status"])).json()).toMatchObject({
+      item: { progress: { total: null, remaining: null, state: "partial" } },
+    })
+  })
+
+  it("syncs a page with 200 pages under it: the pace waits on the run's clock, not the wall's", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: id(100), title: "Hub", parent: top, markdown: "hub" })
+    for (let n = 0; n < 200; n++)
+      notion.addPage({ id: id(200 + n), title: `Leaf ${n}`, parent: under(id(100)), markdown: "leaf" })
+    const { run } = cli(notion)
+    const synced = await run(["sync", "--limit", "500"])
+    expect(synced.code, synced.err).toBe(0)
+    expect(synced.waits.length).toBeGreaterThan(0)
+    expect(synced.json()).toMatchObject({ item: { saved: 201 } })
   })
 
   it("reads the local copy without Notion, and says to sync when there is none", async () => {

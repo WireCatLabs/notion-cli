@@ -26,7 +26,10 @@ yourself; if none is given, run a command without one and read the profiles the 
   memories and people. An answer with `missing` on `synced_at` means the copy is over a day old: run
   `notion <profile> sync --json` first.
 - `notion <profile> sync --json` copies what changed. `meta.issues` and `item.warnings` name pages Notion would not
-  give; `item.pending` above 0 means run it again. `notion <profile> status --json` says how far it is.
+  give; the answer then says `meta.complete: false` and exits non-zero, though the rest was synced. `item.pending`
+  above 0 means run it again. `notion <profile> status --json` says how far it is.
+- A refusal with reason `profile.account-taken` or `profile.other-account` means the token belongs to another
+  profile's Notion connection. Tell the owner which profile the error names; never sign out a profile yourself.
 - `notion <profile> session status --check --json` says whether the token works, and for which workspace.
 
 Find the rest with the tool itself: `notion commands --json`, `notion help <command>`, `notion doctor --json`.

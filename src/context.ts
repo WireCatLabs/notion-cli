@@ -23,6 +23,8 @@ export interface ServiceEnvironment extends BaseEnvironment {
   fetch?: typeof fetch
   /** Notion's retry and pace waits; a test passes one that only counts them (WC-TEST-3). */
   sleep?: SleepLike
+  /** The clock those waits run on, in ms; a test's `sleep` moves it, or the pace would wait on real time. */
+  now?: () => number
 }
 
 /**
@@ -56,14 +58,16 @@ export const tokenOf = (command: Command): string => {
 const transportOf = (command: Command, events: EventSink | undefined, onAnswer?: (response: Response) => void) => {
   const { environment, env, profile } = contextOf(command)
   const pace = pacePathFor(IDENTITY, profile, env)
+  const now = environment.now ?? Date.now
   return {
     events,
     ...(onAnswer ? { onAnswer } : {}),
     signal: environment.signal,
     fetch: environment.fetch,
-    pacer: new Pacer(pace, PACE),
+    pacer: new Pacer(pace, PACE, now),
     ...(environment.sleep ? { sleep: environment.sleep } : {}),
-    queryPacer: new Pacer(pace.replace(/\.json$/u, ".queries.json"), QUERY_PACE),
+    ...(environment.now ? { now: () => new Date(now()) } : {}),
+    queryPacer: new Pacer(pace.replace(/\.json$/u, ".queries.json"), QUERY_PACE, now),
   }
 }
 

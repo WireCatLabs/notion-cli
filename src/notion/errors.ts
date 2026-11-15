@@ -38,8 +38,10 @@ export const REASONS = defineReasons(
       ["identity.not-seen", "not_found", "this Notion user was not seen on the document"],
       ["identity.target", "validation_error", "the target must be a person: reference"],
       ["identity.no-person", "not_found", "the target person has no known identity"],
+      ["profile.account-taken", "conflict", "another profile already uses this Notion connection", ["profile"]],
+      ["profile.other-account", "conflict", "the profile's local copy was synced from another Notion connection"],
     ] as const
-  ).map(([reason, code, message]) => ({ reason, code, message, details: [] })),
+  ).map(([reason, code, message, details = []]) => ({ reason, code, message, details: [...details] })),
 )
 
 /** Notion's error code and rate-limit reason are fixed words from its docs, never text it was sent. */

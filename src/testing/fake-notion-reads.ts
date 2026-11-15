@@ -53,6 +53,8 @@ export interface FakeDatabase {
   trashed?: boolean
   shared?: boolean
   unreadable?: boolean
+  /** Shared, yet the token may not read it: Notion answers 403. */
+  restricted?: boolean
 }
 
 type Method = Exclude<keyof NotionReads, "serverTime">
@@ -307,6 +309,7 @@ export class FakeNotion implements NotionReads {
     this.enter("retrieveDatabase", id)
     const database = this.databases.get(id)
     if (!database || !this.readable(database)) throw notFound(`database ${id}`)
+    if (database.restricted) throw new CliError("permission_error", `may not read database ${id}`, { status: 403 })
     return this.databaseJson(database)
   }
 

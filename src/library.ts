@@ -1,9 +1,16 @@
 import { createHash } from "node:crypto"
-import { readFileSync, rmSync } from "node:fs"
+import { existsSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { ProviderEntry } from "@wirecat/cli-core"
-import { accountFileFor, openAppStore, readOnlyLockOf, rememberAccount } from "@wirecat/cli-core/cli"
+import {
+  accountFileFor,
+  openAppStore,
+  type ProfileTokenStore,
+  profilesHere,
+  readOnlyLockOf,
+  rememberAccount,
+} from "@wirecat/cli-core/cli"
 import type { SourceContent, SourceState, SourceStatePort, SourceWalk } from "@wirecat/cli-core/documents"
 import { acquireLock } from "@wirecat/cli-core/files"
 import type { MessageStore } from "@wirecat/cli-core/store"
@@ -26,18 +33,29 @@ export const MAX_ENTRIES = 10_000
 /** The longest page text the store keeps; a longer page is kept by name only. */
 export const TEXT_LIMIT = 1_000_000
 
-/**
- * The shared store with notion's provider entry written. Under the read-only lock it is opened read-only. Otherwise it
- * is opened for writing even to read: a read-only open right after a sync found pages by title but not by the words
- * of their body (seen in src/library.test.ts on cli-core 0.666.0; the cause in cli-core is not confirmed).
- */
-export const openStore = (env: NodeJS.ProcessEnv): Promise<MessageStore> =>
-  openAppStore(env, { app: IDENTITY, provider: PROVIDER, readOnly: readOnlyLockOf(IDENTITY, env) !== undefined })
+/** The shared store with notion's provider entry; a read, or any run under the read-only lock, opens it read-only. */
+export const openStore = (env: NodeJS.ProcessEnv, write: boolean): Promise<MessageStore> =>
+  openAppStore(env, {
+    app: IDENTITY,
+    provider: PROVIDER,
+    readOnly: !write || readOnlyLockOf(IDENTITY, env) !== undefined,
+  })
 
-export const withStore = async <T>(env: NodeJS.ProcessEnv, fn: (store: MessageStore) => Promise<T>): Promise<T> => {
-  const store = await openStore(env)
+/**
+ * A write leaves the search index caught up: a page is indexed only when a writable search drains what was written,
+ * so a read-only search right after a sync found it by title but not by its words. cli-core's `drainNoteIndex` is not
+ * exported; `embedded` drains before it looks.
+ */
+export const withStore = async <T>(
+  env: NodeJS.ProcessEnv,
+  write: boolean,
+  fn: (store: MessageStore) => Promise<T>,
+): Promise<T> => {
+  const store = await openStore(env, write)
   try {
-    return await fn(store)
+    const value = await fn(store)
+    if (write && readOnlyLockOf(IDENTITY, env) === undefined) await store.notes.embedded("", {})
+    return value
   } finally {
     await store.close()
   }
@@ -59,11 +77,21 @@ const readJson = <T>(path: string): T | undefined => {
 
 const writeJson = (path: string, value: unknown) => writeSecurely(path, JSON.stringify(value), 0o600)
 
-export const chosenFolders = (env: NodeJS.ProcessEnv, profile: string): string[] =>
-  readJson<{ roots: string[] }>(join(profileDir(env, profile), "folders.json"))?.roots ?? []
+interface Folders {
+  roots: string[]
+  /** When the choice last changed: a sync before it copied another scope. */
+  changed_at?: string
+}
+
+const foldersOf = (env: NodeJS.ProcessEnv, profile: string) =>
+  readJson<Folders>(join(profileDir(env, profile), "folders.json"))
+
+export const chosenFolders = (env: NodeJS.ProcessEnv, profile: string): string[] => foldersOf(env, profile)?.roots ?? []
+
+export const foldersChangedAt = (env: NodeJS.ProcessEnv, profile: string) => foldersOf(env, profile)?.changed_at
 
 export const saveFolders = (env: NodeJS.ProcessEnv, profile: string, roots: string[]) =>
-  writeJson(join(profileDir(env, profile), "folders.json"), { roots })
+  writeJson(join(profileDir(env, profile), "folders.json"), { roots, changed_at: new Date().toISOString() })
 
 export const rootsOf = (env: NodeJS.ProcessEnv, profile: string) => {
   const chosen = chosenFolders(env, profile)
@@ -98,6 +126,10 @@ export const syncState = (env: NodeJS.ProcessEnv, profile: string, principal: st
     removeSnapshot: (id) => rmSync(snapshot(id), { force: true }),
   }
 }
+
+/** The engine's planning walk, when one is under way: it is saved between runs until the plan is made. */
+export const walkUnderWay = (env: NodeJS.ProcessEnv, profile: string) =>
+  existsSync(join(profileDir(env, profile), "sync", "walk.json"))
 
 export const readSnapshot = (env: NodeJS.ProcessEnv, profile: string, id: string) =>
   readJson<SourceContent<NotionFile>>(join(profileDir(env, profile), "sync", "snapshots", `${fileName(id)}.json`))
@@ -138,22 +170,50 @@ export const withProfileLock = async <T>(
 const recalled = (env: NodeJS.ProcessEnv, profile: string) =>
   readJson<{ account?: unknown }>(accountFileFor(IDENTITY, profile, env))?.account
 
-/** The account a profile last synced or signed in as: local reads never ask Notion. */
+/** The account a profile has synced as: local reads never ask Notion, and a profile only signed in has no copy. */
 export const principalOf = (env: NodeJS.ProcessEnv, profile: string): string => {
   const account = recalled(env, profile)
-  if (typeof account !== "string")
+  if (typeof account !== "string" || !existsSync(join(profileDir(env, profile), "sync", "state.json")))
     throw new CliError("not_found", `profile ${profile} has no local copy yet — ${IDENTITY.command} ${profile} sync`, {
       reason: "profile.not-synced",
     })
   return account
 }
 
-/** The signed-in account, which must be the one this profile's copy belongs to: two accounts never mix. */
-export const confirmPrincipal = (env: NodeJS.ProcessEnv, profile: string, live: string) => {
-  const saved = recalled(env, profile)
-  if (saved && saved !== live)
-    throw new CliError("authentication_error", "signed-in Notion account does not match this profile's local copy", {
-      reason: "profile.wrong-account",
-    })
-  if (!saved) rememberAccount(IDENTITY, profile, live, env)
+/**
+ * Takes a Notion connection for a profile, before its token is kept or its copy written. One connection is one
+ * account in the shared store, so two profiles on it would each remove the other's pages; and a profile's local copy
+ * stays with the connection it was synced from.
+ */
+export const claimAccount = (
+  env: NodeJS.ProcessEnv,
+  profile: string,
+  account: string,
+  tokens: Pick<ProfileTokenStore, "read">,
+) => {
+  // A token from the environment variable is every profile's, so it holds none.
+  const signedIn = (name: string) => {
+    const source = tokens.read(name)?.source
+    return source !== undefined && source !== "environment"
+  }
+  const other = profilesHere(IDENTITY, [], env).find(
+    (name) => name !== profile && recalled(env, name) === account && signedIn(name),
+  )
+  const cli = IDENTITY.command
+  if (other)
+    throw new CliError(
+      "conflict",
+      `profile ${other} already uses this Notion connection; use \`${cli} ${other} …\`, or run ` +
+        `\`${cli} ${other} session end\` first`,
+      { reason: "profile.account-taken", profile: other },
+    )
+  const synced = syncState(env, profile, "").read().principal
+  if (synced && synced !== account)
+    throw new CliError(
+      "conflict",
+      `profile ${profile} holds a copy synced from another Notion connection; sign this token in under a new ` +
+        `profile (\`${cli} <new profile> session start\`), or keep this profile's own token`,
+      { reason: "profile.other-account" },
+    )
+  if (recalled(env, profile) !== account) rememberAccount(IDENTITY, profile, account, env)
 }

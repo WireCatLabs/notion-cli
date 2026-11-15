@@ -110,6 +110,7 @@ it("mcp serve offers the shared documents commands by what they read and write",
     }
     expect(await writes("tags")).toMatchObject({ "tags add": true, "tags list": false })
     expect(await writes("sync")).toMatchObject({ sync: false, "folders remove": true })
+    expect(await writes("folders")).toMatchObject({ "folders add": true, "folders browse": false })
     expect(await writes("documents")).toMatchObject({ "documents list": false, "documents get": false })
     const listed = await mcp.call("notion_read", { command: "folders list" })
     expect(listed.body).toMatchObject({ items: [{ id: "notion-workspace" }] })

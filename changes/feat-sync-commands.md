@@ -3,9 +3,13 @@
 - `notion <profile> sync` copies Notion pages, pages under pages, databases and their rows into WireCat's shared
   store, under provider `notion`. Without a chosen folder it copies everything the token sees. `--limit` bounds one
   run and `--rescan` walks everything again. A page or database Notion would not give is named in `meta.issues` and
-  in the answer's `warnings`. See [the sync](../docs/dev/SYNC.md).
+  in the answer's `warnings`, and the answer says `meta.complete: false`. A page or database Notion answers 403 for
+  is kept as it was; only a 404 or the trash removes it. See [the sync](../docs/dev/SYNC.md).
+- One Notion connection is one profile: `session start` and `sync` refuse a connection another signed-in profile
+  uses, and a profile synced from one connection refuses a token of another. See [sign-in](../docs/dev/DESIGN.md).
 - `folders add|list|browse|remove` narrow the sync to chosen pages and databases. `folders browse` lists one level
-  live from Notion.
+  live from Notion. Removing the last folder says that the next sync copies the whole workspace again. Over MCP,
+  `folders add` goes through the write tool.
 - `status`, `documents list|show|export|context|add`, `search` (Lucene syntax, offline), `catalog`, `tags`,
   `relationships`, `notes`, `memories`, `facts` and `identities`: cli-core's shared documents commands over the
   local copy. `documents add` keeps one page, read live, among the sources added by hand.
