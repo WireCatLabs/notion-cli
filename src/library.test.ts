@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { memoryKeyring } from "@wirecat/cli-base"
 import { accountFileFor } from "@wirecat/cli-core/cli"
 import { documentCommandsContract } from "@wirecat/cli-core/documents/testing"
 import { describe, expect, it } from "vitest"
@@ -8,7 +9,7 @@ import { NOTION_WORDS } from "./commands/library.js"
 import { IDENTITY } from "./identity.js"
 import type { NotionParent } from "./notion/reads.js"
 import { createProgram } from "./program.js"
-import { fakeNotion } from "./testing/fake-notion.js"
+import { FAKE_TOKEN, fakeNotion } from "./testing/fake-notion.js"
 import { FakeNotion } from "./testing/fake-notion-reads.js"
 import { runCli, signedIn } from "./testing/harness.js"
 
@@ -154,6 +155,16 @@ describe("sync over the shared store", () => {
     const out = join(dir, "child.md")
     expect((await run(["documents", "export", CHILD, "--output", out])).code).toBe(0)
     for (const file of filesUnder(dir)) expect(readFileSync(file, "latin1"), file).not.toMatch(/X-Amz-|signature=/iu)
+  })
+
+  it("syncs right after session start: sign-in and sync name the account the same way", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "notion-signin-"))
+    const env = { MESSAGING_STORE: join(dir, "wirecat.db"), WCNOTION_STATE_DIR: join(dir, "state") }
+    const notion = fakeNotion({ workspace: workspace() })
+    const keyring = memoryKeyring()
+    const signed = await runCli(["personal", "session", "start", "--json"], { notion, keyring, env, stdin: FAKE_TOKEN })
+    expect(signed.code).toBe(0)
+    expect((await runCli(["personal", "sync", "--json"], { notion, keyring, env })).code).toBe(0)
   })
 
   it("refuses to sync another account into a profile's copy", async () => {

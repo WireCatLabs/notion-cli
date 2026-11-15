@@ -28,8 +28,8 @@ export const TEXT_LIMIT = 1_000_000
 
 /**
  * The shared store with notion's provider entry written. Under the read-only lock it is opened read-only. Otherwise it
- * is opened for writing even to read: the words of a page's body are indexed when the store is next opened for
- * writing, so a read-only open right after a sync finds pages by title only.
+ * is opened for writing even to read: a read-only open right after a sync found pages by title but not by the words
+ * of their body (seen in src/library.test.ts on cli-core 0.666.0; the cause in cli-core is not confirmed).
  */
 export const openStore = (env: NodeJS.ProcessEnv): Promise<MessageStore> =>
   openAppStore(env, { app: IDENTITY, provider: PROVIDER, readOnly: readOnlyLockOf(IDENTITY, env) !== undefined })
