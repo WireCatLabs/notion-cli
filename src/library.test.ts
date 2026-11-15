@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
-import { memoryKeyring } from "@wirecat/cli-base"
+import { CliError, memoryKeyring } from "@wirecat/cli-base"
 import { accountFileFor } from "@wirecat/cli-core/cli"
 import { documentCommandsContract } from "@wirecat/cli-core/documents/testing"
 import { describe, expect, it } from "vitest"
@@ -10,6 +10,7 @@ import { NOTION_WORDS } from "./commands/library.js"
 import { IDENTITY } from "./identity.js"
 import type { NotionParent } from "./notion/reads.js"
 import { createProgram } from "./program.js"
+import { passUnderWay } from "./sync/source.js"
 import { FAKE_TOKEN, fakeNotion } from "./testing/fake-notion.js"
 import { FakeNotion } from "./testing/fake-notion-reads.js"
 import { runCli, signedIn } from "./testing/harness.js"
@@ -296,6 +297,137 @@ describe("sync over the shared store", () => {
     }
     expect(saved).toBe(61)
     expect(waits).toBeGreaterThan(0)
+  })
+
+  it("keeps syncing when Notion refuses one block of a page's Markdown (403), with the rest of the text", async () => {
+    const notion = new FakeNotion()
+    const block = id(50)
+    notion.addPage({
+      id: ROADMAP,
+      title: "Roadmap",
+      parent: top,
+      markdown: "roadmap <unknown/>",
+      unknown: { [block]: "x" },
+    })
+    notion.addPage({ id: LONELY, title: "Lonely", parent: top, markdown: "lonely v1" })
+    const read = notion.pageMarkdown.bind(notion)
+    notion.pageMarkdown = async (page: string) => {
+      if (page === block) throw new CliError("permission_error", "restricted", { status: 403 })
+      return read(page)
+    }
+    const { run } = cli(notion)
+    const first = await run(["sync"])
+    expect(first.code, first.out).toBe(0)
+    expect((first.json() as { item: { warnings: unknown[] } }).item.warnings).toContainEqual(
+      expect.objectContaining({ id: block, code: "permission_error", reason: "notion.left-out" }),
+    )
+    notion.advance(60 * 60_000)
+    notion.edit(LONELY, { markdown: "lonely v2" })
+    expect((await run(["sync"])).code).toBe(0)
+    const shown = (await run(["documents", "show", LONELY])).json() as { item: { text: string } }
+    expect(shown.item.text).toContain("lonely v2")
+    const roadmap = (await run(["documents", "show", ROADMAP])).json() as { item: { text: string } }
+    expect(roadmap.item.text).toContain("roadmap")
+  })
+
+  it("syncs a database whose one data source Notion will not query (404 or 403), and keeps the other's rows", async () => {
+    for (const [code, status] of [
+      ["not_found", 404],
+      ["permission_error", 403],
+    ] as const) {
+      const notion = new FakeNotion()
+      notion.addPage({ id: ROADMAP, title: "Roadmap", parent: top, markdown: "roadmap" })
+      notion.addDatabase({ id: TASKS, title: "Tasks", parent: under(ROADMAP), sources: [SOURCE, id(9)] })
+      notion.addPage({
+        id: ROW,
+        title: "Write the plan",
+        parent: { type: "data_source_id", data_source_id: SOURCE, database_id: TASKS },
+      })
+      const query = notion.queryDataSource.bind(notion)
+      notion.queryDataSource = async (source: string, body: Parameters<FakeNotion["queryDataSource"]>[1]) => {
+        if (source === id(9)) throw new CliError(code, "no", { status })
+        return query(source, body)
+      }
+      const { run } = cli(notion)
+      for (const argv of [["sync"], ["sync"], ["sync", "--rescan"]]) {
+        const ran = await run([...argv, "--timeout", "10m"])
+        expect(ran.code, `${code} ${argv.join(" ")}: ${ran.out}`).toBe(0)
+      }
+      const listed = (await run(["documents", "list"])).json() as { items: { id: string }[] }
+      expect(listed.items.map((item) => item.id)).toContain(ROW)
+    }
+  })
+
+  it("stops a long Notion pass before the deadline, says to sync again, and the next syncs finish it", async () => {
+    const notion = new FakeNotion()
+    for (let n = 0; n < 12; n++) {
+      notion.addDatabase({ id: id(100 + n), title: `DB ${n}`, parent: top, sources: [id(200 + n)] })
+      notion.addPage({
+        id: id(300 + n),
+        title: `Row ${n}`,
+        parent: { type: "data_source_id", data_source_id: id(200 + n), database_id: id(100 + n) },
+      })
+    }
+    const { run, env, http } = cli(notion)
+    const complete = (ran: { json: () => Record<string, unknown> }) =>
+      (ran.json() as { meta: { complete: boolean } }).meta.complete
+    for (let round = 0; round < 10 && !complete(await run(["sync", "--timeout", "10m"])); round++);
+    notion.advance(60 * 60_000)
+    notion.edit(id(311), { title: "Row 11 edited" })
+    const cursor = () => {
+      const state = JSON.parse(
+        readFileSync(join(env.WCNOTION_STATE_DIR, "profiles", "personal", "sync", "state.json"), "utf8"),
+      ) as { cursor: string; pending?: { cursor: string } }
+      return state.pending?.cursor ?? state.cursor
+    }
+    const before = cursor()
+    // Each answer takes 200 ms of real time, as cli-core's deadline runs on the wall clock.
+    const fetch = http.fetch
+    http.fetch = (async (...args: Parameters<typeof globalThis.fetch>) => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      return fetch(...args)
+    }) as typeof globalThis.fetch
+    const cut = await run(["sync", "--timeout", "6s"])
+    expect(cut.code, cut.out).toBe(0)
+    expect(cut.json()).toMatchObject({
+      item: { complete: false },
+      next: [{ command: "sync", args: { timeout: "6s" }, safe_to_auto_execute: true }],
+      meta: { complete: false },
+    })
+    expect(cursor()).not.toBe(before)
+    expect(passUnderWay(cursor())).toBe(true)
+    http.fetch = fetch
+    let found = false
+    for (let round = 0; round < 6 && !found; round++) {
+      const again = await run(["sync", "--timeout", "10m"])
+      expect(again.code, again.out).toBe(0)
+      const listed = (await run(["documents", "list"])).json() as { items: { name: string }[] }
+      found = listed.items.some((item) => item.name === "Row 11 edited")
+    }
+    expect(found).toBe(true)
+  }, 40_000)
+
+  it("asks Notion who the token is once per sync", async () => {
+    const { run, http } = cli()
+    await run(["sync"])
+    expect(http.calls.filter((call) => call.path === "/v1/users/me")).toHaveLength(1)
+  })
+
+  it("counts a profile signed in by WCNOTION_TOKEN as using its connection", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "notion-variable-"))
+    const env = {
+      MESSAGING_STORE: join(dir, "wirecat.db"),
+      WCNOTION_STATE_DIR: join(dir, "state"),
+      WCNOTION_TOKEN: FAKE_TOKEN,
+    }
+    const http = fakeNotion({ workspace: workspace() })
+    const keyring = memoryKeyring()
+    const as = (profile: string, argv: string[]) => runCli([profile, ...argv, "--json"], { notion: http, keyring, env })
+    expect((await as("personal", ["sync"])).code).toBe(0)
+    const work = await as("work", ["sync"])
+    expect(work.json()).toMatchObject({
+      error: { reason: "profile.account-taken", message: expect.stringContaining("WCNOTION_TOKEN") },
+    })
   })
 
   it("reads the local copy without Notion, and says to sync when there is none", async () => {

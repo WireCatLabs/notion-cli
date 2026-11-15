@@ -184,22 +184,23 @@ export const claimAccount = (
   account: string,
   tokens: Pick<ProfileTokenStore, "read">,
 ) => {
-  // A token from the environment variable is every profile's, so it holds none.
-  const signedIn = (name: string) => {
-    const source = tokens.read(name)?.source
-    return source !== undefined && source !== "environment"
-  }
+  // A token from the environment variable signs every profile in, so each profile synced under it holds its account.
+  const signedIn = (name: string) => tokens.read(name) !== undefined
   const other = profilesHere(IDENTITY, [], env).find(
     (name) => name !== profile && recalled(env, name) === account && signedIn(name),
   )
   const cli = IDENTITY.command
-  if (other)
+  if (other) {
+    const fromVariable = tokens.read(other)?.source === "environment"
     throw new CliError(
       "conflict",
-      `profile ${other} already uses this Notion connection; use \`${cli} ${other} …\`, or run ` +
-        `\`${cli} ${other} session end\` first`,
+      `profile ${other} already uses this Notion connection; use \`${cli} ${other} …\`, or ` +
+        (fromVariable
+          ? `give this profile its own token instead of ${IDENTITY.envPrefix}_TOKEN`
+          : `run \`${cli} ${other} session end\` first`),
       { reason: "profile.account-taken", profile: other },
     )
+  }
   const synced = syncState(env, profile, "").read().principal
   if (synced && synced !== account)
     throw new CliError(

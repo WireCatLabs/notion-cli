@@ -17,9 +17,12 @@ const LONGEST_WAIT_MS = 60_000
 /** Notion's guide retries 429 and 529 with `Retry-After`, then backs off ([request limits](https://developers.notion.com/reference/request-limits)). */
 const RETRY = { retries: 3, baseDelayMs: 500, maxDelayMs: 10_000, maxRetryAfterMs: LONGEST_WAIT_MS }
 
-/** 180 a minute per connection, the lower plan's limit; data source queries have a slower limit of their own. */
+/**
+ * 180 a minute per connection, the lower plan's limit; data source queries have a limit of their own, "about 3
+ * requests per second per connection" ([request limits](https://developers.notion.com/reference/request-limits)).
+ */
 export const PACE = { perMinute: 170, burst: 10 }
-export const QUERY_PACE = { perMinute: 60, burst: 3 }
+export const QUERY_PACE = { perMinute: 170, burst: 3 }
 
 const ID = /[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/giu
 const QUERY = /^\/v1\/data_sources\/[^/]+\/query$/u

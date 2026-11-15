@@ -11,12 +11,13 @@ import { documentSourceContract } from "@wirecat/cli-core/documents/testing"
 import { beforeEach, describe, expect, it } from "vitest"
 import type { NotionParent } from "../notion/reads.js"
 import { FakeNotion } from "../testing/fake-notion-reads.js"
-import { decodeCursor } from "./cursor.js"
+import { decodeCursor, encodeCursor } from "./cursor.js"
 import {
   isNotionDocument,
   isNotionFolder,
   type NotionFile,
   notionSource,
+  passUnderWay,
   type SyncWarning,
   WORKSPACE_ROOT,
 } from "./source.js"
@@ -319,6 +320,7 @@ describe("the Notion source under cli-core's sync engine", () => {
     expect(run.warnings).toContainEqual(expect.objectContaining({ code: "rate_limited", retry_after_ms: 30_000 }))
     expect(decodeCursor(run.state().cursor as string).pass?.tasks).toEqual([
       { t: "rows", database: "db", source: "ds" },
+      { t: "database", id: "db" },
     ])
     const searches = notion.calls.search
     await run.sync()
@@ -588,6 +590,89 @@ describe("changes()", () => {
     expect(Date.parse(done.mark as string)).toBeGreaterThan(Date.parse(decodeCursor(cursor).mark as string))
     const all = [first, next].flatMap((page) => page.items.map((item) => item.id))
     expect(all).toContain("r1")
+  })
+
+  it.each([
+    ["an hourly pass", HOUR],
+    ["the daily full walk", 25 * HOUR],
+  ])("stops %s before the run's deadline with the pass saved, and the next runs finish it", async (_, later) => {
+    const notion = workspace()
+    for (const id of ["db2", "db3", "db4"]) notion.addDatabase({ id, title: id, parent: top, sources: [`${id}-ds`] })
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(later)
+    notion.edit("r3", { title: "edited" })
+    // Every request takes a second on this clock, and each run may last ten.
+    let clock = 0
+    const timed = new Proxy(notion, {
+      get: (target, name, receiver) => {
+        const value = Reflect.get(target, name, receiver)
+        if (typeof value !== "function" || name === "serverTime") return value
+        return (...args: unknown[]) => {
+          clock += 1000
+          return value.apply(target, args)
+        }
+      },
+    })
+    let cursor = run.state().cursor as string
+    const walkedAt = decodeCursor(cursor).walkedAt
+    const seen: string[] = []
+    let runs = 0
+    do {
+      clock = 0
+      runs++
+      const source = notionSource(timed, {
+        now: () => notion.now,
+        known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+        deadline: { endsAt: 10_000, ms: 10_000 },
+        clock: () => clock,
+      })
+      const page = await source.changes(cursor)
+      expect(clock).toBeLessThanOrEqual(10_000)
+      seen.push(...page.items.map((item) => item.id))
+      cursor = page.cursor
+    } while (passUnderWay(cursor) && runs < 30)
+    expect(runs).toBeGreaterThan(1)
+    expect(passUnderWay(cursor)).toBe(false)
+    expect(seen).toContain("r3")
+    expect(decodeCursor(cursor).walkedAt > walkedAt).toBe(later > 24 * HOUR)
+  })
+
+  it("refuses a run too short for one step rather than saving nothing and asking again", async () => {
+    const notion = workspace()
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(HOUR)
+    const source = notionSource(notion, {
+      now: () => notion.now,
+      known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+      deadline: { endsAt: 4_000, ms: 4_000 },
+      clock: () => 0,
+    })
+    await expect(source.changes(run.state().cursor as string)).rejects.toMatchObject({
+      code: "timeout",
+      details: { reason: "notion.timeout-too-short" },
+    })
+  })
+
+  it("finishes a workspace walk that a 0.1.0 sync saved halfway", async () => {
+    const notion = workspace()
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(HOUR)
+    notion.edit("a", { title: "Alpha renamed" })
+    const cursor = decodeCursor(run.state().cursor as string)
+    const old = encodeCursor({
+      ...cursor,
+      pass: { next: cursor.mark, startedAt: notion.now, walk: true, tasks: [{ t: "walk", id: WORKSPACE_ROOT }] },
+    })
+    const source = notionSource(notion, {
+      now: () => notion.now,
+      known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+    })
+    const page = await source.changes(old)
+    expect(passUnderWay(page.cursor)).toBe(false)
+    expect(page.items).toContainEqual(expect.objectContaining({ id: "a", removed: false }))
   })
 
   it("reads a 25,000-row database whole through the engine, in created_time windows of at most 10,000", async () => {

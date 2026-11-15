@@ -45,8 +45,9 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 2. **Each database in scope**, queried for rows edited on or after the mark minus the overlap
    ([timestamp filter](https://developers.notion.com/reference/filter-data-source-entries)). This does not depend on
    search, so a row search misses is still found.
-3. **Every 24 hours, a full walk** instead of step 2. It lists the top of the workspace from search, the children
-   of every page, and every row of every database by query. `sync --rescan` walks at once.
+3. **Every 24 hours, a full walk** instead of step 2. It lists the top of the workspace from search, one page of
+   results at a time, the children of every page, and every row of every database by query. The known top-level
+   pages search did not show are read directly at the end. `sync --rescan` walks at once.
 4. **Before anything is removed**, the sync asks Notion for it directly
    ([retrieve a page](https://developers.notion.com/reference/retrieve-a-page)). It is removed only when Notion
    answers that it is in the trash, or answers 404 (deleted, or no longer shared with the token). A page that is
@@ -108,6 +109,13 @@ the rest was synced, and the next sync is likely to leave the same item out. cli
   about a dozen steps and a sync with `--timeout 10m` about 250. A sync that stops answers `complete: false`,
   `stopped` and `walk`, exits 0, and names `sync` as its next step. `--rescan` starts the walk over, so it is run once
   and continued with plain `sync` runs. There is no cap on the size of the chosen folders.
+- **A pass stops before the run's deadline.** Each step of the pass is small: one page of a search, one database,
+  one window of rows, one page's children, or one direct read. Before each request the source checks that the
+  slowest request so far, plus cli-core's margin (`deadlineMargin`), still fits before the deadline. If not, it saves
+  the step it reached in the position. The answer then says `complete: false` and names `sync` (with the same
+  `--timeout`) as its next step, and the next sync goes on from that step. This holds for the hourly pass and for
+  the daily walk. A run too short for even one step fails with `timeout` (`notion.timeout-too-short`) instead of
+  saving nothing; run it with a longer `--timeout`. A page with very many children is still one step.
 - **The change feed names each changed page.** A round of changes lists only the direct children of a page the feed
   names, so the feed names every page and row that changed, not only an ancestor (checked by cli-core's
   `documentSourceContract`, `addNested`). A page new to the scope is walked in full.
@@ -115,7 +123,10 @@ the rest was synced, and the next sync is likely to leave the same item out. cli
   out of that sync with a warning. The sync goes on with the rest. This holds for the blocks inside a page too, at
   any depth: a synced block whose original is not shared with the token answers 404 for its children. That block is
   skipped with a `notion.left-out` warning, and the rest of the page is read. The pages the sync holds under a
-  skipped block are read one by one instead.
+  skipped block are read one by one instead. A block Notion answers 403 for while the page's Markdown is read is
+  skipped the same way, with a warning, and the page keeps the rest of its text. A data source of a database that
+  Notion will not query (404 or 403) is left out with a warning; the database's other data sources still sync, and
+  the rows already held are read one by one before any counts as gone.
 - **Only a 404 or the trash removes.** A 403 on a page or a database the sync holds keeps it and its rows as they
   were, with a `notion.kept-unconfirmed` warning: a 403 says nothing about whether the item is still there.
 - **A failure partway** (a 429 after the client's retries, Notion down) ends the pass early. The work done is

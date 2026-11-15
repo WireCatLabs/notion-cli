@@ -147,8 +147,10 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
      with an error that names it, never a silent cut. The store has no ceiling any more, and neither has the sync: one
      sync walks at most 10,000 entries (`maxEntries`) and its run's budget, saves where it stopped, and the next sync
      goes on.
-   - Requests are paced below Notion's limit of 180 a minute per connection, with a second, slower pace for database
-     queries ([request limits](https://developers.notion.com/reference/request-limits)), through cli-core's pacer.
+   - Requests are paced below Notion's limit of 180 a minute per connection, through cli-core's pacer. Data source
+     queries have a limit of their own, "about 3 requests per second per connection"
+     ([request limits](https://developers.notion.com/reference/request-limits)), so they take a second pace at the
+     same rate with a smaller burst.
      cli-base's retry waits for `Retry-After`; search and database queries are POST, so they are marked as reads.
    - `sync --limit` bounds the pages saved in one run, and the source stops at 2,000 requests while it looks for
      changes. `status` answers with `progress` in the shared shape (WC-LIFE-14). Not yet: a budget sized to the

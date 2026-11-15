@@ -4,7 +4,16 @@ import * as v from "valibot"
 const PREFIX = "notion1."
 
 const Task = v.variant("t", [
-  v.object({ t: v.literal("search"), kind: v.picklist(["page", "data_source"]) }),
+  v.object({
+    t: v.literal("search"),
+    kind: v.picklist(["page", "data_source"]),
+    start: v.optional(v.string()),
+    /** Everything search gives, for the top of a workspace walk, not only what was edited since the mark. */
+    full: v.optional(v.boolean()),
+  }),
+  v.object({ t: v.literal("database"), id: v.string(), walk: v.optional(v.boolean()) }),
+  /** Known children of a container that its listing has not shown yet, each read directly at the end of the pass. */
+  v.object({ t: v.literal("confirm"), container: v.string(), ids: v.array(v.string()) }),
   v.object({
     t: v.literal("rows"),
     database: v.string(),

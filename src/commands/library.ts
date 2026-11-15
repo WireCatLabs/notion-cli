@@ -1,7 +1,7 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { annotate, metaOf } from "@wirecat/cli-base/commands"
 import type { NextStep } from "@wirecat/cli-base/standards"
-import { progressOf } from "@wirecat/cli-core/background"
+import { type Deadline, progressOf } from "@wirecat/cli-core/background"
 import {
   actorOf,
   answerEntity,
@@ -42,12 +42,12 @@ import {
   withStore,
 } from "../library.js"
 import { notionId } from "../notion/ids.js"
-import { decodeCursor } from "../sync/cursor.js"
 import {
   isNotionDocument,
   isNotionFolder,
   type NotionFile,
   notionSource,
+  passUnderWay,
   type SyncWarning,
   WORKSPACE_ROOT,
 } from "../sync/source.js"
@@ -132,11 +132,23 @@ export const libraryCommands = (): Command[] => {
   let warnings: SyncWarning[] = []
   let next: NextStep[] | undefined
 
+  const syncAgain = (limit: number): NextStep => {
+    const timeout = command().optsWithGlobals().timeout
+    return {
+      kind: "command",
+      step: "sync.run",
+      command: "sync",
+      args: { limit, ...(timeout === undefined ? {} : { timeout }) },
+      why: "the sync stopped before the end of its pass; running it again goes on from there",
+      safe_to_auto_execute: true,
+    }
+  }
+
   const output = (body: Body) => {
     const issues = issuesOf(warnings)
     const answer = {
       ...body,
-      ...(next ? { next } : {}),
+      ...(next && !body.next?.length ? { next } : {}),
       ...(issues.length ? { meta: { ...body.meta, issues: [...(body.meta?.issues ?? []), ...issues] } } : {}),
     }
     renderAnswer(command(), outputFor(command()), answer)
@@ -178,11 +190,12 @@ export const libraryCommands = (): Command[] => {
     return actor === "owner" ? ("owner" as const) : { bot: actor, reason: `asked by ${actor} through ${CLI}` }
   }
 
-  const sourceFor = (reads: Parameters<typeof notionSource>[0], principal?: string) =>
+  const sourceFor = (reads: Parameters<typeof notionSource>[0], held = false, deadline?: Deadline) =>
     notionSource(reads, {
       roots: rootsOf(env(), profile()),
-      ...(principal ? { known: () => knownOf(syncState(env(), profile(), principal).read()) } : {}),
+      ...(held ? { known: () => knownOf(syncState(env(), profile(), "").read()) } : {}),
       warn: (warning) => warnings.push(warning),
+      ...(deadline ? { deadline } : {}),
     })
 
   /** One Notion run: the token read first, every request inside cli-core's run (WC-LIFE-15). */
@@ -280,9 +293,9 @@ export const libraryCommands = (): Command[] => {
         const name = profile()
         const roots = rootsOf(env(), name)
         const result = await withNotionReads(async (reads) => {
-          const live = await sourceFor(reads).identity()
+          const source = sourceFor(reads, true, deadline)
+          const live = await source.identity()
           claimAccount(env(), name, live, context().tokens)
-          const source = sourceFor(reads, live)
           return withProfileLock(env(), name, (assertHeld) =>
             withStore(env(), true, async (store) => {
               const ingestion = ingestionOf(store)
@@ -318,8 +331,12 @@ export const libraryCommands = (): Command[] => {
             }),
           )
         })
+        // The engine counts a round of changes as done; Notion's own pass may still have tasks for the next sync.
+        const underWay = passUnderWay(syncState(env(), name, "").read().cursor)
+        if (underWay) next = [syncAgain(limit)]
         return {
           ...result,
+          ...(underWay ? { complete: false } : {}),
           warnings: warnings.map(({ id, code, reason, message }) => ({ id: id ?? null, code, reason, message })),
         }
       },
@@ -334,7 +351,7 @@ export const libraryCommands = (): Command[] => {
         // Until the plan is made, or while Notion's own pass goes on, nothing says how much is left.
         const unplanned =
           walkUnderWay(env(), name) ||
-          (held.cursor !== undefined && decodeCursor(held.cursor).pass !== undefined) ||
+          passUnderWay(held.cursor) ||
           (changed !== undefined && (!held.lastSync || Date.parse(changed) > Date.parse(held.lastSync)))
         return {
           profile: name,
