@@ -3,6 +3,7 @@ import { type Deadline, deadlineMargin } from "@wirecat/cli-core/background"
 import type { DocumentSource, SourceChange, SourceContent, SourceFile } from "@wirecat/cli-core/documents"
 import { withoutSignedLinks } from "../notion/links.js"
 import type {
+  NotionBlock,
   NotionDatabase,
   NotionDataSource,
   NotionList,
@@ -117,6 +118,8 @@ const isNotFound = (error: unknown) => isCliError(error) && error.code === "not_
 /** Answers about one item, not the sync: a linked database view answers 404 by design, a restricted page 403. */
 const isItemError = (error: unknown) =>
   isCliError(error) && (error.code === "not_found" || error.code === "permission_error")
+/** A request Notion refused as sent (400), such as a list position it no longer takes. */
+const isRefused = (error: unknown) => isCliError(error) && error.code === "validation_error"
 const text = (parts: { plain_text: string }[]) => parts.map((part) => part.plain_text).join("")
 
 interface Listing {
@@ -238,6 +241,33 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
   }
 
+  /**
+   * A page as its parent's listing gives it, with no read of its own. A page under a page has only its title for
+   * properties, and the block names it, its times and its authors (https://developers.notion.com/reference/block).
+   */
+  const childPageFile = (block: NotionBlock, container: string): NotionFile => {
+    accessible.add(block.id)
+    return {
+      id: block.id,
+      name: block.child_page?.title.trim() || UNTITLED,
+      mime: "application/vnd.notion.page",
+      parents: [container],
+      version: versionOf(block.last_edited_time),
+      modifiedAt: block.last_edited_time,
+      createdAt: block.created_time,
+      // The block has no link; the page's own comes when its text is read.
+      url: known.get(block.id)?.url ?? "",
+      trashed: block.in_trash ?? false,
+      canDownload: true,
+      providerMetadata: {
+        kind: "page",
+        parent: { type: block.parent.type, id: parentId(block.parent) },
+        ...(block.created_by ? { createdBy: block.created_by.id } : {}),
+        ...(block.last_edited_by ? { lastEditedBy: block.last_edited_by.id } : {}),
+      },
+    }
+  }
+
   const databaseFile = async (database: NotionDatabase): Promise<NotionFile> => {
     accessible.add(database.id)
     return {
@@ -281,23 +311,28 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
   }
 
-  /** One `created_time` window of a data source; Notion stops a query at 10,000 rows and says so. */
-  const rowWindow = async (database: string, source: string, after: string | undefined, since: string | null) => {
+  /** One page of a data source's rows, oldest first: created from `after` on, and edited since `since`. */
+  const rowPage = (source: string, after: string | undefined, since: string | null, start: string | undefined) => {
     const filters = [
       ...(since ? [{ timestamp: "last_edited_time" as const, last_edited_time: { on_or_after: since } }] : []),
       ...(after ? [{ timestamp: "created_time" as const, created_time: { on_or_after: after } }] : []),
     ]
     const filter = filters.length > 1 ? { and: filters } : filters[0]
+    return reads.queryDataSource(source, {
+      ...(filter ? { filter } : {}),
+      sorts: [{ timestamp: "created_time", direction: "ascending" }],
+      page_size: PAGE_SIZE,
+      ...(start ? { start_cursor: start } : {}),
+    })
+  }
+
+  /** One `created_time` window of a data source; Notion stops a query at 10,000 rows and says so. */
+  const rowWindow = async (database: string, source: string, after: string | undefined, since: string | null) => {
     const rows: NotionPage[] = []
     let incomplete = false
     let start: string | undefined
     do {
-      const page = await reads.queryDataSource(source, {
-        ...(filter ? { filter } : {}),
-        sorts: [{ timestamp: "created_time", direction: "ascending" }],
-        page_size: PAGE_SIZE,
-        ...(start ? { start_cursor: start } : {}),
-      })
+      const page = await rowPage(source, after, since, start)
       for (const result of page.results) rows.push(result)
       if (page.request_status?.type === "incomplete") incomplete = true
       start = page.has_more && page.next_cursor ? page.next_cursor : undefined
@@ -396,7 +431,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
   const isGone = (database: NotionDatabase | "gone" | "unreadable") =>
     database === "gone" || (database !== "unreadable" && database.in_trash)
 
-  const childPages = async (blockId: string, found: { pages: string[]; databases: string[] }) => {
+  const childPages = async (blockId: string, found: { pages: NotionBlock[]; databases: string[] }) => {
     let start: string | undefined
     do {
       let page: Awaited<ReturnType<NotionReads["blockChildren"]>>
@@ -415,7 +450,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       }
       for (const block of page.results) {
         if (block.in_trash) continue
-        if (block.type === "child_page") found.pages.push(block.id)
+        if (block.type === "child_page") found.pages.push(block)
         else if (block.type === "child_database") found.databases.push(block.id)
         else if (block.has_children) await childPages(block.id, found)
       }
@@ -464,7 +499,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         })
       }
     }
-    for (const page of found.pages) await child(page, async () => pageFile(await reads.retrievePage(page)))
+    for (const page of found.pages) if (!page.in_trash) files.push(childPageFile(page, id))
     for (const database of found.databases)
       await child(database, async () => databaseFile(await reads.retrieveDatabase(database)))
     return files
@@ -541,6 +576,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     fresh()
     requests = 0
     const pass = cursor.pass ?? startPass(cursor)
+    containers = new Map(Object.entries(pass.parents ?? {}))
+    const resolved = containers.size
     const since = cursor.mark ? minus(cursor.mark, overlapMs) : null
     const items = new Map<string, SourceChange<NotionFile>>()
     const emit = (file: NotionFile) => items.set(file.id, { id: file.id, removed: false, file })
@@ -550,7 +587,17 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       const before = known.get(file.id)
       return !before || before.name !== file.name || before.parents[0] !== file.parents[0]
     }
-    let confirmed = 0
+    /** Work this run keeps even when the deadline cuts its step: a direct read or a resolved kind. */
+    let kept = 0
+    // A saved position Notion no longer takes (it answers 400) starts that listing again, so it cannot fail every run.
+    const restart = (task: SyncTask, what: string) => {
+      warn({
+        code: "validation_error",
+        reason: "notion.listing-restarted",
+        message: `${what} started again from its top`,
+      })
+      pass.tasks.splice(1, 0, task)
+    }
     // A confirm task stays last: it reads directly only what the rest of the pass did not show.
     const queue = (task: SyncTask) => {
       const last = pass.tasks.at(-1)
@@ -567,7 +614,13 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     // One page of the answer per task, so that a pass cut short by the deadline goes on from the page it reached.
     const search = async (task: Extract<SyncTask, { t: "search" }>) => {
       const { kind } = task
-      const page = await searchPage(kind, task.start)
+      let page: Awaited<ReturnType<typeof searchPage>>
+      try {
+        page = await searchPage(kind, task.start)
+      } catch (error) {
+        if (!task.start || !isRefused(error)) throw error
+        return restart({ ...task, start: undefined }, `the search for ${kind}s`)
+      }
       let start = page.has_more && page.next_cursor ? page.next_cursor : undefined
       if (task.full) {
         await searchTop(page)
@@ -646,50 +699,80 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         if (file) {
           const listing: Listing = { files: [], gone: [], moved: [] }
           await confirm([file], task.container, listing)
-          for (const found of [...listing.files, ...listing.moved]) if (unheld(found)) emit(found)
+          for (const found of [...listing.files, ...listing.moved]) if (changedPage(found)) emit(found)
           for (const id of listing.gone) gone(id)
         }
         task.ids.shift()
-        confirmed++
+        kept++
       }
     }
 
+    // One page of rows per step. The next step reads from the last row's minute on, as Notion rounds created_time
+    // to the minute; only when a whole page shares one minute does it go on by the query's own position instead.
     const rows = async (task: Extract<SyncTask, { t: "rows" }>) => {
-      let window: Awaited<ReturnType<typeof rowWindow>>
+      let page: NotionList<NotionPage>
       try {
-        window = await rowWindow(task.database, task.source, task.after, task.full ? null : since)
+        page = await rowPage(task.source, task.after, task.full ? null : since, task.start)
       } catch (error) {
+        if (task.start && isRefused(error))
+          return restart({ ...task, start: undefined, seen: undefined }, `the rows of database ${task.database}`)
         if (!isNotFound(error)) throw error
         cursor.sources = cursor.sources.filter((item) => item.source !== task.source)
         if (isGone(await readDatabase(task.database))) gone(task.database)
         return
       }
-      const seen = new Set<string>()
-      for (const row of window.rows) {
-        seen.add(row.id)
-        emit(await pageFile(row))
-      }
+      for (const row of page.results) emit(await pageFile(row))
+      const last = page.results.at(-1)?.created_time
+      const more = page.has_more && page.next_cursor && last ? { cursor: page.next_cursor, last } : undefined
+      const dense = more && task.after !== undefined && Date.parse(more.last) <= Date.parse(task.after)
+      const seen = [...(task.seen ?? []), ...page.results.map((row) => row.id)]
+      if (dense && isCut(page))
+        throw new CliError(
+          "validation_error",
+          `database ${task.database} has more than 10000 rows created in one minute`,
+          { reason: "notion.window-too-dense", database: task.database },
+        )
+      const next: SyncTask[] = []
       if (task.full) {
-        // A window covers the rows created from its start up to the next window's start; a known row of that span
-        // the window did not return is read directly before it counts as gone.
+        // This page holds every row created from the step's start up to its last row's minute; a known row of that
+        // span it did not return is read directly before it counts as gone.
         const from = task.after ? Date.parse(task.after) : Number.NEGATIVE_INFINITY
-        const to = window.next ? Date.parse(window.next) : Number.POSITIVE_INFINITY
+        const to = more ? Date.parse(more.last) : Number.POSITIVE_INFINITY
+        const shown = new Set(seen)
         const missing = [...known.values()].filter((file) => {
           const created = Date.parse(file.createdAt ?? "")
           return (
             file.providerMetadata.kind === "row" &&
             file.providerMetadata.parent?.id === task.source &&
-            !seen.has(file.id) &&
+            !shown.has(file.id) &&
             created >= from &&
             created < to
           )
         })
-        const listing: Listing = { files: [], gone: [], moved: [] }
-        await confirm(missing, task.database, listing)
-        for (const file of [...listing.files, ...listing.moved]) emit(file)
-        for (const id of listing.gone) gone(id)
+        if (missing.length) next.push({ t: "confirm", container: task.database, ids: missing.map((file) => file.id) })
       }
-      if (window.next) queue({ ...task, after: window.next })
+      if (dense) next.push({ ...task, start: more.cursor, seen })
+      else if (more) next.push({ ...task, after: more.last, start: undefined, seen: undefined })
+      pass.tasks.splice(1, 0, ...next)
+    }
+
+    const child = async (task: Extract<SyncTask, { t: "child" }>) => {
+      let file: NotionFile
+      try {
+        file = await databaseFile(await reads.retrieveDatabase(task.id))
+      } catch (error) {
+        if (!isItemError(error)) throw error
+        warn({
+          id: task.id,
+          code: (error as CliError).code,
+          reason: "notion.child-unreadable",
+          message: "a child Notion would not give was left out",
+        })
+        return
+      }
+      if (file.trashed) return
+      if (unheld(file)) emit(file)
+      queue({ t: "walk", id: file.id, kind: "database" })
     }
 
     const walkDatabase = async (id: string) => {
@@ -708,14 +791,61 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     // The engine walks again every folder it is sent, so a held page is sent only when Notion changed it.
     const changedPage = (file: NotionFile) => unheld(file) || known.get(file.id)?.version !== file.version
 
-    const walk = async (id: string) => {
-      const kind =
-        id === WORKSPACE_ROOT
-          ? "workspace"
-          : (known.get(id)?.providerMetadata.kind ?? (await retrieve(id)).providerMetadata.kind)
-      if (kind === "database") return walkDatabase(id)
-      if (kind === "row") return
-      const listing = await listChildren(id)
+    // A page's children a page of blocks per step, from where the last step stopped.
+    const walkPage = async (task: Extract<SyncTask, { t: "walk" }>) => {
+      const blocks = task.blocks ?? [{ id: task.id }]
+      const seen = task.seen ?? []
+      const head = blocks[0] as { id: string; start?: string }
+      try {
+        const page = await reads.blockChildren(head.id, head.start)
+        for (const block of page.results) {
+          if (block.in_trash) continue
+          if (block.type === "child_page") {
+            seen.push(block.id)
+            const file = childPageFile(block, task.id)
+            if (changedPage(file)) emit(file)
+            const holds = [...known.values()].some((item) => item.parents[0] === block.id)
+            if (block.has_children || holds) queue({ t: "walk", id: block.id, kind: "page" })
+          } else if (block.type === "child_database") {
+            seen.push(block.id)
+            queue({ t: "child", id: block.id, container: task.id })
+          } else if (block.has_children) blocks.push({ id: block.id })
+        }
+        if (page.has_more && page.next_cursor) blocks[0] = { id: head.id, start: page.next_cursor }
+        else blocks.shift()
+      } catch (error) {
+        if (head.start && isRefused(error))
+          return restart({ t: "walk", id: task.id, kind: "page" }, `the listing of page ${task.id}`)
+        if (!isItemError(error)) throw error
+        // The known children it hides are read one by one before any counts as gone.
+        warn({
+          id: head.id,
+          code: (error as CliError).code,
+          reason: "notion.left-out",
+          message: "the blocks inside were left out of this sync: Notion would not list them",
+        })
+        blocks.shift()
+      }
+      if (blocks.length) return void pass.tasks.splice(1, 0, { ...task, blocks, seen })
+      const listed = new Set(seen)
+      const missing = [...known.values()].filter((file) => file.parents[0] === task.id && !listed.has(file.id))
+      if (missing.length)
+        pass.tasks.splice(1, 0, { t: "confirm", container: task.id, ids: missing.map((file) => file.id) })
+    }
+
+    const walk = async (task: Extract<SyncTask, { t: "walk" }>) => {
+      if (task.id === WORKSPACE_ROOT) return walkWorkspace()
+      if (!task.kind) {
+        task.kind = known.get(task.id)?.providerMetadata.kind ?? (await retrieve(task.id)).providerMetadata.kind
+        kept++
+      }
+      if (task.kind === "database") return walkDatabase(task.id)
+      if (task.kind === "page") return walkPage(task)
+    }
+
+    // Only a pass a 0.1.0 sync saved still holds the workspace as one step.
+    const walkWorkspace = async () => {
+      const listing = await listChildren(WORKSPACE_ROOT)
       for (const file of listing.moved) emit(file)
       for (const file of listing.files) {
         const page = file.providerMetadata.kind === "page"
@@ -735,12 +865,13 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
           else if (task.t === "database") await database(task)
           else if (task.t === "confirm") await confirmEach(task)
           else if (task.t === "rows") await rows(task)
-          else await walk(task.id)
+          else if (task.t === "child") await child(task)
+          else await walk(task)
         } catch (error) {
           // The task is done again from its start next time: what it emitted is sent twice, which the engine allows.
           if (error === OUT_OF_TIME) {
             // cli-core ends the command at the deadline, so a run that saves nothing would only be asked again.
-            if (!done && !confirmed)
+            if (!done && !kept && containers.size === resolved)
               throw new CliError(
                 "timeout",
                 "the time left was too short for one step of the Notion sync; run it again with a longer --timeout",
@@ -750,7 +881,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
           }
           const failure = isCliError(error) ? error : new CliError("provider_error", String(error))
           const id =
-            task.t === "rows" ? task.database : task.t === "database" || task.t === "walk" ? task.id : undefined
+            task.t === "rows" ? task.database : task.t === "search" || task.t === "confirm" ? undefined : task.id
           if (isItemError(failure)) {
             warn({
               ...(id ? { id } : {}),
@@ -781,7 +912,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     } finally {
       timed = false
     }
-    if (pass.tasks.length) cursor.pass = pass
+    if (pass.tasks.length) cursor.pass = { ...pass, parents: Object.fromEntries(containers) }
     else {
       cursor.mark = later(cursor.mark, pass.next)
       if (pass.walk) cursor.walkedAt = pass.startedAt

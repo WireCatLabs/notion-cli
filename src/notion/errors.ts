@@ -28,6 +28,7 @@ export const REASONS = defineReasons(
       ["notion.kept-unconfirmed", "permission_error", "a page Notion would not show was kept as it was"],
       ["notion.left-out", "not_found", "an item Notion refused was left out of this sync"],
       ["notion.stopped-early", "provider_error", "the sync stopped early and goes on next time"],
+      ["notion.listing-restarted", "validation_error", "Notion no longer took a saved list position; it started over"],
       ["notion.timeout-too-short", "timeout", "the time left was too short for one step of the sync"],
       ["source.text-limit", "validation_error", "the page is longer than the text the store keeps"],
       ["profile.not-synced", "not_found", "the profile has no local copy yet; sync first"],

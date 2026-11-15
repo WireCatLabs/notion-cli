@@ -592,6 +592,44 @@ describe("changes()", () => {
     expect(all).toContain("r1")
   })
 
+  /** Runs of changes() with a deadline each, on a clock where every Notion request takes `perCall` ms. */
+  const timedRuns = async (
+    notion: FakeNotion,
+    run: ReturnType<typeof harness>,
+    { perCall = 1000, ms = 10_000, most = 30 } = {},
+  ) => {
+    let clock = 0
+    const timed = new Proxy(notion, {
+      get: (target, name, receiver) => {
+        const value = Reflect.get(target, name, receiver)
+        if (typeof value !== "function" || name === "serverTime") return value
+        return (...args: unknown[]) => {
+          clock += perCall
+          return value.apply(target, args)
+        }
+      },
+    })
+    let cursor = run.state().cursor as string
+    const items: { id: string; removed: boolean }[] = []
+    let runs = 0
+    do {
+      clock = 0
+      runs++
+      const source = notionSource(timed, {
+        now: () => notion.now,
+        known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+        deadline: { endsAt: ms, ms },
+        clock: () => clock,
+        warn: (warning) => run.warnings.push(warning),
+      })
+      const page = await source.changes(cursor)
+      expect(clock).toBeLessThanOrEqual(ms)
+      items.push(...page.items)
+      cursor = page.cursor
+    } while (passUnderWay(cursor) && runs < most)
+    return { runs, cursor, items, seen: items.map((item) => item.id) }
+  }
+
   it.each([
     ["an hourly pass", HOUR],
     ["the daily full walk", 25 * HOUR],
@@ -602,40 +640,85 @@ describe("changes()", () => {
     await run.sync()
     notion.advance(later)
     notion.edit("r3", { title: "edited" })
-    // Every request takes a second on this clock, and each run may last ten.
-    let clock = 0
-    const timed = new Proxy(notion, {
-      get: (target, name, receiver) => {
-        const value = Reflect.get(target, name, receiver)
-        if (typeof value !== "function" || name === "serverTime") return value
-        return (...args: unknown[]) => {
-          clock += 1000
-          return value.apply(target, args)
-        }
-      },
-    })
-    let cursor = run.state().cursor as string
-    const walkedAt = decodeCursor(cursor).walkedAt
-    const seen: string[] = []
-    let runs = 0
-    do {
-      clock = 0
-      runs++
-      const source = notionSource(timed, {
-        now: () => notion.now,
-        known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
-        deadline: { endsAt: 10_000, ms: 10_000 },
-        clock: () => clock,
-      })
-      const page = await source.changes(cursor)
-      expect(clock).toBeLessThanOrEqual(10_000)
-      seen.push(...page.items.map((item) => item.id))
-      cursor = page.cursor
-    } while (passUnderWay(cursor) && runs < 30)
+    const walkedAt = decodeCursor(run.state().cursor as string).walkedAt
+    const { runs, cursor, seen } = await timedRuns(notion, run)
     expect(runs).toBeGreaterThan(1)
     expect(passUnderWay(cursor)).toBe(false)
     expect(seen).toContain("r3")
     expect(decodeCursor(cursor).walkedAt > walkedAt).toBe(later > 24 * HOUR)
+  })
+
+  it("walks a 10,000-row database over a few 30 s runs, a page of rows per step, and removes none", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "Big", parent: top, sources: ["ds"] })
+    for (let r = 0; r < 10_000; r++)
+      notion.addPage({ id: `r${r}`, title: `R${r}`, parent: row("db", "ds"), created: notion.now + r * 1000 })
+    const run = harness(notion, { max: 20_000 })
+    await run.sync()
+    notion.advance(25 * HOUR)
+    const { runs, cursor, items } = await timedRuns(notion, run, { perCall: 350, ms: 30_000 })
+    expect(passUnderWay(cursor)).toBe(false)
+    expect(runs).toBeLessThan(5)
+    expect(items.filter((item) => item.removed)).toEqual([])
+  }, 30_000)
+
+  it("goes on by the query's position when more than a page of rows share one minute", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "Dense", parent: top, sources: ["ds"] })
+    for (let r = 0; r < 250; r++) notion.addPage({ id: `d${r}`, title: `D${r}`, parent: row("db", "ds") })
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(25 * HOUR)
+    notion.edit("d200", { trashed: true })
+    const { cursor, items } = await timedRuns(notion, run)
+    expect(passUnderWay(cursor)).toBe(false)
+    expect(items.filter((item) => item.removed).map((item) => item.id)).toEqual(["d200"])
+  })
+
+  it("walks a page with 100 child pages from its listing, without reading each child", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: "hub", title: "Hub", parent: top })
+    for (let c = 0; c < 100; c++) notion.addPage({ id: `c${c}`, title: `C${c}`, parent: under("hub") })
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(25 * HOUR)
+    notion.edit("c7", { title: "C7 renamed" })
+    const retrieved = notion.calls.retrievePage
+    const { runs, cursor, items } = await timedRuns(notion, run, { perCall: 350, ms: 30_000 })
+    expect(passUnderWay(cursor)).toBe(false)
+    expect(runs).toBeLessThan(5)
+    expect(notion.calls.retrievePage).toBe(retrieved)
+    expect(items).toContainEqual(
+      expect.objectContaining({ id: "c7", file: expect.objectContaining({ name: "C7 renamed" }) }),
+    )
+    expect(items.filter((item) => item.removed)).toEqual([])
+  }, 30_000)
+
+  it("starts a listing again when Notion no longer takes its saved position", async () => {
+    const notion = workspace()
+    const run = harness(notion)
+    await run.sync()
+    notion.advance(HOUR)
+    notion.edit("a", { title: "Alpha renamed" })
+    const cursor = decodeCursor(run.state().cursor as string)
+    const stale = encodeCursor({
+      ...cursor,
+      pass: {
+        next: cursor.mark,
+        startedAt: notion.now,
+        walk: false,
+        tasks: [{ t: "search", kind: "page", start: "c3RhbGU" }],
+      },
+    })
+    const source = notionSource(notion, {
+      now: () => notion.now,
+      known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
+      warn: (warning) => run.warnings.push(warning),
+    })
+    const page = await source.changes(stale)
+    expect(passUnderWay(page.cursor)).toBe(false)
+    expect(page.items).toContainEqual(expect.objectContaining({ id: "a" }))
+    expect(run.warnings).toContainEqual(expect.objectContaining({ reason: "notion.listing-restarted" }))
   })
 
   it("refuses a run too short for one step rather than saving nothing and asking again", async () => {

@@ -20,7 +20,12 @@ pages, keeps the checkpoint and resumes a cut batch. The reads it needs from Not
 
 **The cost of pages as folders.** The engine lists the children of every folder it is sent. So a page is sent
 again only when Notion changed it, and a full walk asks for each page's children once. Listing a page's children
-reads every block that holds others (toggles, columns, lists), since a child page can sit inside one.
+reads every block that holds others (toggles, columns, lists), since a child page can sit inside one. A child page
+comes from its `child_page` block, which names its id, title, times and authors
+([block](https://developers.notion.com/reference/block)), so a page of 100 children costs one request, not 101. A
+page under a page has only its title for properties, so nothing is lost. Not yet checked against the live API: that
+a `child_page` block's `last_edited_time` is the page's. If it is not, a walk sends such pages again each day. A
+child database is still read on its own, for its data sources.
 
 ## The position between syncs
 
@@ -105,17 +110,23 @@ the rest was synced, and the next sync is likely to leave the same item out. cli
 - One sync makes at most 2,000 requests while it looks for changes. Then it saves where it stopped, and the next
   sync goes on. Saving the pages has its own bound, `sync --limit`.
 - **A walk goes on over several syncs.** cli-core's engine asks the run's budget before each listing and each page
-  it reads. The budget comes from the run's deadline, at about 2 s a step, so a sync with the default deadline does
-  about a dozen steps and a sync with `--timeout 10m` about 250. A sync that stops answers `complete: false`,
+  it reads. The budget comes from the run's deadline, at about 2 s a step. Since cli-core 0.671.0 the shared `sync`
+  is cooperative: its deadline is 15 minutes in a terminal and 45 seconds over MCP, unless `--timeout` sets one. A
+  sync that stops answers `complete: false`,
   `stopped` and `walk`, exits 0, and names `sync` as its next step. `--rescan` starts the walk over, so it is run once
   and continued with plain `sync` runs. There is no cap on the size of the chosen folders.
-- **A pass stops before the run's deadline.** Each step of the pass is small: one page of a search, one database,
-  one window of rows, one page's children, or one direct read. Before each request the source checks that the
-  slowest request so far, plus cli-core's margin (`deadlineMargin`), still fits before the deadline. If not, it saves
-  the step it reached in the position. The answer then says `complete: false` and names `sync` (with the same
-  `--timeout`) as its next step, and the next sync goes on from that step. This holds for the hourly pass and for
-  the daily walk. A run too short for even one step fails with `timeout` (`notion.timeout-too-short`) instead of
-  saving nothing; run it with a longer `--timeout`. A page with very many children is still one step.
+- **A pass stops before the run's deadline.** Each step of the pass costs one request: one page of a search, one
+  database, one page of rows, one page of a page's blocks, or one direct read. A step that needs a page's container
+  may read it too, and keeps what it read. Before each request the source checks that the slowest request so far,
+  plus cli-core's margin (`deadlineMargin`), still fits before the deadline. If not, it saves the step it reached in
+  the position. The answer then says `complete: false` and names `sync` (with the same `--timeout`) as its next
+  step, and the next sync goes on from that step. This holds for the hourly pass and for the daily walk. A run that
+  could keep nothing fails with `timeout` (`notion.timeout-too-short`) instead of asking for the same run again; run
+  it with a longer `--timeout`.
+  - Rows go a page at a time. The next page is read from the last row's minute on, as Notion rounds `created_time`
+    to the minute. Only when a whole page of rows shares one minute does the step go on by the query's own position.
+  - A saved position Notion no longer takes (a 400) starts that search or listing again from its top, with a
+    `notion.listing-restarted` warning.
 - **The change feed names each changed page.** A round of changes lists only the direct children of a page the feed
   names, so the feed names every page and row that changed, not only an ancestor (checked by cli-core's
   `documentSourceContract`, `addNested`). A page new to the scope is walked in full.

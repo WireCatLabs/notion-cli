@@ -274,13 +274,24 @@ describe("sync over the shared store", () => {
     })
   })
 
-  it("syncs a page with 60 pages under it over several runs, the pace waiting on the run's clock", async () => {
+  it("first syncs a page with 60 pages under it in one run with the default deadline", async () => {
     const notion = new FakeNotion()
     notion.addPage({ id: id(100), title: "Hub", parent: top, markdown: "hub" })
     for (let n = 0; n < 60; n++)
       notion.addPage({ id: id(200 + n), title: `Leaf ${n}`, parent: under(id(100)), markdown: "leaf" })
     const { run } = cli(notion)
-    const first = await run(["sync", "--limit", "500"])
+    const ran = await run(["sync", "--limit", "500"])
+    expect(ran.code, ran.err).toBe(0)
+    expect(ran.json()).toMatchObject({ item: { saved: 61, complete: true }, meta: { complete: true } })
+  })
+
+  it("syncs a page with 60 pages under it over several 30 s runs, the pace waiting on the run's clock", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: id(100), title: "Hub", parent: top, markdown: "hub" })
+    for (let n = 0; n < 60; n++)
+      notion.addPage({ id: id(200 + n), title: `Leaf ${n}`, parent: under(id(100)), markdown: "leaf" })
+    const { run } = cli(notion)
+    const first = await run(["sync", "--limit", "500", "--timeout", "30s"])
     expect(first.code, first.err).toBe(0)
     expect(first.json()).toMatchObject({
       item: { complete: false, stopped: "requests" },
@@ -357,6 +368,29 @@ describe("sync over the shared store", () => {
       expect(listed.items.map((item) => item.id)).toContain(ROW)
     }
   })
+
+  it("first syncs a page with 60 child pages over short runs, each ending in time and moving on", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: id(1), title: "Hub", parent: top, markdown: "hub" })
+    for (let c = 0; c < 60; c++)
+      notion.addPage({ id: id(100 + c), title: `C${c}`, parent: under(id(1)), markdown: "c" })
+    const { run, http } = cli(notion)
+    // Each answer takes 150 ms of real time, as cli-core's deadline runs on the wall clock.
+    const fetch = http.fetch
+    http.fetch = (async (...args: Parameters<typeof globalThis.fetch>) => {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      return fetch(...args)
+    }) as typeof globalThis.fetch
+    const left: number[] = []
+    for (let round = 0; round < 3; round++) {
+      const ran = await run(["sync", "--timeout", "8s"])
+      expect(ran.code, ran.out).toBe(0)
+      left.push((ran.json() as { item: { walk?: { folders_left: number } } }).item.walk?.folders_left ?? 0)
+    }
+    // The first run finds the hub, the second its 60 children; each run after that walks at least one of them.
+    expect(left[2]).toBeLessThan(left[1] as number)
+    expect(notion.calls.retrievePage).toBeLessThan(60)
+  }, 150_000)
 
   it("stops a long Notion pass before the deadline, says to sync again, and the next syncs finish it", async () => {
     const notion = new FakeNotion()

@@ -151,6 +151,10 @@ export class FakeNotion implements NotionReads {
     return this.dateHeader && this.log.length ? this.now : undefined
   }
 
+  private blockTimes() {
+    return { created_time: iso(this.now), last_edited_time: iso(this.now) }
+  }
+
   private pageJson(page: FakePage): NotionPage {
     return {
       object: "page",
@@ -317,7 +321,7 @@ export class FakeNotion implements NotionReads {
     this.enter("retrieveBlock", id)
     const parent = this.blocks.get(id)
     if (!parent) throw notFound(`block ${id}`)
-    return { object: "block", id, type: "column", has_children: true, parent }
+    return { object: "block", id, type: "column", has_children: true, parent, ...this.blockTimes() }
   }
 
   async blockChildren(id: string, startCursor?: string): Promise<NotionList<NotionBlock>> {
@@ -331,7 +335,16 @@ export class FakeNotion implements NotionReads {
     const children: NotionBlock[] = [
       ...[...this.blocks.entries()]
         .filter(([, owner]) => under(owner))
-        .map(([block]): NotionBlock => ({ object: "block", id: block, type: "column", has_children: true, parent })),
+        .map(
+          ([block]): NotionBlock => ({
+            object: "block",
+            id: block,
+            type: "column",
+            has_children: true,
+            parent,
+            ...this.blockTimes(),
+          }),
+        ),
       ...[...this.pages.values()]
         .filter((child) => under(child.parent) && child.shared !== false)
         .map(
@@ -342,6 +355,10 @@ export class FakeNotion implements NotionReads {
             has_children: true,
             in_trash: child.trashed ?? false,
             parent,
+            created_time: iso(child.created),
+            last_edited_time: iso(child.edited),
+            ...(child.createdBy ? { created_by: { object: "user", id: child.createdBy } } : {}),
+            ...(child.editedBy ? { last_edited_by: { object: "user", id: child.editedBy } } : {}),
             child_page: { title: child.title },
           }),
         ),
@@ -355,6 +372,8 @@ export class FakeNotion implements NotionReads {
             has_children: false,
             in_trash: child.trashed ?? false,
             parent,
+            created_time: iso(child.created),
+            last_edited_time: iso(child.edited),
             child_database: { title: child.title },
           }),
         ),

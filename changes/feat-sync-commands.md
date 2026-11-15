@@ -9,9 +9,11 @@
   database Notion answers 403 for is kept as it was; only a 404 or the trash removes it. A block Notion refuses in a
   page's Markdown, or a data source it will not query, is left out with a warning and the rest syncs. See
   [the sync](../docs/dev/SYNC.md).
-- A sync stops before its deadline, the hourly pass and the daily walk alike: it saves where it stopped, answers
-  `complete: false` and names `sync` as the next step. A `--timeout` too short for one step fails with `timeout`
-  and reason `notion.timeout-too-short`. See [the sync](../docs/dev/SYNC.md).
+- A sync runs up to 15 minutes in a terminal and 45 seconds over MCP, unless `--timeout` sets another time
+  (cli-core 0.671.0). It stops before its deadline, in the hourly pass and the daily walk alike, one request at a
+  time: it saves where it stopped, answers `complete: false` and names `sync` as the next step. A page's child
+  pages come from its listing, 100 a request. A `--timeout` too short to keep anything fails with `timeout` and
+  reason `notion.timeout-too-short`. See [the sync](../docs/dev/SYNC.md).
 - One Notion connection is one profile: `session start` and `sync` refuse a connection another signed-in profile
   uses, and a profile synced from one connection refuses a token of another. A profile signed in by `WCNOTION_TOKEN`
   counts too. See [sign-in](../docs/dev/DESIGN.md).
