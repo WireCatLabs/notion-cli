@@ -139,3 +139,38 @@ export interface BlockPosition {
   blocks: { id: string; start?: string }[]
   seen: string[]
 }
+
+const BROWSE_PREFIX = "notion-browse1."
+
+const BrowsePosition = v.object({
+  parent: v.string(),
+  at: v.variant("k", [
+    v.object({ k: v.literal("search"), kind: v.picklist(["page", "data_source"]), start: v.optional(v.string()) }),
+    v.object({ k: v.literal("list"), position: v.string() }),
+  ]),
+  /** The folders of that page of Notion's answer already shown: a page can hold more than one `--limit`. */
+  skip: v.pipe(v.number(), v.integer(), v.minValue(0)),
+})
+
+/** Where `folders browse` stopped: one page of Notion's answer, and how many of its folders were shown. */
+export type BrowsePosition = v.InferOutput<typeof BrowsePosition>
+
+export const encodeBrowsePosition = (position: BrowsePosition) =>
+  `${BROWSE_PREFIX}${Buffer.from(JSON.stringify(position)).toString("base64url")}`
+
+export const decodeBrowsePosition = (token: string, parent: string): BrowsePosition => {
+  let parsed: unknown
+  try {
+    parsed = token.startsWith(BROWSE_PREFIX)
+      ? JSON.parse(Buffer.from(token.slice(BROWSE_PREFIX.length), "base64url").toString("utf8"))
+      : undefined
+  } catch {
+    parsed = undefined
+  }
+  const result = v.safeParse(BrowsePosition, parsed)
+  if (!result.success || result.output.parent !== parent)
+    throw new CliError("validation_error", "--cursor is not one folders browse gave for this --parent", {
+      reason: "folder.cursor-invalid",
+    })
+  return result.output
+}

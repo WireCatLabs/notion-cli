@@ -50,6 +50,12 @@ const filesUnder = (dir: string): string[] =>
     .map((name) => join(dir, name))
     .filter((path) => statSync(path).isFile())
 
+interface Browsed {
+  [key: string]: unknown
+  items: { id: string; kind: string; url: string; parent: string | null; added: boolean }[]
+  page: { mode: string; has_more: boolean; next_cursor?: string }
+}
+
 /** One profile against one fake workspace, with a store and state folder of its own. */
 const cli = (notion = workspace()) => {
   const dir = mkdtempSync(join(tmpdir(), "notion-library-"))
@@ -114,24 +120,93 @@ describe("sync over the shared store", () => {
     expect((await run(["folders", "add", ROW])).code).not.toBe(0)
   })
 
-  it("folders browse lists one level live with each item's link, and marks what is chosen", async () => {
+  it("folders browse lists one level live with each item's kind, link and parent, and marks what is added", async () => {
     const { run } = cli()
     await run(["folders", "add", ROADMAP])
-    const top = (await run(["folders", "browse"])).json() as { items: { id: string; chosen: boolean }[] }
-    expect(top.items.map((item) => [item.id, item.chosen]).sort()).toEqual(
+    const top = (await run(["folders", "browse"])).json() as Browsed
+    expect(top.items.map((item) => [item.id, item.kind, item.parent, item.added]).sort()).toEqual(
       [
-        [ROADMAP, true],
-        [LONELY, false],
+        [ROADMAP, "page", null, true],
+        [LONELY, "page", null, false],
       ].sort(),
     )
-    const inside = (await run(["folders", "browse", "--parent", ROADMAP])).json() as {
-      items: { id: string; url: string }[]
-    }
-    expect(inside.items.map((item) => item.id).sort()).toEqual([CHILD, TASKS].sort())
+    expect(top.page).toMatchObject({ mode: "cursor", has_more: false })
+    const inside = (await run(["folders", "browse", "--parent", ROADMAP])).json() as Browsed
+    expect(inside.items.map((item) => [item.id, item.kind, item.parent]).sort()).toEqual(
+      [
+        [CHILD, "page", ROADMAP],
+        [TASKS, "database", ROADMAP],
+      ].sort(),
+    )
     expect(inside.items.find((item) => item.id === CHILD)?.url).toBe(
       `https://app.notion.com/p/${CHILD.replaceAll("-", "")}`,
     )
     for (const item of inside.items) expect(item.url).toMatch(/^https:\/\//)
+    expect((await run(["folders", "browse", "--parent", TASKS])).json()).toMatchObject({ items: [] })
+  })
+
+  it("folders browse pages the top with --limit and --cursor, from the pages on to the databases", async () => {
+    const notion = workspace()
+    notion.addDatabase({ id: id(10), title: "Top table", parent: top, sources: [id(11)] })
+    const { run } = cli(notion)
+    const seen: [string, string][] = []
+    let cursor: string | undefined
+    for (let call = 0; call < 10; call++) {
+      const level = (await run(["folders", "browse", "--limit", "1", ...(cursor ? ["--cursor", cursor] : [])])).json()
+      const { items, page } = level as Browsed
+      expect(items.length).toBeLessThanOrEqual(1)
+      for (const item of items) seen.push([item.id, item.kind])
+      cursor = page.next_cursor
+      expect(page.has_more).toBe(cursor !== undefined)
+      if (!cursor) break
+    }
+    expect(seen.sort()).toEqual(
+      [
+        [ROADMAP, "page"],
+        [LONELY, "page"],
+        [id(10), "database"],
+      ].sort(),
+    )
+    const other = await run(["folders", "browse", "--parent", ROADMAP, "--cursor", "notion-browse1.e30"])
+    expect(other.json()).toMatchObject({ error: { reason: "folder.cursor-invalid" } })
+  })
+
+  it("folders browse answers with a cursor once a call has sent its requests, and takes it only for its level", async () => {
+    const notion = workspace()
+    for (let n = 0; n < 60; n++) {
+      notion.addPage({ id: id(100 + n), title: `Hidden ${n}`, parent: top, shared: false })
+      notion.addPage({ id: id(200 + n), title: `Shared ${n}`, parent: under(id(100 + n)) })
+    }
+    const { run } = cli(notion)
+    const first = (await run(["folders", "browse"])).json() as Browsed
+    expect(first.items.length).toBeLessThan(62)
+    expect(first.page.has_more).toBe(true)
+    const cursor = first.page.next_cursor as string
+    const wrong = await run(["folders", "browse", "--parent", ROADMAP, "--cursor", cursor])
+    expect(wrong.json()).toMatchObject({ error: { reason: "folder.cursor-invalid" } })
+    const ids = first.items.map((item) => item.id)
+    let next: string | undefined = cursor
+    while (next) {
+      const more = (await run(["folders", "browse", "--cursor", next])).json() as Browsed
+      for (const item of more.items) ids.push(item.id)
+      next = more.page.next_cursor
+    }
+    expect(ids.sort()).toEqual([ROADMAP, LONELY, ...Array.from({ length: 60 }, (_, n) => id(200 + n))].sort())
+  })
+
+  it("folders browse goes past blocks that hold no page to the column that does", async () => {
+    const notion = workspace()
+    notion.blocks.set(id(20), under(LONELY))
+    notion.addPage({ id: id(21), title: "In a column", parent: { type: "block_id", block_id: id(20) } })
+    notion.addPage({ id: id(22), title: "Also in it", parent: { type: "block_id", block_id: id(20) } })
+    const { run } = cli(notion)
+    const first = (await run(["folders", "browse", "--parent", LONELY, "--limit", "1"])).json() as Browsed
+    expect(first.items.map((item) => item.parent)).toEqual([LONELY])
+    expect(first.page.has_more).toBe(true)
+    const cursor = first.page.next_cursor as string
+    const rest = (await run(["folders", "browse", "--parent", LONELY, "--cursor", cursor])).json() as Browsed
+    expect([...first.items, ...rest.items].map((item) => item.id).sort()).toEqual([id(21), id(22)].sort())
+    expect(rest.page.has_more).toBe(false)
   })
 
   it("names what Notion would not give in meta.issues and the answer's warnings, and exits 0", async () => {

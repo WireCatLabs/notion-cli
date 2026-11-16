@@ -40,6 +40,7 @@ export const REASONS = defineReasons(
       ["folder.not-a-folder", "validation_error", "only a page or a database can be chosen as a folder"],
       ["folder.not-chosen", "not_found", "that page or database is not a chosen folder"],
       ["folder.workspace", "validation_error", "the whole workspace is the scope when no folder is chosen"],
+      ["folder.cursor-invalid", "validation_error", "the cursor is not one folders browse gave for this parent"],
       ["identity.not-seen", "not_found", "this Notion user was not seen on the document"],
       ["identity.target", "validation_error", "the target must be a person: reference"],
       ["identity.no-person", "not_found", "the target person has no known identity"],

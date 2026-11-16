@@ -1,6 +1,6 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { deadlineMargin } from "@wirecat/cli-core/background"
-import type { DocumentSource, SourceChange, SourceContent } from "@wirecat/cli-core/documents"
+import type { SourceChange, SourceContent } from "@wirecat/cli-core/documents"
 import { isItemError, isNotFound, isRefused } from "../notion/errors.js"
 import { withoutSignedLinks } from "../notion/links.js"
 import type {
@@ -13,6 +13,7 @@ import type {
   NotionReads,
   NotionUser,
 } from "../notion/reads.js"
+import { browseLevel, type NotionSource } from "./browse.js"
 import {
   type BlockPosition,
   decodeCursor,
@@ -35,6 +36,7 @@ import {
   sourceIds,
   UNTITLED,
   WORKSPACE_ROOT,
+  workspaceFile,
 } from "./files.js"
 import { frontMatter, frontMatterLines, titleOf } from "./front-matter.js"
 import { pageText } from "./markdown.js"
@@ -68,7 +70,7 @@ const OUT_OF_TIME = new Error("the run's deadline is near")
 /** Whether a Notion pass is still under way: the next `changes()` goes on with its tasks. */
 export const passUnderWay = (token: string | undefined) => token !== undefined && decodeCursor(token).pass !== undefined
 
-export const notionSource = (notion: NotionReads, options: NotionSourceOptions = {}): DocumentSource<NotionFile> => {
+export const notionSource = (notion: NotionReads, options: NotionSourceOptions = {}): NotionSource => {
   const overlapMs = options.overlapMs ?? DEFAULTS.overlapMs
   if (overlapMs < MIN_OVERLAP_MS) throw new CliError("validation_error", "the sync overlap must be two minutes or more")
   const walkEveryMs = options.walkEveryMs ?? DEFAULTS.walkEveryMs
@@ -225,17 +227,6 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
   }
 
-  const workspaceFile = (): NotionFile => ({
-    id: WORKSPACE_ROOT,
-    name: "Notion workspace",
-    mime: "application/vnd.notion.workspace",
-    parents: [],
-    url: "",
-    trashed: false,
-    canDownload: false,
-    providerMetadata: { kind: "workspace" },
-  })
-
   const retrieve = async (id: string, kind?: NotionKind): Promise<NotionFile> => {
     if (id === WORKSPACE_ROOT) return workspaceFile()
     if (kind === "database") return databaseFile(await reads.retrieveDatabase(id))
@@ -346,11 +337,11 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
   }
 
-  const searchPage = (kind: "page" | "data_source", start: string | undefined) =>
+  const searchPage = (kind: "page" | "data_source", start: string | undefined, size = PAGE_SIZE) =>
     reads.search({
       filter: { property: "object", value: kind },
       sort: { timestamp: "last_edited_time", direction: "descending" },
-      page_size: PAGE_SIZE,
+      page_size: size,
       ...(start ? { start_cursor: start } : {}),
     })
   const isCut = (page: NotionList<unknown>) => page.request_status?.type === "incomplete"
@@ -401,26 +392,32 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
   const isGone = (database: NotionDatabase | "gone" | "unreadable") =>
     database === "gone" || (database !== "unreadable" && database.in_trash)
 
-  /** The top of the workspace, from search: Notion lists no children of a workspace. */
-  const listed = async (id: string): Promise<NotionFile[]> => {
-    if (id === WORKSPACE_ROOT) {
-      const pages = (await searchAll("page")) as NotionPage[]
-      const sources = (await searchAll("data_source")) as NotionDataSource[]
-      for (const page of pages) accessible.add(page.id)
-      const databases = new Map<string, NotionDatabase>()
-      for (const source of sources) {
-        const id = source.parent.database_id
-        accessible.add(id)
-        if (databases.has(id) || source.in_trash) continue
-        const database = await readDatabase(id)
-        if (typeof database === "object") databases.set(id, database)
-      }
-      const files: NotionFile[] = []
-      for (const page of pages) if (!page.in_trash) files.push(await pageFile(page))
-      for (const database of databases.values()) if (!database.in_trash) files.push(await databaseFile(database))
-      return files.filter((file) => file.parents[0] === WORKSPACE_ROOT)
+  /** The top-level pages and databases among what search gave: Notion lists no children of a workspace. */
+  const topFiles = async (results: (NotionPage | NotionDataSource)[]) => {
+    const pages = results.filter((result): result is NotionPage => result.object === "page")
+    const sources = results.filter((result): result is NotionDataSource => result.object === "data_source")
+    for (const page of pages) accessible.add(page.id)
+    for (const source of sources) accessible.add(source.parent.database_id)
+    const databases = new Map<string, NotionDatabase>()
+    for (const source of sources) {
+      const id = source.parent.database_id
+      if (databases.has(id) || source.in_trash) continue
+      const database = await readDatabase(id)
+      if (typeof database === "object") databases.set(id, database)
     }
-    return []
+    const files: NotionFile[] = []
+    for (const page of pages) if (!page.in_trash) files.push(await pageFile(page))
+    for (const database of databases.values()) if (!database.in_trash) files.push(await databaseFile(database))
+    return files.filter((file) => file.parents[0] === WORKSPACE_ROOT)
+  }
+
+  const listed = async (id: string): Promise<NotionFile[]> =>
+    id === WORKSPACE_ROOT ? topFiles([...(await searchAll("page")), ...(await searchAll("data_source"))]) : []
+
+  /** One page of search for `folders browse`, so that a large workspace is not read whole for one level. */
+  const topPage = async (kind: "page" | "data_source", start: string | undefined, size: number) => {
+    const page = await searchPage(kind, start, size)
+    return { files: await topFiles(page.results), next: page.has_more ? page.next_cursor : null, cut: isCut(page) }
   }
 
   /** Known items missing from a listing, each read directly: gone only on 404 or the trash, kept on any doubt. */
@@ -981,6 +978,11 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     async childrenPage(id, cursor) {
       fresh()
       return childrenPage(id, cursor)
+    },
+    async browse(parent, limit, cursor) {
+      fresh()
+      const ports = { retrieve: (id: string) => retrieve(id), childrenPage, topPage, requests: () => requests }
+      return browseLevel(ports, parent, limit, cursor)
     },
     async startToken() {
       const top = await reads.search({

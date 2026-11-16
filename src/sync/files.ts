@@ -60,6 +60,17 @@ export const isNotionDocument = (file: NotionFile) => file.providerMetadata.kind
 /** A page may have an empty title, and every catalog entry needs a name. */
 export const UNTITLED = "Untitled"
 
+export const workspaceFile = (): NotionFile => ({
+  id: WORKSPACE_ROOT,
+  name: "Notion workspace",
+  mime: "application/vnd.notion.workspace",
+  parents: [],
+  url: "",
+  trashed: false,
+  canDownload: false,
+  providerMetadata: { kind: "workspace" },
+})
+
 export interface NotionSourceOptions {
   /** Chosen pages and databases; none means everything the token sees. */
   roots?: string[]

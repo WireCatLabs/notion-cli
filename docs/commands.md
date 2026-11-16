@@ -154,10 +154,12 @@ notion folders browse [options]
 | Option | What it does |
 |---|---|
 | `--parent <id>` | page id or Notion link to list inside; the top of the workspace without it. |
+| `--limit <n>` | at most this many; 100 if not given. |
+| `--cursor <cursor>` | go on from where the last page stopped; page.next gives it, with the same --parent. |
 
-**Returns:** notion folder — id, name, kind, url, chosen; every field: notion commands info folders browse
+**Returns:** notion folder — id, name, kind, url, parent, added; every field: notion commands info folders browse
 
-**Example:** `notion personal folders browse`, `notion personal folders browse --parent PAGE_ID --json`
+**Example:** `notion personal folders browse`, `notion personal folders browse --parent PAGE_ID --json`, `notion personal folders browse --limit 20 --cursor CURSOR`
 
 ### `notion folders remove`
 
