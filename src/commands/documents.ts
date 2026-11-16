@@ -1,5 +1,4 @@
 import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from "node:fs"
-import { resolve } from "node:path"
 import { CliError, visibleControls } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import {
@@ -111,9 +110,6 @@ const write = async <T>(command: Command, extra: readonly string[], act: (notion
   }
 }
 
-/** Kernel and device files: /proc/self/environ holds the token's variable. */
-const SYSTEM_FILES = /^\/(proc|sys|dev)(\/|$)/u
-
 const realOf = (path: string) => {
   try {
     return realpathSync(path)
@@ -133,13 +129,12 @@ const refusedFile = (file: string) =>
 /**
  * One open, then every check on what was opened: a link as the last part is refused (O_NOFOLLOW), so the path
  * cannot be swapped between the check and the read, and a FIFO does not block the open (O_NONBLOCK). An agent steered
- * by a page's text must not publish a key, the process's environment or another tool's settings into Notion. The
- * /proc, /sys and /dev check and the regular-file check go once cli-core's refusedPlace has them (cli-core #3014).
+ * by a page's text must not publish a key, the process's environment or another tool's settings into Notion.
+ * cli-core's readUpload checks the path and reads it later, so it is not used here.
  */
 const readOwnFile = (file: string, env: NodeJS.ProcessEnv): string => {
-  const outside = (path: string | undefined) =>
-    path !== undefined && (SYSTEM_FILES.test(path) || refusedPlace(path, IDENTITY, env))
-  if (outside(resolve(file)) || outside(realOf(file))) throw refusedFile(file)
+  const outside = (path: string | undefined) => path !== undefined && refusedPlace(path, IDENTITY, env)
+  if (outside(file)) throw refusedFile(file)
   let fd: number
   try {
     fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))

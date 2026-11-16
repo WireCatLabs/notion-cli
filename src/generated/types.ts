@@ -1716,7 +1716,7 @@ export type CreateViewRequest = {
   /** Property sorts to save on the view. Timestamp sorts are accepted but are not saved. */
   sorts?: ViewSortsRequest
   /** Quick filters to pin in the view's filter bar. Keys are property names or IDs. Values are filter conditions (same shape as a property filter but without the property field). Each quick filter appears as a clickable pill above the view, independent of the advanced filter. */
-  quick_filters?: Record<string, QuickFilterConditionRequest>
+  quick_filters?: { [key: string]: QuickFilterConditionRequest }
   /** Create a new linked database block on a page and add the view to it. Mutually exclusive with database_id and view_id. */
   create_database?: CreateDatabaseForViewRequest
   /** View presentation configuration. The type field must match the view type. */
@@ -2097,7 +2097,7 @@ export type DataSourceObjectResponse = {
   /** The user who last edited the data source. */
   last_edited_by: PartialUserObjectResponse
   /** The properties schema of the data source. */
-  properties: Record<string, DatabasePropertyConfigResponse>
+  properties: { [key: string]: DatabasePropertyConfigResponse }
   /** The icon of the data source. */
   icon: PageIconResponse | null
   /** The cover of the data source. */
@@ -2403,7 +2403,7 @@ export type DataSourceViewObjectResponse = {
   /** The sorts applied to this view (same shape as data source query sorts). */
   sorts?: Array<ViewSortResponse> | null
   /** Quick filters pinned to the view's filter bar. Keys are property IDs. Values are filter conditions (same shape as a property filter without the property field). Null when no quick filters are set. */
-  quick_filters?: Record<string, QuickFilterConditionResponse> | null
+  quick_filters?: { [key: string]: QuickFilterConditionResponse } | null
   /** View presentation configuration. */
   configuration?: ViewConfigResponse | null
   /** For dashboard widget views, the ID of the parent dashboard view. Only present when this view is a widget inside a dashboard. */
@@ -3396,7 +3396,7 @@ export type EquationRichTextItemResponse = {
 export type ErrorApi400 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code:
     | "invalid_json"
     | "invalid_request_url"
@@ -3411,7 +3411,7 @@ export type ErrorApi400 = {
 export type ErrorApi401 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "unauthorized"
   status: 401
 }
@@ -3420,7 +3420,7 @@ export type ErrorApi403 =
   | {
       object: "error"
       message: string
-      additional_data?: Record<string, string | Array<string>>
+      additional_data?: { [key: string]: string | Array<string> }
       code: "restricted_resource" | "status_change_not_allowed"
       status: 403
     }
@@ -3435,7 +3435,7 @@ export type ErrorApi403 =
         recovery_kind: "contact_workspace_owner" | "open_workspace_credit_settings"
         /** Present when recovery_kind directs the caller to a settings page. */
         recovery_url?: string
-      } & Record<string, string | Array<string>>
+      } & { [key: string]: string | Array<string> }
       code: "workspace_credits_exhausted"
       status: 403
     }
@@ -3455,7 +3455,7 @@ export type ErrorApi403 =
           | "request_pending"
         /** Present when recovery_kind directs the caller to a settings page. */
         recovery_url?: string
-      } & Record<string, string | Array<string>>
+      } & { [key: string]: string | Array<string> }
       code: "agent_credit_limit_reached"
       status: 403
     }
@@ -3463,7 +3463,7 @@ export type ErrorApi403 =
 export type ErrorApi404 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "object_not_found" | "directory_not_found"
   status: 404
 }
@@ -3471,7 +3471,7 @@ export type ErrorApi404 = {
 export type ErrorApi406 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "row_limit_exceeded"
   status: 406
 }
@@ -3479,7 +3479,7 @@ export type ErrorApi406 = {
 export type ErrorApi409 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "conflict_error" | "idempotency_key_reused" | "agent_deleted"
   status: 409
 }
@@ -3487,7 +3487,7 @@ export type ErrorApi409 = {
 export type ErrorApi429 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "rate_limited"
   status: 429
 }
@@ -3495,7 +3495,7 @@ export type ErrorApi429 = {
 export type ErrorApi500 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "internal_server_error"
   status: 500
 }
@@ -3503,7 +3503,7 @@ export type ErrorApi500 = {
 export type ErrorApi503 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "service_unavailable"
   status: 503
 }
@@ -3511,7 +3511,7 @@ export type ErrorApi503 = {
 export type ErrorApi504 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "gateway_timeout"
   status: 504
 }
@@ -3519,7 +3519,7 @@ export type ErrorApi504 = {
 export type ErrorApi529 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "service_overload"
   status: 529
 }
@@ -3527,7 +3527,7 @@ export type ErrorApi529 = {
 export type ErrorOauth400 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "invalid_request" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope"
   status: 400
 }
@@ -3535,7 +3535,7 @@ export type ErrorOauth400 = {
 export type ErrorOauth401 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "invalid_client"
   status: 401
 }
@@ -3543,7 +3543,7 @@ export type ErrorOauth401 = {
 export type ErrorOauth403 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "test_env_error"
   status: 403
 }
@@ -3551,7 +3551,7 @@ export type ErrorOauth403 = {
 export type ErrorOauth500 = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
   code: "internal_server_error"
   status: 500
 }
@@ -4441,7 +4441,7 @@ export type ImageBlockObjectResponse = {
 
 export type InitialDataSourceRequest = {
   /** Property schema for the initial data source, if you'd like to create one. */
-  properties?: Record<string, PropertyConfigurationRequest>
+  properties?: { [key: string]: PropertyConfigurationRequest }
 }
 
 export type InternalFileRequest = {
@@ -5648,7 +5648,7 @@ export type PageObjectResponse = {
   /** Information about the page's parent. */
   parent: ParentForBlockBasedObjectResponse
   /** Property values of this page. */
-  properties: Record<string, PagePropertyValueWithIdResponse>
+  properties: { [key: string]: PagePropertyValueWithIdResponse }
   /** Page icon. */
   icon: PageIconResponse | null
   /** Page cover image. */
@@ -5688,130 +5688,130 @@ export type PagePositionSchema =
       type: "page_end"
     }
 
-export type PagePropertiesRequest = Record<
-  string,
-  | {
-      title: Array<RichTextItemRequest>
-      type?: "title"
-    }
-  | {
-      rich_text: Array<RichTextItemRequest>
-      type?: "rich_text"
-    }
-  | {
-      number: number | null
-      type?: "number"
-    }
-  | {
-      url: TextRequest | null
-      type?: "url"
-    }
-  | {
-      select:
-        | (
-            | {
-                id: StringRequest
-                name?: TextRequest
-                color?: SelectColor
-                description?: TextRequest | null
-              }
-            | {
-                name: TextRequest
-                id?: StringRequest
-                color?: SelectColor
-                description?: TextRequest | null
-              }
-          )
-        | null
-      type?: "select"
-    }
-  | {
-      multi_select: Array<
-        | {
-            id: StringRequest
-            name?: TextRequest
-            color?: SelectColor
-            description?: TextRequest | null
-          }
-        | {
-            name: TextRequest
-            id?: StringRequest
-            color?: SelectColor
-            description?: TextRequest | null
-          }
-      >
-      type?: "multi_select"
-    }
-  | {
-      people: Array<PartialUserObjectRequest | GroupObjectRequest>
-      type?: "people"
-    }
-  | {
-      email: StringRequest | null
-      type?: "email"
-    }
-  | {
-      phone_number: StringRequest | null
-      type?: "phone_number"
-    }
-  | {
-      date: DateRequest | null
-      type?: "date"
-    }
-  | {
-      checkbox: boolean
-      type?: "checkbox"
-    }
-  | {
-      relation: Array<RelationItemPropertyValueResponse>
-      type?: "relation"
-    }
-  | {
-      files: Array<InternalOrExternalFileWithNameRequest | FileUploadWithOptionalNameRequest>
-      type?: "files"
-    }
-  | {
-      status:
-        | (
-            | {
-                id: StringRequest
-                name?: TextRequest
-                color?: SelectColor
-                description?: TextRequest | null
-              }
-            | {
-                name: TextRequest
-                id?: StringRequest
-                color?: SelectColor
-                description?: TextRequest | null
-              }
-          )
-        | null
-      type?: "status"
-    }
-  | {
-      place: {
-        lat: number
-        lon: number
-        name?: string | null
-        address?: string | null
-        aws_place_id?: string | null
-        google_place_id?: string | null
-      } | null
-      type?: "place"
-    }
-  | {
-      verification:
-        | {
-            state: "verified"
-            date?: DateRequest
-          }
-        | {
-            state: "unverified"
-          }
-      type?: "verification"
-    }
->
+export type PagePropertiesRequest = {
+  [key: string]:
+    | {
+        title: Array<RichTextItemRequest>
+        type?: "title"
+      }
+    | {
+        rich_text: Array<RichTextItemRequest>
+        type?: "rich_text"
+      }
+    | {
+        number: number | null
+        type?: "number"
+      }
+    | {
+        url: TextRequest | null
+        type?: "url"
+      }
+    | {
+        select:
+          | (
+              | {
+                  id: StringRequest
+                  name?: TextRequest
+                  color?: SelectColor
+                  description?: TextRequest | null
+                }
+              | {
+                  name: TextRequest
+                  id?: StringRequest
+                  color?: SelectColor
+                  description?: TextRequest | null
+                }
+            )
+          | null
+        type?: "select"
+      }
+    | {
+        multi_select: Array<
+          | {
+              id: StringRequest
+              name?: TextRequest
+              color?: SelectColor
+              description?: TextRequest | null
+            }
+          | {
+              name: TextRequest
+              id?: StringRequest
+              color?: SelectColor
+              description?: TextRequest | null
+            }
+        >
+        type?: "multi_select"
+      }
+    | {
+        people: Array<PartialUserObjectRequest | GroupObjectRequest>
+        type?: "people"
+      }
+    | {
+        email: StringRequest | null
+        type?: "email"
+      }
+    | {
+        phone_number: StringRequest | null
+        type?: "phone_number"
+      }
+    | {
+        date: DateRequest | null
+        type?: "date"
+      }
+    | {
+        checkbox: boolean
+        type?: "checkbox"
+      }
+    | {
+        relation: Array<RelationItemPropertyValueResponse>
+        type?: "relation"
+      }
+    | {
+        files: Array<InternalOrExternalFileWithNameRequest | FileUploadWithOptionalNameRequest>
+        type?: "files"
+      }
+    | {
+        status:
+          | (
+              | {
+                  id: StringRequest
+                  name?: TextRequest
+                  color?: SelectColor
+                  description?: TextRequest | null
+                }
+              | {
+                  name: TextRequest
+                  id?: StringRequest
+                  color?: SelectColor
+                  description?: TextRequest | null
+                }
+            )
+          | null
+        type?: "status"
+      }
+    | {
+        place: {
+          lat: number
+          lon: number
+          name?: string | null
+          address?: string | null
+          aws_place_id?: string | null
+          google_place_id?: string | null
+        } | null
+        type?: "place"
+      }
+    | {
+        verification:
+          | {
+              state: "verified"
+              date?: DateRequest
+            }
+          | {
+              state: "unverified"
+            }
+        type?: "verification"
+      }
+}
 
 export type PagePropertiesUpdatedWebhookPayload = {
   /** Unique identifier for this webhook event. */
@@ -6276,7 +6276,7 @@ export type PartialDataSourceObjectResponse = {
   /** The ID of the data source. */
   id: IdResponse
   /** The properties schema of the data source. */
-  properties: Record<string, DatabasePropertyConfigResponse>
+  properties: { [key: string]: DatabasePropertyConfigResponse }
 }
 
 export type PartialDataSourceViewObjectResponse = {
@@ -6988,7 +6988,7 @@ export type PublicApiAsyncTaskStatusResultJsonValue = unknown
 export type PublicApiCommonErrorResponse = {
   object: "error"
   message: string
-  additional_data?: Record<string, string | Array<string>>
+  additional_data?: { [key: string]: string | Array<string> }
 }
 
 /** A property filter condition. The quick filter key identifies the property. Pass an empty object to add the property to the filter bar without criteria. */
@@ -8507,7 +8507,7 @@ export type UpdateViewRequest = {
   /** Property sorts to apply to the view. Only property-based sorts are supported. Pass null to clear the sorts. */
   sorts?: ViewPropertySortsRequest | null
   /** Quick filters for the view's filter bar. Keys are property names or IDs. Set a key to a filter condition to add/update that quick filter. Set a key to null to remove it. Pass null for the entire field to clear all quick filters. Unmentioned quick filters are preserved. */
-  quick_filters?: Record<string, QuickFilterConditionRequest | null> | null
+  quick_filters?: { [key: string]: QuickFilterConditionRequest | null } | null
   /** View presentation configuration. The type field must match the view type. Individual nullable fields within the configuration can be set to null to clear them. */
   configuration?: ViewConfigRequest
 }
@@ -9352,7 +9352,7 @@ export type RetrieveAsyncTaskResponse =
         name: string
       }
       status: "succeeded"
-      result: Record<string, PublicApiAsyncTaskStatusResultJsonValue>
+      result: { [key: string]: PublicApiAsyncTaskStatusResultJsonValue }
     }
   | {
       object: "async_task"
@@ -9370,161 +9370,161 @@ export type RetrieveAsyncTaskResponse =
             status: 400
             code: "invalid_json"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 400
             code: "invalid_request_url"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 400
             code: "invalid_request"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 400
             code: "missing_version"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 400
             code: "invalid_beta"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 400
             code: "validation_error"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 401
             code: "unauthorized"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 403
             code: "restricted_resource"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 404
             code: "object_not_found"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 404
             code: "directory_not_found"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 429
             code: "rate_limited"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 529
             code: "service_overload"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 500
             code: "internal_server_error"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 503
             code: "service_unavailable"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 504
             code: "gateway_timeout"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 409
             code: "conflict_error"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 409
             code: "idempotency_key_reused"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 406
             code: "row_limit_exceeded"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 403
             code: "status_change_not_allowed"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 409
             code: "agent_deleted"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 400
             code: "invalid_credit_limit"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 403
             code: "workspace_credits_exhausted"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
         | {
             object: "error"
             status: 403
             code: "agent_credit_limit_reached"
             message: string
-            additional_data?: Record<string, string | Array<string>>
+            additional_data?: { [key: string]: string | Array<string> }
           }
     }
 
@@ -9760,291 +9760,291 @@ export type UpdateADataSourceRequest = {
   /** Data source icon. */
   icon?: PageIconRequest | null
   /** The property schema of the data source. The keys are property names or IDs, and the values are property configuration objects. Properties set to null will be removed. */
-  properties?: Record<
-    string,
-    | (
-        | (
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `number` */
-                type?: "number"
-                number: {
-                  format?: NumberFormat
+  properties?: {
+    [key: string]:
+      | (
+          | (
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `number` */
+                  type?: "number"
+                  number: {
+                    format?: NumberFormat
+                  }
                 }
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `formula` */
-                type?: "formula"
-                formula: {
-                  expression?: string
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `formula` */
+                  type?: "formula"
+                  formula: {
+                    expression?: string
+                  }
                 }
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `select` */
-                type?: "select"
-                select: {
-                  options?: Array<
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `select` */
+                  type?: "select"
+                  select: {
+                    options?: Array<
+                      | {
+                          color?: SelectColor
+                          description?: string | null
+                          name: string
+                          id?: string
+                        }
+                      | {
+                          color?: SelectColor
+                          description?: string | null
+                          id: string
+                          name?: string
+                        }
+                    >
+                  }
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `multi_select` */
+                  type?: "multi_select"
+                  multi_select: {
+                    options?: Array<
+                      | {
+                          color?: SelectColor
+                          description?: string | null
+                          name: string
+                          id?: string
+                        }
+                      | {
+                          color?: SelectColor
+                          description?: string | null
+                          id: string
+                          name?: string
+                        }
+                    >
+                  }
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `status` */
+                  type?: "status"
+                  status: StatusPropertyConfigUpdateRequest
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `relation` */
+                  type?: "relation"
+                  relation:
                     | {
-                        color?: SelectColor
-                        description?: string | null
-                        name: string
-                        id?: string
+                        data_source_id: IdRequest
+                        /** Always `single_property` */
+                        type?: "single_property"
+                        single_property: EmptyObject
                       }
                     | {
-                        color?: SelectColor
-                        description?: string | null
-                        id: string
-                        name?: string
+                        data_source_id: IdRequest
+                        /** Always `dual_property` */
+                        type?: "dual_property"
+                        dual_property: {
+                          synced_property_id?: string
+                          synced_property_name?: string
+                        }
                       }
-                  >
                 }
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `multi_select` */
-                type?: "multi_select"
-                multi_select: {
-                  options?: Array<
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `rollup` */
+                  type?: "rollup"
+                  rollup:
                     | {
-                        color?: SelectColor
-                        description?: string | null
-                        name: string
-                        id?: string
+                        /** The function to use for the rollup, e.g. count, count_values, percent_not_empty, max. */
+                        function: RollupFunction
+                        relation_property_name: string
+                        rollup_property_name: string
                       }
                     | {
-                        color?: SelectColor
-                        description?: string | null
-                        id: string
-                        name?: string
+                        /** The function to use for the rollup, e.g. count, count_values, percent_not_empty, max. */
+                        function: RollupFunction
+                        relation_property_id: string
+                        rollup_property_name: string
                       }
-                  >
-                }
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `status` */
-                type?: "status"
-                status: StatusPropertyConfigUpdateRequest
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `relation` */
-                type?: "relation"
-                relation:
-                  | {
-                      data_source_id: IdRequest
-                      /** Always `single_property` */
-                      type?: "single_property"
-                      single_property: EmptyObject
-                    }
-                  | {
-                      data_source_id: IdRequest
-                      /** Always `dual_property` */
-                      type?: "dual_property"
-                      dual_property: {
-                        synced_property_id?: string
-                        synced_property_name?: string
+                    | {
+                        /** The function to use for the rollup, e.g. count, count_values, percent_not_empty, max. */
+                        function: RollupFunction
+                        relation_property_name: string
+                        rollup_property_id: string
                       }
-                    }
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `rollup` */
-                type?: "rollup"
-                rollup:
-                  | {
-                      /** The function to use for the rollup, e.g. count, count_values, percent_not_empty, max. */
-                      function: RollupFunction
-                      relation_property_name: string
-                      rollup_property_name: string
-                    }
-                  | {
-                      /** The function to use for the rollup, e.g. count, count_values, percent_not_empty, max. */
-                      function: RollupFunction
-                      relation_property_id: string
-                      rollup_property_name: string
-                    }
-                  | {
-                      /** The function to use for the rollup, e.g. count, count_values, percent_not_empty, max. */
-                      function: RollupFunction
-                      relation_property_name: string
-                      rollup_property_id: string
-                    }
-                  | {
-                      /** The function to use for the rollup, e.g. count, count_values, percent_not_empty, max. */
-                      function: RollupFunction
-                      relation_property_id: string
-                      rollup_property_id: string
-                    }
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `unique_id` */
-                type?: "unique_id"
-                unique_id: {
-                  prefix?: string | null
+                    | {
+                        /** The function to use for the rollup, e.g. count, count_values, percent_not_empty, max. */
+                        function: RollupFunction
+                        relation_property_id: string
+                        rollup_property_id: string
+                      }
                 }
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `title` */
-                type?: "title"
-                title: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `rich_text` */
-                type?: "rich_text"
-                rich_text: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `url` */
-                type?: "url"
-                url: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `people` */
-                type?: "people"
-                people: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `files` */
-                type?: "files"
-                files: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `email` */
-                type?: "email"
-                email: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `phone_number` */
-                type?: "phone_number"
-                phone_number: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `date` */
-                type?: "date"
-                date: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `checkbox` */
-                type?: "checkbox"
-                checkbox: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `created_by` */
-                type?: "created_by"
-                created_by: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `created_time` */
-                type?: "created_time"
-                created_time: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `last_edited_by` */
-                type?: "last_edited_by"
-                last_edited_by: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `last_edited_time` */
-                type?: "last_edited_time"
-                last_edited_time: EmptyObject
-              }
-            | {
-                /** The name of the property. */
-                name?: string
-                /** The description of the property. */
-                description?: PropertyDescriptionRequest | null
-                /** Always `place` */
-                type?: "place"
-                place: EmptyObject
-              }
-          )
-        | {
-            /** The new name of the property. */
-            name: string
-          }
-      )
-    | null
-  >
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `unique_id` */
+                  type?: "unique_id"
+                  unique_id: {
+                    prefix?: string | null
+                  }
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `title` */
+                  type?: "title"
+                  title: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `rich_text` */
+                  type?: "rich_text"
+                  rich_text: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `url` */
+                  type?: "url"
+                  url: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `people` */
+                  type?: "people"
+                  people: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `files` */
+                  type?: "files"
+                  files: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `email` */
+                  type?: "email"
+                  email: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `phone_number` */
+                  type?: "phone_number"
+                  phone_number: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `date` */
+                  type?: "date"
+                  date: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `checkbox` */
+                  type?: "checkbox"
+                  checkbox: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `created_by` */
+                  type?: "created_by"
+                  created_by: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `created_time` */
+                  type?: "created_time"
+                  created_time: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `last_edited_by` */
+                  type?: "last_edited_by"
+                  last_edited_by: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `last_edited_time` */
+                  type?: "last_edited_time"
+                  last_edited_time: EmptyObject
+                }
+              | {
+                  /** The name of the property. */
+                  name?: string
+                  /** The description of the property. */
+                  description?: PropertyDescriptionRequest | null
+                  /** Always `place` */
+                  type?: "place"
+                  place: EmptyObject
+                }
+            )
+          | {
+              /** The new name of the property. */
+              name: string
+            }
+        )
+      | null
+  }
   /** Whether the data source should be moved to or from the trash. If not provided, the trash status will not be updated. */
   in_trash?: boolean
   /** The parent of the data source, when moving it to a different database. If not provided, the parent will not be updated. */
@@ -10068,7 +10068,7 @@ export type CreateADatabaseRequest = {
   /** An object specifying the parent of the new data source to be created. */
   parent: ParentOfDataSourceRequest
   /** Property schema of data source. */
-  properties: Record<string, PropertyConfigurationRequest>
+  properties: { [key: string]: PropertyConfigurationRequest }
   /** Title of data source as it appears in Notion. */
   title?: Array<RichTextItemRequest>
   /** Page icon. */
@@ -12867,7 +12867,7 @@ export type UpdateSessionRequest =
         type?: "file_upload"
         name?: string
       }>
-      metadata?: Record<string, string>
+      metadata?: { [key: string]: string }
       prompt_context?: string
     }
   | {
@@ -12877,7 +12877,7 @@ export type UpdateSessionRequest =
         /** One of: `approve`, `reject` */
         option_id: "approve" | "reject"
       }>
-      metadata?: Record<string, string>
+      metadata?: { [key: string]: string }
     }
   | {
       session_id: IdRequest
@@ -13845,7 +13845,7 @@ export type QuerySessionEventsResponse = {
           /** One of: `user`, `bot` */
           type: "user" | "bot"
         } | null
-        metadata: Record<string, string> | null
+        metadata: { [key: string]: string } | null
       }
     | {
         /** Always `session_event` */
