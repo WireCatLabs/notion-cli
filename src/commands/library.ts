@@ -320,7 +320,7 @@ export const libraryCommands = (): Command[] => {
                       missing: [
                         {
                           field: "items",
-                          why: "Notion's search gave only its 10,000 most recently edited results; older top-level pages may be missing",
+                          why: "Notion's search gave only its 10,000 most recently edited results; older top-level pages or databases may be missing",
                         },
                       ],
                     }

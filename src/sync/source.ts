@@ -337,11 +337,11 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
   }
 
-  const searchPage = (kind: "page" | "data_source", start: string | undefined) =>
+  const searchPage = (kind: "page" | "data_source", start: string | undefined, size = PAGE_SIZE) =>
     reads.search({
       filter: { property: "object", value: kind },
       sort: { timestamp: "last_edited_time", direction: "descending" },
-      page_size: PAGE_SIZE,
+      page_size: size,
       ...(start ? { start_cursor: start } : {}),
     })
   const isCut = (page: NotionList<unknown>) => page.request_status?.type === "incomplete"
@@ -415,8 +415,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     id === WORKSPACE_ROOT ? topFiles([...(await searchAll("page")), ...(await searchAll("data_source"))]) : []
 
   /** One page of search for `folders browse`, so that a large workspace is not read whole for one level. */
-  const topPage = async (kind: "page" | "data_source", start?: string) => {
-    const page = await searchPage(kind, start)
+  const topPage = async (kind: "page" | "data_source", start: string | undefined, size: number) => {
+    const page = await searchPage(kind, start, size)
     return { files: await topFiles(page.results), next: page.has_more ? page.next_cursor : null, cut: isCut(page) }
   }
 

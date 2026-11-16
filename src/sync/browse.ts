@@ -3,8 +3,13 @@ import type { DocumentSource } from "@wirecat/cli-core/documents"
 import { type BrowsePosition, decodeBrowsePosition, encodeBrowsePosition, encodeListPosition } from "./cursor.js"
 import { type NotionFile, WORKSPACE_ROOT } from "./files.js"
 
-/** Requests one `folders browse` call may send before it answers with a cursor; Desktop waits a minute for it. */
-const REQUESTS = 40
+/**
+ * Requests one `folders browse` call starts a new page of Notion's answer within; a page of search can add about 50
+ * more, for the parents and databases of its 25 results. Desktop waits a minute, and Notion takes about 3 a second.
+ */
+const REQUESTS = 30
+/** Search results per page: each may cost a read of its parent page or of its database. */
+const SEARCH_PAGE = 25
 
 /** One level of `folders browse`: its pages and databases, where the next call goes on, and whether search was cut. */
 export interface BrowseLevel {
@@ -22,7 +27,8 @@ export interface BrowsePorts {
   childrenPage(id: string, token: string): Promise<{ files: NotionFile[]; cursor?: string }>
   topPage(
     kind: "page" | "data_source",
-    start?: string,
+    start: string | undefined,
+    size: number,
   ): Promise<{ files: NotionFile[]; next: string | null; cut: boolean }>
   requests(): number
 }
@@ -35,7 +41,7 @@ const batchOf = async (ports: BrowsePorts, parent: string, at: At): Promise<Brow
     const page = await ports.childrenPage(parent, at.position)
     return { files: page.files, ...(page.cursor ? { next: { k: "list", position: page.cursor } } : {}), cut: false }
   }
-  const page = await ports.topPage(at.kind, at.start)
+  const page = await ports.topPage(at.kind, at.start, SEARCH_PAGE)
   const next: At | undefined = page.next
     ? { ...at, start: page.next }
     : at.kind === "page"
@@ -65,6 +71,10 @@ export const browseLevel = async (
   cursor?: string,
 ): Promise<BrowseLevel> => {
   let position = cursor === undefined ? await firstOf(ports, parent) : decodeBrowsePosition(cursor, parent)
+  if (position && (position.at.k === "search") !== (parent === WORKSPACE_ROOT))
+    throw new CliError("validation_error", "--cursor is not one folders browse gave for this --parent", {
+      reason: "folder.cursor-invalid",
+    })
   const files: NotionFile[] = []
   let cut = false
   const most = ports.requests() + REQUESTS

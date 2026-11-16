@@ -171,6 +171,29 @@ describe("sync over the shared store", () => {
     expect(other.json()).toMatchObject({ error: { reason: "folder.cursor-invalid" } })
   })
 
+  it("folders browse answers with a cursor once a call has sent its requests, and takes it only for its level", async () => {
+    const notion = workspace()
+    for (let n = 0; n < 60; n++) {
+      notion.addPage({ id: id(100 + n), title: `Hidden ${n}`, parent: top, shared: false })
+      notion.addPage({ id: id(200 + n), title: `Shared ${n}`, parent: under(id(100 + n)) })
+    }
+    const { run } = cli(notion)
+    const first = (await run(["folders", "browse"])).json() as Browsed
+    expect(first.items.length).toBeLessThan(62)
+    expect(first.page.has_more).toBe(true)
+    const cursor = first.page.next_cursor as string
+    const wrong = await run(["folders", "browse", "--parent", ROADMAP, "--cursor", cursor])
+    expect(wrong.json()).toMatchObject({ error: { reason: "folder.cursor-invalid" } })
+    const ids = first.items.map((item) => item.id)
+    let next: string | undefined = cursor
+    while (next) {
+      const more = (await run(["folders", "browse", "--cursor", next])).json() as Browsed
+      for (const item of more.items) ids.push(item.id)
+      next = more.page.next_cursor
+    }
+    expect(ids.sort()).toEqual([ROADMAP, LONELY, ...Array.from({ length: 60 }, (_, n) => id(200 + n))].sort())
+  })
+
   it("folders browse goes past blocks that hold no page to the column that does", async () => {
     const notion = workspace()
     notion.blocks.set(id(20), under(LONELY))
