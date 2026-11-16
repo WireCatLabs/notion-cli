@@ -457,13 +457,17 @@ describe("sync over the shared store", () => {
       await new Promise((resolve) => setTimeout(resolve, 200))
       return fetch(...args)
     }) as typeof globalThis.fetch
-    const cut = await run(["sync", "--timeout", "6s"])
+    // cli-core stops 5 s before the deadline, counted from the command's start, and fits one step per 2 s in the rest.
+    // 6 s left one second, which a slow Windows start spent before the first step: nothing moved, so no next step.
+    // 10 s fits two steps, still short of the whole pass.
+    const cut = await run(["sync", "--timeout", "10s"])
     expect(cut.code, cut.out).toBe(0)
     expect(cut.json()).toMatchObject({
-      item: { complete: false },
-      next: [{ command: "sync", args: { timeout: "6s" }, safe_to_auto_execute: true }],
+      item: { complete: false, stopped: expect.stringMatching(/^(requests|deadline)$/) },
+      next: [{ command: "sync", args: { timeout: "10s" }, safe_to_auto_execute: true }],
       meta: { complete: false },
     })
+    expect((cut.json() as { meta: { duration_ms: number } }).meta.duration_ms).toBeLessThan(10_000)
     expect(cursor()).not.toBe(before)
     expect(passUnderWay(cursor())).toBe(true)
     http.fetch = fetch
