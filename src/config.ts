@@ -14,6 +14,9 @@ export const PAGE_WRITE_KEYS: Record<string, readonly string[]> = {
   "documents update": ["api.update-page-markdown"],
   "documents delete": ["api.patch-page"],
   "documents restore": ["api.patch-page"],
+  "comments create": ["api.create-a-comment"],
+  "comments reply": ["comments.create", "api.create-a-comment"],
+  "files upload": ["api.create-file", "api.complete-file-upload", "api.patch-block-children"],
 }
 
 /**

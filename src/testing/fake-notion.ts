@@ -16,12 +16,15 @@ export const BOT_ID = "bbbbbbbb-0000-4000-8000-000000000002"
 export const PAGE_ID = "cccccccc-0000-4000-8000-000000000003"
 export const DATABASE_ID = "dddddddd-0000-4000-8000-000000000004"
 export const SOURCE_ID = "eeeeeeee-0000-4000-8000-000000000005"
+export const DISCUSSION_ID = "d0d0d0d0-0000-4000-8000-000000000099"
 
 export interface FakeCall {
   method: string
   path: string
   query: Record<string, string>
   body: Record<string, unknown> | undefined
+  /** A multipart body's fields: a file as its name and size, never its bytes. */
+  form?: Record<string, string | { name: string; size: number }>
   url: string
   headers: Record<string, string>
 }
@@ -38,6 +41,8 @@ interface Route {
   query: readonly string[]
   /** The body's documented fields; a route without it takes no body. */
   body?: readonly string[]
+  /** The multipart form's documented fields, for a route that takes one instead of JSON. */
+  form?: readonly string[]
   answer: (id: string, call: FakeCall) => Answer | Promise<Answer>
 }
 
@@ -72,6 +77,8 @@ export interface FakeNotionOptions {
    * a sync runs against one data model with the request checks of this fake.
    */
   workspace?: FakeWorkspace
+  /** Discussions already on PAGE_ID, one comment each, to reply in. */
+  discussions?: string[]
 }
 
 const text = (content: string) => [
@@ -512,6 +519,191 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
     },
   )
 
+  const MIB = 1024 * 1024
+  const comments: { id: string; discussion_id: string; page: string; markdown: string }[] = (
+    options.discussions ?? []
+  ).map((discussion, index) => ({
+    id: `c0c0c0c0-0000-4000-8000-${String(900 + index).padStart(12, "0")}`,
+    discussion_id: discussion,
+    page: PAGE_ID,
+    markdown: "Fake earlier comment",
+  }))
+  const commentJson = (comment: (typeof comments)[number]) => ({
+    object: "comment",
+    id: comment.id,
+    parent: { type: "page_id", page_id: comment.page },
+    discussion_id: comment.discussion_id,
+    created_time: "2026-01-02T03:04:00.000Z",
+    last_edited_time: "2026-01-02T03:04:00.000Z",
+    created_by: { object: "user", id: BOT_ID },
+    rich_text: text(comment.markdown),
+    display_name: { type: "integration", resolved_name: "Test bot" },
+  })
+  const TYPES: Record<string, string> = {
+    png: "image/png",
+    pdf: "application/pdf",
+    txt: "text/plain",
+    mp4: "video/mp4",
+  }
+  const uploads = new Map<
+    string,
+    { filename: string; parts: number | undefined; sent: Map<number, number>; status: string; attached: boolean }
+  >()
+  const uploadJson = (id: string) => {
+    const upload = uploads.get(id)
+    const extension = upload?.filename.split(".").at(-1) ?? ""
+    return {
+      object: "file_upload",
+      id,
+      created_time: "2026-01-02T03:04:00.000Z",
+      last_edited_time: "2026-01-02T03:04:00.000Z",
+      expiry_time: "2026-01-02T04:04:00.000Z",
+      in_trash: false,
+      status: upload?.status,
+      filename: upload?.filename,
+      content_type: TYPES[extension] ?? "application/octet-stream",
+      content_length: [...(upload?.sent.values() ?? [])].reduce((sum, size) => sum + size, 0),
+      upload_url: `https://api.notion.com/v1/file_uploads/${id}/send`,
+    }
+  }
+  routes.push(
+    {
+      // https://developers.notion.com/reference/list-comments: the unresolved comments of a page or block.
+      method: "GET",
+      path: /^\/v1\/comments$/u,
+      query: ["block_id", "start_cursor", "page_size"],
+      answer: (_, { query }) => {
+        if (!query.block_id || !(query.block_id in pages)) return notionError(404, "object_not_found")
+        const size = Number(query.page_size ?? 100)
+        if (!Number.isInteger(size) || size < 1 || size > 100) return notionError(400, "validation_error")
+        const all = comments.filter((comment) => comment.page === query.block_id)
+        const from = Number(query.start_cursor ?? 0)
+        const more = from + size < all.length
+        return {
+          status: 200,
+          body: {
+            object: "list",
+            results: all.slice(from, from + size).map(commentJson),
+            next_cursor: more ? String(from + size) : null,
+            has_more: more,
+            type: "comment",
+            comment: {},
+          },
+        }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/create-a-comment: exactly one target and exactly one body format.
+      method: "POST",
+      path: /^\/v1\/comments$/u,
+      query: [],
+      body: ["parent", "discussion_id", "rich_text", "markdown", "markdown_version", "attachments", "display_name"],
+      answer: (_, { body = {} }) => {
+        const parent = body.parent as { page_id?: unknown } | undefined
+        if ((parent === undefined) === (body.discussion_id === undefined)) return notionError(400, "validation_error")
+        if ((body.rich_text === undefined) === (typeof body.markdown !== "string"))
+          return notionError(400, "validation_error")
+        const thread = comments.find((comment) => comment.discussion_id === body.discussion_id)
+        const page = typeof parent?.page_id === "string" ? parent.page_id : thread?.page
+        if (!page || !(page in pages)) return notionError(404, "object_not_found")
+        const n = String(comments.length + 1).padStart(12, "0")
+        const comment = {
+          id: `c0c0c0c0-0000-4000-8000-${n}`,
+          discussion_id: thread?.discussion_id ?? `d0d0d0d0-0000-4000-8000-${n}`,
+          page,
+          markdown: body.markdown as string,
+        }
+        comments.push(comment)
+        return { status: 200, body: commentJson(comment) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/create-file: a name with an extension; parts only in multi_part.
+      method: "POST",
+      path: /^\/v1\/file_uploads$/u,
+      query: [],
+      body: ["mode", "filename", "content_type", "number_of_parts", "external_url"],
+      answer: (_, { body = {} }) => {
+        const multi = body.mode === "multi_part"
+        if (typeof body.filename !== "string" || !body.filename.includes("."))
+          return notionError(400, "validation_error")
+        if (body.mode !== undefined && body.mode !== "single_part" && !multi)
+          return notionError(400, "validation_error")
+        if (multi !== (typeof body.number_of_parts === "number")) return notionError(400, "validation_error")
+        const id = `a0a0a0a0-0000-4000-8000-${String(uploads.size + 1).padStart(12, "0")}`
+        uploads.set(id, {
+          filename: body.filename,
+          parts: multi ? (body.number_of_parts as number) : undefined,
+          sent: new Map(),
+          status: "pending",
+          attached: false,
+        })
+        return { status: 200, body: uploadJson(id) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/upload-file: one part of 5 to 20 MB, the last smaller; 20 MB whole.
+      method: "POST",
+      path: new RegExp(`^/v1/file_uploads/(${UUID})/send$`, "u"),
+      query: [],
+      form: ["file", "part_number"],
+      answer: (id, { form = {} }) => {
+        const upload = uploads.get(id)
+        if (!upload) return notionError(404, "object_not_found")
+        const file = form.file
+        if (typeof file !== "object" || upload.status !== "pending") return notionError(400, "validation_error")
+        if (upload.parts === undefined) {
+          if (form.part_number !== undefined || file.size > 20 * MIB) return notionError(400, "validation_error")
+          upload.sent.set(1, file.size)
+          upload.status = "uploaded"
+        } else {
+          const part = Number(form.part_number)
+          if (!Number.isInteger(part) || part < 1 || part > upload.parts) return notionError(400, "validation_error")
+          if (file.size > 20 * MIB || (part < upload.parts && file.size < 5 * MIB))
+            return notionError(400, "validation_error")
+          upload.sent.set(part, file.size)
+        }
+        return { status: 200, body: uploadJson(id) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/complete-file-upload: every part sent first.
+      method: "POST",
+      path: new RegExp(`^/v1/file_uploads/(${UUID})/complete$`, "u"),
+      query: [],
+      body: [],
+      answer: (id) => {
+        const upload = uploads.get(id)
+        if (!upload) return notionError(404, "object_not_found")
+        if (upload.parts === undefined || upload.sent.size !== upload.parts) return notionError(400, "validation_error")
+        upload.status = "uploaded"
+        return { status: 200, body: uploadJson(id) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/patch-block-children, with a file upload as in
+      // https://developers.notion.com/guides/data-apis/uploading-small-files
+      method: "PATCH",
+      path: new RegExp(`^/v1/blocks/(${UUID})/children$`, "u"),
+      query: [],
+      body: ["children", "after", "position", "notifications"],
+      answer: (id, { body = {} }) => {
+        if (!(id in pages)) return notionError(404, "object_not_found")
+        const children = body.children as Record<string, { type?: string; file_upload?: { id?: string } }>[]
+        const block = children?.[0] as (Record<string, unknown> & { type?: string }) | undefined
+        const type = block?.type ?? ""
+        const media = block?.[type] as { type?: string; file_upload?: { id?: string } } | undefined
+        const upload = uploads.get(media?.file_upload?.id ?? "")
+        if (children.length !== 1 || !["image", "video", "audio", "pdf", "file"].includes(type))
+          return notionError(400, "validation_error")
+        if (media?.type !== "file_upload" || upload?.status !== "uploaded") return notionError(400, "validation_error")
+        upload.attached = true
+        const created = { object: "block", id: "b1b1b1b1-0000-4000-8000-000000000001", type, has_children: false }
+        return { status: 200, body: { object: "list", results: [created], next_cursor: null, has_more: false } }
+      },
+    },
+  )
+
   const refuse = (why: string, answer: Answer) => {
     refusals.push(why)
     return answer
@@ -527,6 +719,10 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
       if (!route.query.includes(key)) return refuse(`query ${key}`, notionError(400, "validation_error"))
     if (route.body === undefined && call.body !== undefined)
       return refuse(`body on ${call.path}`, notionError(400, "validation_error"))
+    if ((route.form === undefined) !== (call.form === undefined))
+      return refuse(`form on ${call.path}`, notionError(400, "validation_error"))
+    for (const key of Object.keys(call.form ?? {}))
+      if (!route.form?.includes(key)) return refuse(`form ${key}`, notionError(400, "validation_error"))
     for (const key of Object.keys(call.body ?? {}))
       if (!route.body?.includes(key)) return refuse(`body ${key}`, notionError(400, "validation_error"))
     const failure = options.failWith ?? failures.shift()
@@ -540,11 +736,21 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
     if (init.redirect !== "error") refusals.push(`redirect ${String(init.redirect)}`)
     const headers = Object.fromEntries(new Headers(init.headers).entries())
     const raw = typeof init.body === "string" ? init.body : undefined
+    const form =
+      init.body instanceof FormData
+        ? Object.fromEntries(
+            [...init.body.entries()].map(([key, value]) => [
+              key,
+              typeof value === "string" ? value : { name: value.name, size: value.size },
+            ]),
+          )
+        : undefined
     const call: FakeCall = {
       method: (init.method ?? "GET").toUpperCase(),
       path: url.pathname,
       query: Object.fromEntries(url.searchParams.entries()),
       body: raw === undefined ? undefined : (JSON.parse(raw) as Record<string, unknown>),
+      ...(form ? { form } : {}),
       url: url.toString(),
       headers,
     }
@@ -558,7 +764,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
     })
   }
 
-  return { fetch: fetch as typeof globalThis.fetch, calls, refusals, pages }
+  return { fetch: fetch as typeof globalThis.fetch, calls, refusals, pages, comments, uploads }
 }
 
 export type FakeNotion = ReturnType<typeof fakeNotion>

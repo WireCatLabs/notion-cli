@@ -26,5 +26,26 @@
     "reason": "Notion's own name for the switch its Markdown update takes (allow_deleting_content), and the flag of Notion's own CLI: it lets an update delete the child pages and databases its new text leaves out. The vocabulary's --allow-delete means a call that deletes for good, and Notion's API deletes no page for good (https://developers.notion.com/reference/trash-page; docs/dev/DESIGN.md, Writes). Add it to the cli-base vocabulary if a second CLI writes pages with children (Confluence, Outline).",
     "owner": "@WireCatLabs",
     "review_after": "2027-02-16"
+  },
+  {
+    "rule": "unknown-verb",
+    "target": "comments reply",
+    "reason": "Notion answers in a discussion by its discussion_id (https://developers.notion.com/reference/create-a-comment), as drive-cli's comments reply answers in a Google comment thread; review when the shared vocabulary names comment-thread actions.",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-16"
+  },
+  {
+    "rule": "unknown-verb",
+    "target": "files upload",
+    "reason": "Sends a local file to Notion's file uploads and adds it to a page, as drive-cli's files upload sends one to Drive; review when the shared vocabulary names an upload verb.",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-16"
+  },
+  {
+    "rule": "list-without-query",
+    "target": "comments list",
+    "reason": "Notion's list comments takes only a page or block and a cursor (https://developers.notion.com/reference/list-comments); there is nothing to filter by on Notion's side.",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-16"
   }
 ]

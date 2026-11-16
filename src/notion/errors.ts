@@ -33,6 +33,7 @@ export const REASONS = defineReasons(
       ["notion.listing-restarted", "validation_error", "Notion no longer took a saved list position; it started over"],
       ["notion.listing-stale", "not_found", "Notion no longer takes a folder's saved position; it is listed again"],
       ["notion.timeout-too-short", "timeout", "the time left was too short for one step of the sync"],
+      ["notion.upload-unfinished", "invalid_response", "Notion did not mark the file upload as uploaded"],
       ["source.text-limit", "validation_error", "the page is longer than the text the store keeps"],
       ["profile.not-synced", "not_found", "the profile has no local copy yet; sync first"],
       ["profile.busy", "provider_unavailable", "another sync or write holds the profile's local copy"],

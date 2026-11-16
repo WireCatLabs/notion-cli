@@ -7,7 +7,8 @@
 # unless Notion's signed file links were seen and cut. It must also hold at least one page under it: the sync files a
 # child page from its child_page block, and the check compares that block with the page (docs/dev/SYNC.md).
 # It writes only under that page: it creates one page `wirecat-live-<time>` there with a page under it, changes,
-# trashes and restores it, and leaves it in Notion's trash. No other page is changed (docs/dev/DESIGN.md, Writes).
+# trashes and restores it, comments on it, replies, uploads a small text file to it, and leaves it in Notion's trash.
+# No other page is changed (docs/dev/DESIGN.md, Writes). The token needs the read and insert comments capabilities.
 set -euo pipefail
 page=${1:?give a page id or link the token can read: scripts/live.sh <page> < token-file}
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
@@ -114,6 +115,19 @@ fi
 [ "$(field dropped error.reason)" = "notion.text-refused" ] || { echo "the refusal is not notion.text-refused" >&2; exit 1; }
 "${cli[@]}" live documents get "$made" --json >"$work/kept.json"
 holds kept "second-$stamp"
+"${cli[@]}" live comments create "$made" --text "WireCat live check comment, $stamp" --json >"$work/commented.json"
+discussion=$(field commented item.comment.discussion_id)
+"${cli[@]}" live comments reply "$discussion" --text "WireCat live check reply, $stamp" --json >/dev/null
+"${cli[@]}" live comments list "$made" --json >"$work/comments.json"
+node -e '
+  const answer = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+  const thread = answer.items.filter((one) => one.discussion_id === process.argv[2])
+  if (thread.length !== 2) throw new Error(`comments list shows ${thread.length} comments in the discussion, not 2`)' \
+  "$work/comments.json" "$discussion"
+printf 'Uploaded by the WireCat live check, %s\n' "$stamp" >"$work/wirecat-live-$stamp.txt"
+"${cli[@]}" live files upload "$work/wirecat-live-$stamp.txt" --parent "$made" --json >"$work/uploaded.json"
+[ "$(field uploaded item.upload.parts)" = "1" ] || { echo "a small file went in more than one part" >&2; exit 1; }
+[ "$(field uploaded item.block.type)" = "file" ] || { echo "the text file was not added as a file block" >&2; exit 1; }
 "${cli[@]}" live documents delete "$made" --json >"$work/trashed.json"
 [ "$(field trashed item.page.in_trash)" = "true" ] || { echo "delete left the page out of the trash" >&2; exit 1; }
 "${cli[@]}" live documents restore "$made" --json >"$work/restored.json"
@@ -124,5 +138,5 @@ made=""
 
 "${cli[@]}" live session end --json >/dev/null
 echo "live check passed: describe format 2, sign-in, users/me, databases list and show, documents get," \
-  "a child_page block against its page, doctor, a page created, read, updated, refused, trashed and restored" \
-  "under the test page and left in the trash, sign-out"
+  "a child_page block against its page, doctor, a page created, read, updated, refused, commented on, replied to," \
+  "given a file, trashed and restored under the test page and left in the trash, sign-out"

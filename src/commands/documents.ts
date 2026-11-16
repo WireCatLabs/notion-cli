@@ -1,26 +1,13 @@
-import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from "node:fs"
-import { CliError, visibleControls } from "@wirecat/cli-base"
+import { visibleControls } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import {
-  answerEntity,
-  bufferedInput,
-  commandPath,
-  itemOf,
-  MAX_BUFFERED_INPUT,
-  outputFor,
-  REMOTE_READ,
-  REMOTE_WRITE,
-  renderAnswer,
-  terminalAsker,
-} from "@wirecat/cli-core/cli"
-import { guardedWrite, guardFor, keyedGuard, levelFor, newOperationId, refusedPlace } from "@wirecat/cli-core/sends"
+import { answerEntity, itemOf, outputFor, REMOTE_READ, REMOTE_WRITE, renderAnswer } from "@wirecat/cli-core/cli"
 import { Command } from "commander"
-import { DELETE_KEY, PAGE_WRITE_KEYS, permissions } from "../config.js"
-import { contextOf, notionWritesFor, tokenOf, withNotion } from "../context.js"
+import { DELETE_KEY } from "../config.js"
+import { withNotion } from "../context.js"
 import { IDENTITY } from "../identity.js"
 import { notionId } from "../notion/ids.js"
 import { type Document, documentSchema } from "../notion/notion.js"
-import type { LiveWrites } from "../notion/writes.js"
+import { markdownOf, TEXT_OPTIONS, write } from "./writing.js"
 
 const CLI = IDENTITY.command
 
@@ -67,117 +54,6 @@ export const getCommand = () =>
       if (issues.length > 0 && output.format !== "json" && output.format !== "jsonl")
         output.renderer.warn(`the page is incomplete: ${why}`)
     })
-
-/**
- * Every page write's one path, as the template's sample (WC-PERM-13): the level of the command's key and of each
- * extra key refuses or asks once, the send journal records the attempt and never its content (WC-PERM-17), and the
- * answer carries `operation_id` (WC-OUT-10). cli-core has already answered `--dry-run` and refused under
- * `WCNOTION_READ_ONLY`. Never retried: a write that got no answer is `outcome_unknown` (WC-LIFE-9).
- */
-const write = async <T>(command: Command, extra: readonly string[], act: (notion: LiveWrites) => Promise<T>) => {
-  const context = contextOf(command)
-  const { settings, env, renderer } = context
-  const path = commandPath(command)
-  const key = path.replaceAll(" ", ".")
-  const token = tokenOf(command)
-  const operationId = newOperationId()
-  const levelOf = (one: string) => levelFor(settings.permissions, one, permissions.defaults).level
-  const guard = keyedGuard(
-    (ask) =>
-      guardFor(
-        IDENTITY,
-        // Notion limits its own rate, so this guard keeps the levels and the journal, not a send cap.
-        { ...settings, sendsPerHour: Number.MAX_SAFE_INTEGER, permissionDefaults: permissions.defaults },
-        renderer.warn,
-        env,
-        ask,
-      ),
-    terminalAsker(command),
-    levelOf,
-    [...(PAGE_WRITE_KEYS[path] ?? []), ...extra],
-  )
-  const request = { chatId: null, kind: "edit" as const, key, operationId }
-  guard.refuse(request)
-  try {
-    const done = await guardedWrite(guard, request, () =>
-      context.run((events) => act(notionWritesFor(command, token, events))),
-    )
-    return { operationId, done }
-  } catch (error) {
-    if (error instanceof CliError && error.code === "outcome_unknown")
-      throw new CliError("outcome_unknown", error.message, { ...error.details, operation_id: operationId })
-    throw error
-  }
-}
-
-const realOf = (path: string) => {
-  try {
-    return realpathSync(path)
-  } catch {
-    return undefined
-  }
-}
-
-const refusedFile = (file: string) =>
-  new CliError(
-    "validation_error",
-    `${file} is not read: only a regular file goes to Notion, never a link, a system file, a credential file, a ` +
-      "browser profile or a WireCat folder",
-    { reason: "file.refused-place", sent: false },
-  )
-
-/**
- * One open, then every check on what was opened: a link as the last part is refused (O_NOFOLLOW), so the path
- * cannot be swapped between the check and the read, and a FIFO does not block the open (O_NONBLOCK). An agent steered
- * by a page's text must not publish a key, the process's environment or another tool's settings into Notion.
- * cli-core's readUpload checks the path and reads it later, so it is not used here.
- */
-const readOwnFile = (file: string, env: NodeJS.ProcessEnv): string => {
-  const outside = (path: string | undefined) => path !== undefined && refusedPlace(path, IDENTITY, env)
-  if (outside(file)) throw refusedFile(file)
-  let fd: number
-  try {
-    fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === "ELOOP" || code === "EMLINK") throw refusedFile(file)
-    throw new CliError("validation_error", `${file}: ${code === "ENOENT" ? "no such file" : "it cannot be read"}`, {
-      sent: false,
-    })
-  }
-  try {
-    // On Linux the open descriptor names the file it really is, whatever happened to the path since the check.
-    const opened = process.platform === "linux" ? realOf(`/proc/self/fd/${fd}`) : undefined
-    if (!fstatSync(fd).isFile() || outside(opened)) throw refusedFile(file)
-    return readFileSync(fd, "utf8")
-  } finally {
-    closeSync(fd)
-  }
-}
-
-/** The page's new text: `--text`, or `--file`, where `-` is stdin. */
-const markdownOf = async (command: Command, args: { text?: string; file?: string }, required: boolean) => {
-  if (args.text !== undefined && args.file !== undefined)
-    throw new CliError("validation_error", "give the text with --text or --file, not both", { sent: false })
-  if (args.text !== undefined) return args.text
-  if (args.file === "-") {
-    const { environment } = contextOf(command)
-    const input = await bufferedInput(environment.stdin ?? process.stdin, {
-      maxBytes: MAX_BUFFERED_INPUT,
-      ...(environment.signal ? { signal: environment.signal } : {}),
-    })
-    return input.toString("utf8")
-  }
-  if (args.file !== undefined) return readOwnFile(args.file, contextOf(command).env)
-  if (required)
-    throw new CliError("validation_error", "give the page's new text with --text or --file", { sent: false })
-  return undefined
-}
-
-const TEXT_OPTIONS = {
-  text: "the text, as Notion-flavoured Markdown",
-  file: "read the text from this file; - reads stdin",
-}
 
 /** `documents create`: a new page under a page the token can see. */
 export const createCommand = () =>

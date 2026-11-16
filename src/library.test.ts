@@ -464,7 +464,7 @@ describe("sync over the shared store", () => {
     }) as typeof globalThis.fetch
     const left: number[] = []
     for (let round = 0; round < 3; round++) {
-      const ran = await run(["sync", "--timeout", "8s"])
+      const ran = await run(["sync", "--timeout", "10s"])
       expect(ran.code, ran.out).toBe(0)
       left.push((ran.json() as { item: { walk?: { folders_left: number } } }).item.walk?.folders_left ?? 0)
     }

@@ -33,6 +33,49 @@ const parsed = <T>(schema: v.GenericSchema<unknown, T>, value: unknown): T => {
   })
 }
 
+/** [Comment](https://developers.notion.com/reference/comment-object): the fields a write's answer reports. */
+const wireComment = v.looseObject({
+  object: v.literal("comment"),
+  id: v.string(),
+  discussion_id: v.string(),
+  created_time: v.optional(v.string()),
+})
+
+/** [File upload](https://developers.notion.com/reference/file-upload). */
+const wireUpload = v.looseObject({
+  object: v.literal("file_upload"),
+  id: v.string(),
+  status: v.string(),
+  filename: v.nullish(v.string()),
+  content_type: v.nullish(v.string()),
+})
+
+/** [Append block children](https://developers.notion.com/reference/patch-block-children). */
+const wireAppended = v.looseObject({
+  object: v.literal("list"),
+  results: v.array(v.looseObject({ id: v.string(), type: v.string() })),
+})
+
+/** Up to 20 MB goes in one part; above, in parts of 5 to 20 MB, Notion's guide suggesting 10 ([larger files](https://developers.notion.com/guides/data-apis/sending-larger-files)). */
+export const SINGLE_PART_BYTES = 20 * 1024 * 1024
+export const PART_BYTES = 10 * 1024 * 1024
+
+/** The block a file is shown in, by the type Notion read from its name ([file blocks](https://developers.notion.com/reference/block#file)). */
+const blockTypeOf = (contentType: string | null | undefined) => {
+  const [kind] = (contentType ?? "").split("/")
+  if (kind === "image" || kind === "video" || kind === "audio") return kind
+  return contentType === "application/pdf" ? "pdf" : "file"
+}
+
+export interface Upload {
+  /** The page the file is added to, at its end. */
+  page: string
+  filename: string
+  size: number
+  /** `length` bytes of the file from `offset`. */
+  read: (offset: number, length: number) => Uint8Array<ArrayBuffer>
+}
+
 export const pageSchema = v.strictObject({
   id: v.string(),
   title: v.string(),
@@ -136,6 +179,67 @@ export const liveWrites = (client: Client) => ({
         return { id: answer.id, warnings: (answer.warnings ?? []).map(({ code }) => code) }
       } catch (error) {
         throw allowDeleting ? error : withContentHint(error)
+      }
+    }),
+
+  /** A comment on a page, or a reply in a discussion; Notion takes inline Markdown only ([create a comment](https://developers.notion.com/reference/create-a-comment)). */
+  comment: (target: { page: string } | { discussion: string }, markdown: string) =>
+    writing(async () => {
+      const body =
+        "page" in target
+          ? { parent: { page_id: target.page }, markdown }
+          : { discussion_id: target.discussion, markdown }
+      const comment = parsed(wireComment, await mapped(() => client.comments.create(body)))
+      return { id: comment.id, discussion_id: comment.discussion_id, created_time: comment.created_time ?? null }
+    }),
+
+  /**
+   * The file sent to Notion, in parts when it is larger than one may be, then added to the end of the page as a block
+   * of its kind. An upload not added to a page within an hour expires ([file uploads](https://developers.notion.com/reference/file-upload)).
+   */
+  upload: ({ page, filename, size, read }: Upload) =>
+    writing(async () => {
+      const parts = size > SINGLE_PART_BYTES ? Math.ceil(size / PART_BYTES) : 1
+      const created = parsed(
+        wireUpload,
+        await mapped(() =>
+          client.fileUploads.create(
+            parts > 1 ? { mode: "multi_part", number_of_parts: parts, filename } : { filename },
+          ),
+        ),
+      )
+      let answer: unknown
+      for (let part = 1; part <= parts; part++) {
+        const offset = parts > 1 ? (part - 1) * PART_BYTES : 0
+        const data = new Blob([read(offset, parts > 1 ? Math.min(PART_BYTES, size - offset) : size)])
+        answer = await mapped(() =>
+          client.fileUploads.send({
+            file_upload_id: created.id,
+            file: { filename, data },
+            ...(parts > 1 ? { part_number: String(part) } : {}),
+          }),
+        )
+      }
+      if (parts > 1) answer = await mapped(() => client.fileUploads.complete({ file_upload_id: created.id }))
+      const uploaded = parsed(wireUpload, answer)
+      if (uploaded.status !== "uploaded")
+        throw new CliError("invalid_response", `${NOTION} did not finish the upload: it is ${uploaded.status}`, {
+          reason: "notion.upload-unfinished",
+        })
+      const type = blockTypeOf(uploaded.content_type)
+      const block = { type, [type]: { type: "file_upload", file_upload: { id: uploaded.id } } }
+      const appended = parsed(
+        wireAppended,
+        await mapped(() =>
+          client.blocks.children.append({
+            block_id: page,
+            children: [block as unknown as Parameters<typeof client.blocks.children.append>[0]["children"][number]],
+          }),
+        ),
+      )
+      return {
+        upload: { id: uploaded.id, filename, content_type: uploaded.content_type ?? null, size, parts },
+        block: { id: appended.results.at(-1)?.id ?? null, type },
       }
     }),
 

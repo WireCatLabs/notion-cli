@@ -39,7 +39,7 @@ The work goes in this order, each step one pull request:
 4. Search by a property (`status:Done`).
 5. ~~Writes: create, update and delete a page.~~ Done: see [Writes](#writes).
 6. A local folder kept in step with a Notion page tree.
-7. The raw API, comments and files.
+7. ~~The raw API, comments and files.~~ Done: `api`, and see [Comments and files](#comments-and-files).
 8. Sign-in in the browser (OAuth), through the person's own Notion connection.
 
 Every request runs inside cli-core's command run (WC-LIFE-15, WC-LIFE-17).
@@ -98,7 +98,8 @@ reason here.
 | `search` | the local copy, Lucene syntax; database rows are searched here, not by a separate query | same |
 | `catalog`, `tags`, `relationships`, `notes`, `memories`, `facts`, `identities` | the knowledge layer over documents | same |
 | `mirrors add\|list\|remove\|status\|sync\|watch` | a local Markdown folder in step with a page tree | same |
-| `comments list\|create\|reply` | page comments | same group name |
+| `comments list\|create\|reply` | page comments, live; `list` shows unresolved ones only | same group name |
+| `files upload` | a local file added to the end of a page | Notion only |
 | `api list\|show`, one command per operation | the raw API, from Notion's OpenAPI document | same |
 | `doctor`, `config`, `mcp`, `skill`, `runs`, `upgrade`, `commands` | from cli-core | same |
 
@@ -205,6 +206,24 @@ guard and send journal, with the command's own permission key, and answers with 
 - **Never sent twice.** A 5xx, which Notion also gives a request it ended after 60 s, no answer, or an answer that
   cannot be read is `outcome_unknown`: the page may have changed, so it is read before the write is repeated.
 - The local copy is not changed by a write; the next `sync` brings it in step.
+
+## Comments and files
+
+`comments list|create|reply` and `files upload` are friendly commands over the same calls `api` makes, with the
+writes' guard, send journal, `operation_id`, `--dry-run` and `WCNOTION_READ_ONLY`.
+
+- **comments list** sends [list comments](https://developers.notion.com/reference/list-comments), which gives only
+  unresolved comments; its help says so. `--limit` and `--cursor` page it.
+- **comments create** comments on a page and **comments reply** answers in a discussion by its `discussion_id`, both
+  with `markdown` in [create a comment](https://developers.notion.com/reference/create-a-comment), which keeps inline
+  Markdown only. The text is a `secretInput`: no run record keeps it, whatever `record_input` says. Both check
+  `comments.create` and `api.create-a-comment`, so a deny on either stops a reply too.
+- **files upload** sends up to 20 MB in one part and a larger file in parts of 10 MB, then completes it, as
+  [sending larger files](https://developers.notion.com/guides/data-apis/sending-larger-files) says (parts of 5 to
+  20 MB). It then appends the file to the end of the page as an image, video, audio, PDF or file block, by the type
+  Notion read from the name. It checks `files.upload`, `api.create-file`, `api.complete-file-upload` and
+  `api.patch-block-children`. The file is opened once and checked as `--file` is: no link, no system or credential
+  file.
 
 ## Keeping a local folder in step
 
