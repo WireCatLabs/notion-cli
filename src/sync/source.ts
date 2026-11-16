@@ -1,6 +1,7 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { deadlineMargin } from "@wirecat/cli-core/background"
 import type { DocumentSource, SourceChange, SourceContent } from "@wirecat/cli-core/documents"
+import { isItemError, isNotFound, isRefused } from "../notion/errors.js"
 import { withoutSignedLinks } from "../notion/links.js"
 import type {
   NotionBlock,
@@ -13,11 +14,13 @@ import type {
   NotionUser,
 } from "../notion/reads.js"
 import {
+  type BlockPosition,
   decodeCursor,
   decodeListPosition,
   encodeCursor,
   encodeListPosition,
   type ListPosition,
+  type RowPosition,
   type SyncCursor,
   type SyncPass,
   type SyncTask,
@@ -27,6 +30,7 @@ import {
   type NotionIdentity,
   type NotionKind,
   type NotionSourceOptions,
+  parentId,
   UNTITLED,
   WORKSPACE_ROOT,
 } from "./files.js"
@@ -53,41 +57,9 @@ export const MIN_OVERLAP_MS = 2 * MINUTE
 const DEFAULTS = { overlapMs: 10 * MINUTE, walkEveryMs: 24 * 60 * MINUTE, maxRequests: 2000 }
 const PAGE_SIZE = 100
 
-const parentId = (parent: NotionParent) => {
-  switch (parent.type) {
-    case "workspace":
-      return WORKSPACE_ROOT
-    case "page_id":
-      return parent.page_id
-    case "data_source_id":
-      return parent.data_source_id
-    case "database_id":
-      return parent.database_id
-    case "block_id":
-      return parent.block_id
-  }
-}
 const minus = (iso: string, ms: number) => new Date(Date.parse(iso) - ms).toISOString()
 const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : Date.parse(a) >= Date.parse(b) ? a : b)
-const isNotFound = (error: unknown) => isCliError(error) && error.code === "not_found"
-/** Answers about one item, not the sync: a linked database view answers 404 by design, a restricted page 403. */
-const isItemError = (error: unknown) =>
-  isCliError(error) && (error.code === "not_found" || error.code === "permission_error")
-/** Notion's own 400, such as a list position it no longer takes; not this code's refusals, which carry no status. */
-const isRefused = (error: unknown) =>
-  isCliError(error) && error.code === "validation_error" && error.details.status === 400
 const text = (parts: { plain_text: string }[]) => parts.map((part) => part.plain_text).join("")
-
-interface RowPosition {
-  after?: string
-  start?: string
-  seen?: string[]
-}
-
-interface BlockPosition {
-  blocks: { id: string; start?: string }[]
-  seen: string[]
-}
 
 interface Listing {
   files: NotionFile[]
@@ -619,7 +591,27 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     // The engine walks every folder it is sent, all its rows, so a database it already holds is not sent again.
     const unheld = (file: NotionFile) => {
       const before = known.get(file.id)
-      return !before || before.name !== file.name || before.parents[0] !== file.parents[0]
+      const sources = (held: NotionFile | undefined) =>
+        held?.providerMetadata.dataSources?.map((item) => item.id).join()
+      return (
+        !before ||
+        before.name !== file.name ||
+        before.parents[0] !== file.parents[0] ||
+        sources(before) !== sources(file)
+      )
+    }
+    // Rows of a data source the database no longer lists go with it. A database Notion will not show (403) lists
+    // nothing, so its rows stay.
+    const unlisted = (database: NotionDatabase) => {
+      const listed = new Set(database.data_sources.map((source) => source.id))
+      cursor.sources = cursor.sources.filter((item) => item.database !== database.id || listed.has(item.source))
+      for (const file of known.values())
+        if (
+          file.providerMetadata.kind === "row" &&
+          file.parents[0] === database.id &&
+          !listed.has(file.providerMetadata.parent?.id ?? "")
+        )
+          gone(file.id)
     }
     /** Work this run keeps even when the deadline cuts its step: a direct read or a resolved kind. */
     let kept = 0
@@ -720,7 +712,10 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       if (typeof found !== "object") return
       const file = await databaseFile(found)
       if (file.trashed) gone(task.id)
-      else if (unheld(file)) emit(file)
+      else {
+        unlisted(found)
+        if (unheld(file)) emit(file)
+      }
       if (task.walk && !file.trashed && file.parents[0] === WORKSPACE_ROOT) {
         shown(file.id)
         queue({ t: "walk", id: file.id })
@@ -752,7 +747,13 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
           return restart({ ...task, start: undefined, seen: undefined }, `the rows of database ${task.database}`)
         if (!isNotFound(error)) throw error
         cursor.sources = cursor.sources.filter((item) => item.source !== task.source)
-        if (isGone(await readDatabase(task.database))) gone(task.database)
+        const database = await readDatabase(task.database)
+        if (isGone(database)) gone(task.database)
+        else if (typeof database === "object") {
+          unlisted(database)
+          const file = await databaseFile(database)
+          if (unheld(file)) emit(file)
+        }
         return
       }
       for (const row of page.rows) emit(await pageFile(row))

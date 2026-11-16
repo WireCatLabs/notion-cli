@@ -155,7 +155,8 @@ the rest was synced, and the next sync is likely to leave the same item out. cli
   skipped the same way, with a warning, and the page keeps the rest of its text. A data source of a database that
   Notion will not query (404 or 403) is left out with a warning; the database's other data sources still sync. In
   the daily walk the rows already held are read one by one before any counts as gone; in the engine's walk (a first
-  sync or `--rescan`) they are kept as they are.
+  sync or `--rescan`) they are kept as they are. A data source its database no longer lists takes its rows out of the
+  local copy on the next sync that reads the database; when Notion will not show the database (403), they stay.
 - **Only a 404 or the trash removes.** A 403 on a page or a database the sync holds keeps it and its rows as they
   were, with a `notion.kept-unconfirmed` warning: a 403 says nothing about whether the item is still there.
 - **A failure partway** (a 429 after the client's retries, Notion down) ends the pass early. The work done is

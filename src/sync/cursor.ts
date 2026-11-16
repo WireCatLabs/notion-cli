@@ -128,3 +128,14 @@ export const decodeListPosition = (token: string): ListPosition => {
     })
   return result.output
 }
+
+export interface RowPosition {
+  after?: string
+  start?: string
+  seen?: string[]
+}
+
+export interface BlockPosition {
+  blocks: { id: string; start?: string }[]
+  seen: string[]
+}

@@ -7,6 +7,21 @@ import type { FrontMatterValue } from "./front-matter.js"
 /** The folder that stands for everything the token sees, the scope when no folder is chosen. */
 export const WORKSPACE_ROOT = "notion-workspace"
 
+export const parentId = (parent: NotionParent) => {
+  switch (parent.type) {
+    case "workspace":
+      return WORKSPACE_ROOT
+    case "page_id":
+      return parent.page_id
+    case "data_source_id":
+      return parent.data_source_id
+    case "database_id":
+      return parent.database_id
+    case "block_id":
+      return parent.block_id
+  }
+}
+
 export type NotionKind = "workspace" | "page" | "row" | "database"
 
 export interface NotionIdentity {
