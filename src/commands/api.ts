@@ -102,10 +102,11 @@ const http = httpApiExecutor({
   failure: (status, answer) => notionRefusal(status, answer),
 })
 
-/** A body that trashes or allows deleting content also checks `documents.delete`, as `documents delete` does. */
+/** A call that deletes, by its operation or its body, also checks `documents.delete`, as `documents delete` does. */
 const execute: typeof http = (command, operation, input) => {
   const body = httpApiRequest(operation, input, NOTION_API).body
-  bodyKeys.set(command, body !== undefined && deletesByBody(operation.command, parseApiJson(body)) ? [DELETE_KEY] : [])
+  const parsed = body === undefined ? undefined : parseApiJson(body)
+  bodyKeys.set(command, deletesByBody(operation.command, parsed) ? [DELETE_KEY] : [])
   return http(command, operation, input)
 }
 

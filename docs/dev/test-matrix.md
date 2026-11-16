@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**168 ✅ · 216 ⛔ · 0 ❌** — 145 commands, 239 options.
+**176 ✅ · 208 ⛔ · 0 ❌** — 145 commands, 239 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -157,9 +157,9 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `api retrieve-async-task` | `--task-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-a-block` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-a-block` | `--block-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-a-block` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-a-block` | `--block-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-a-block` | `--body` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
+| `api update-a-block` |  | ✅ |  |
+| `api update-a-block` | `--block-id` | ✅ |  |
+| `api update-a-block` | `--body` | ✅ |  |
 | `api update-a-block` | `--body-file` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api delete-a-block` |  | ✅ |  |
 | `api delete-a-block` | `--block-id` | ✅ |  |
@@ -173,9 +173,9 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `api patch-block-children` | `--body-file` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-a-data-source` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-a-data-source` | `--data-source-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-a-data-source` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-a-data-source` | `--data-source-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-a-data-source` | `--body` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
+| `api update-a-data-source` |  | ✅ |  |
+| `api update-a-data-source` | `--data-source-id` | ✅ |  |
+| `api update-a-data-source` | `--body` | ✅ |  |
 | `api update-a-data-source` | `--body-file` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api post-database-query` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api post-database-query` | `--data-source-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
@@ -216,8 +216,8 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `api update-a-comment` | `--comment-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api update-a-comment` | `--body` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api update-a-comment` | `--body-file` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api delete-a-comment` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api delete-a-comment` | `--comment-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
+| `api delete-a-comment` |  | ✅ |  |
+| `api delete-a-comment` | `--comment-id` | ✅ |  |
 | `api list-file-uploads` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api list-file-uploads` | `--status` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api list-file-uploads` | `--start-cursor` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |

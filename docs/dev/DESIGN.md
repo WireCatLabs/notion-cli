@@ -192,12 +192,16 @@ guard and send journal, with the command's own permission key, and answers with 
   update with `--allow-deleting-content` also checks `documents.delete`, so it asks too, in one question. Over MCP
   `ask` goes ahead (cli-core's rule), so `deny` is what keeps an agent from deleting. Each write also checks the key of
   the `api` operation it sends (`api.post-page`, `api.update-page-markdown`, `api.patch-page`), so denying the
-  operation cannot be got round through `documents`. The other way round, a raw `api` write whose body sets
-  `in_trash: true` or `allow_deleting_content: true` (`patch-page`, `update-page-markdown`, `update-a-block`,
-  `update-database`, `update-a-data-source`) also checks `documents.delete`, as gcal-cli's `api` checks
-  `events.delete` for a body that cancels an event. `--dry-run` and `WCNOTION_READ_ONLY` are cli-core's.
-- **Files.** `--file` refuses credential files, browser profiles and the WireCat folders, with cli-core's
-  `refusedPlace`, as a messenger's file send does: an agent steered by a page's text must not publish a key.
+  operation cannot be got round through `documents`. The other way round, a raw `api` call that deletes also checks
+  `documents.delete`, as gcal-cli's `api` checks `events.delete` for a body that cancels an event: every operation
+  whose method deletes (`delete-a-block`, which may be a page, `delete-a-comment`, `delete-view` and the rest), and a
+  body that sets `in_trash`, `erase_content` or `is_archived` to `true`, allows deleting content, or sets a data
+  source's property to `null`, which removes it with its values. The list comes from a scan of Notion's OpenAPI
+  document for such fields. `--dry-run` and `WCNOTION_READ_ONLY` are cli-core's.
+- **Files.** `--file` takes only a regular file, after following links, and refuses `/proc`, `/sys` and `/dev`
+  (`/proc/self/environ` holds `WCNOTION_TOKEN`), credential files, browser profiles and the WireCat folders, with
+  cli-core's `refusedPlace`, as a messenger's file send does: an agent steered by a page's text must not publish a
+  key. The `/proc` and regular-file check here goes once cli-core's `refusedPlace` has it (cli-core #3014).
 - **Never sent twice.** A 5xx, which Notion also gives a request it ended after 60 s, no answer, or an answer that
   cannot be read is `outcome_unknown`: the page may have changed, so it is read before the write is repeated.
 - The local copy is not changed by a write; the next `sync` brings it in step.

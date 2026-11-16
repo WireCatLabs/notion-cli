@@ -17,9 +17,11 @@ export const PAGE_WRITE_KEYS: Record<string, readonly string[]> = {
 }
 
 /**
- * The raw operations whose body can trash a page, block, database or data source, or let a Markdown update delete
- * child pages, so `documents.delete: deny` holds over `api` too. Found in Notion's OpenAPI document by the body fields
- * `in_trash` and `allow_deleting_content`.
+ * The raw operations whose body can delete, so `documents.delete: deny` holds over `api` too. Found by scanning
+ * Notion's OpenAPI document for body fields that trash, erase, archive or remove: `in_trash` (pages, blocks, databases,
+ * data sources), `erase_content` and `is_archived` (pages; what `is_archived` does is undocumented, so it counts as a
+ * delete), `allow_deleting_content` (Markdown updates), and a data source property set to `null`, which removes it
+ * with its values ([update a data source](https://developers.notion.com/reference/update-a-data-source)).
  */
 export const TRASHING_OPERATIONS = [
   "patch-page",
@@ -28,16 +30,29 @@ export const TRASHING_OPERATIONS = [
   "update-database",
   "update-a-data-source",
 ] as const
-const TRASHES = "the body sets in_trash true or allow_deleting_content true"
+const TRASHES = "the body trashes, erases, archives or removes content"
 
-/** A raw call's body that deletes: `in_trash: true`, or a Markdown update that allows deleting content. */
+/** Every operation that deletes by its method (a block, which may be a page, a comment, a view): always a delete. */
+export const DELETING_OPERATIONS: readonly string[] = operations
+  .filter((operation) => operation.effect === "destructive")
+  .map((operation) => operation.command)
+
+const DELETING_FIELDS = ["in_trash", "erase_content", "is_archived", "archived"]
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value)
+
+/** A raw call that deletes: by its operation, or by a body that trashes, erases, archives or removes content. */
 export const deletesByBody = (operation: string, body: unknown): boolean => {
-  if (!(TRASHING_OPERATIONS as readonly string[]).includes(operation) || !body || typeof body !== "object") return false
-  const fields = body as Record<string, unknown>
-  const update = typeof fields.type === "string" ? fields[fields.type] : undefined
+  if (DELETING_OPERATIONS.includes(operation)) return true
+  if (!(TRASHING_OPERATIONS as readonly string[]).includes(operation) || !isObject(body)) return false
+  const update = typeof body.type === "string" ? body[body.type] : undefined
   return (
-    fields.in_trash === true ||
-    (!!update && typeof update === "object" && (update as Record<string, unknown>).allow_deleting_content === true)
+    DELETING_FIELDS.some((field) => body[field] === true) ||
+    (isObject(update) && update.allow_deleting_content === true) ||
+    (operation === "update-a-data-source" &&
+      isObject(body.properties) &&
+      Object.values(body.properties).some((property) => property === null))
   )
 }
 
@@ -47,6 +62,7 @@ export const permissions = commandPermissions({
     const keys = PAGE_WRITE_KEYS[path.join(" ")] ?? []
     if (path.join(" ") === "documents update")
       return [...keys, { key: DELETE_KEY, when: "with --allow-deleting-content" }]
+    if (path[0] === "api" && DELETING_OPERATIONS.includes(path[1] ?? "")) return [DELETE_KEY]
     if (path[0] === "api" && (TRASHING_OPERATIONS as readonly string[]).includes(path[1] ?? ""))
       return [{ key: DELETE_KEY, when: TRASHES }]
     return keys

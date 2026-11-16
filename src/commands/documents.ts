@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, realpathSync, statSync } from "node:fs"
+import { resolve } from "node:path"
 import { CliError, visibleControls } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import {
@@ -110,6 +111,17 @@ const write = async <T>(command: Command, extra: readonly string[], act: (notion
   }
 }
 
+/** Kernel and device files: /proc/self/environ holds the token's variable. */
+const SYSTEM_FILES = /^\/(proc|sys|dev)(\/|$)/u
+
+const readablePath = (path: string) => {
+  try {
+    return realpathSync(path)
+  } catch {
+    return undefined
+  }
+}
+
 /** The page's new text: `--text`, or `--file`, where `-` is stdin. */
 const markdownOf = async (command: Command, args: { text?: string; file?: string }, required: boolean) => {
   if (args.text !== undefined && args.file !== undefined)
@@ -124,14 +136,23 @@ const markdownOf = async (command: Command, args: { text?: string; file?: string
     return input.toString("utf8")
   }
   if (args.file !== undefined) {
-    // An agent steered by a page's text must not publish a key or another tool's settings into Notion.
-    if (refusedPlace(args.file, IDENTITY, contextOf(command).env))
+    const real = readablePath(args.file)
+    // An agent steered by a page's text must not publish a key, the process's environment or another tool's settings
+    // into Notion. The /proc, /sys and /dev check and the regular-file check go once cli-core's refusedPlace has them
+    // (cli-core #3014).
+    const refused =
+      refusedPlace(args.file, IDENTITY, contextOf(command).env) ||
+      [resolve(args.file), real].some((path) => path !== undefined && SYSTEM_FILES.test(path)) ||
+      (real !== undefined && !statSync(real).isFile())
+    if (refused)
       throw new CliError(
         "validation_error",
-        `${args.file} is not read: credential files, browser profiles and the WireCat folders never go to Notion`,
+        `${args.file} is not read: only a regular file goes to Notion, never a system file, a credential file, a ` +
+          "browser profile or a WireCat folder",
         { reason: "file.refused-place", sent: false },
       )
-    return readFileSync(args.file, "utf8")
+    if (!real) throw new CliError("validation_error", `${args.file}: no such file`, { sent: false })
+    return readFileSync(real, "utf8")
   }
   if (required)
     throw new CliError("validation_error", "give the page's new text with --text or --file", { sent: false })

@@ -19,8 +19,9 @@ the permissions say.
 
 Creating, changing and restoring a page is `allow` by default. `documents.delete` is `ask`, and an update with
 `--allow-deleting-content` asks under the same key, since it deletes child pages. To keep an agent from deleting
-pages over MCP, set `documents.delete` to `deny`. That holds for the raw `api` commands too: a call whose body sets
-`in_trash` to `true`, or allows deleting content, also checks `documents.delete`. Each page write also checks the key of
+pages over MCP, set `documents.delete` to `deny`. That holds for the raw `api` commands too: an operation that deletes,
+such as `delete-a-block`, and a call whose body trashes, erases, archives or removes content also check
+`documents.delete`. Each page write also checks the key of
 the API operation it sends, such as `api.patch-page` for `documents delete`, so denying that operation stops both.
 
 ## Run records

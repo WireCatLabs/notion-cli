@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, sep } from "node:path"
 import { afterEach, expect, it } from "vitest"
@@ -252,3 +252,44 @@ it("a credential file is never read into a page", async () => {
   expect(refused.json()).toMatchObject({ error: { code: "validation_error", reason: "file.refused-place" } })
   expect(notion.calls).toEqual([])
 })
+
+it("documents.delete deny stops every raw call that deletes: erase, archive, a removed property, a deleted block", async () => {
+  withPermissions({ "documents.delete": "deny", "api.delete-a-block": "allow" })
+  const source = "eeeeeeee-0000-4000-8000-000000000005"
+  for (const [operation, flag, id, body] of [
+    ["patch-page", "--page-id", PAGE_ID, '{"erase_content":true}'],
+    ["patch-page", "--page-id", PAGE_ID, '{"is_archived":true}'],
+    ["update-a-block", "--block-id", PAGE_ID, '{"in_trash":true}'],
+    ["update-a-data-source", "--data-source-id", source, '{"properties":{"Status":null}}'],
+    ["delete-a-block", "--block-id", PAGE_ID, undefined],
+    ["delete-a-comment", "--comment-id", PAGE_ID, undefined],
+  ] as const) {
+    const notion = fakeNotion()
+    const argv = ["personal", "api", operation, flag, id, ...(body ? ["--body", body] : []), "--json"]
+    const ran = await runCli(argv, { notion })
+    expect(ran.json(), `${operation} ${body ?? ""}`).toMatchObject({ error: { code: "permission_error" } })
+    expect(notion.calls).toEqual([])
+  }
+})
+
+it.runIf(process.platform === "linux")(
+  "a system file, such as the process's environment, is never read into a page",
+  async () => {
+    const notion = fakeNotion()
+    for (const file of ["/proc/self/environ", "/dev/null"]) {
+      const ran = await runCli(["personal", "documents", "create", "--parent", PAGE_ID, "--file", file, "--json"], {
+        notion,
+        env: { WIRECAT_REVIEW_MARKER: "wirecat-env-marker" },
+      })
+      expect(ran.json(), file).toMatchObject({ error: { code: "validation_error", reason: "file.refused-place" } })
+    }
+    const link = join(tmpdir(), "environ-link.md")
+    rmSync(link, { force: true })
+    symlinkSync("/proc/self/environ", link)
+    const linked = await runCli(["personal", "documents", "create", "--parent", PAGE_ID, "--file", link, "--json"], {
+      notion,
+    })
+    expect(linked.json()).toMatchObject({ error: { reason: "file.refused-place" } })
+    expect(notion.calls).toEqual([])
+  },
+)
