@@ -10,6 +10,7 @@ import {
   itemOf,
   listOf,
   outputFor,
+  positiveCount,
   REMOTE_READ,
   refuseOffline,
   renderAnswer,
@@ -91,13 +92,28 @@ const documentRow = (file: NotionFile, reference: string) => ({
   reference,
 })
 
-const browseRow = v.looseObject({
+const BROWSE_LIMIT = 100
+
+const browseRow = v.strictObject({
   id: v.string(),
   name: v.string(),
   kind: v.picklist(["page", "database"]),
   url: v.string(),
-  chosen: v.boolean(),
+  parent: v.nullable(v.string()),
+  added: v.boolean(),
 })
+
+const BROWSE_HELP = `
+Each item, one level of the tree (--json prints them under "items"):
+  id      page or database id to pass to --parent or to folders add
+  name    its title in Notion
+  kind    page or database; a database lists no folders inside, as its rows are not folders
+  url     its Notion link
+  parent  the --parent given, or null at the top of the workspace
+  added   whether sync already copies it (folders add)
+The top of the workspace holds its top-level pages and databases, and those whose parent the token cannot see.
+A level comes a page at a time: when page.has_more is true, run it again with --cursor from page.next_cursor.
+A page can come back with fewer items than --limit, or none, and still have more.`
 
 /** An issue names its source and why; the id and the words stay in the answer's `warnings`. */
 const issuesOf = (warnings: SyncWarning[]) => {
@@ -258,7 +274,11 @@ export const libraryCommands = (): Command[] => {
           annotate(folders.command("browse"), {
             effects: REMOTE_READ,
             offline: false,
-            examples: [`${CLI} personal folders browse`, `${CLI} personal folders browse --parent PAGE_ID --json`],
+            examples: [
+              `${CLI} personal folders browse`,
+              `${CLI} personal folders browse --parent PAGE_ID --json`,
+              `${CLI} personal folders browse --limit 20 --cursor CURSOR`,
+            ],
           }),
           "notion_folder",
           browseRow,
@@ -266,20 +286,47 @@ export const libraryCommands = (): Command[] => {
           .summary("list Notion pages and databases one level at a time, live")
           .description("list Notion pages and databases one level at a time, live, to choose one for folders add")
           .option("--parent <id>", "page id or Notion link to list inside; the top of the workspace without it")
-          .action(async (args: { parent?: string }) => {
+          .option("--limit <n>", `at most this many; ${BROWSE_LIMIT} if not given`, positiveCount("--limit"))
+          .option(
+            "--cursor <cursor>",
+            "go on from where the last page stopped; page.next gives it, with the same --parent",
+          )
+          .addHelpText("after", BROWSE_HELP)
+          .action(async (args: { parent?: string; limit?: number; cursor?: string }) => {
             const parent = args.parent === undefined ? WORKSPACE_ROOT : notionId(args.parent)
+            const limit = args.limit ?? BROWSE_LIMIT
             const chosen = new Set(chosenFolders(env(), profile()))
-            const children = await withNotionReads((reads) => sourceFor(reads).children(parent))
-            const items = children
+            const level = await withNotionReads((reads) => sourceFor(reads).browse(parent, limit, args.cursor))
+            const items = level.files
               .filter((file) => file.providerMetadata.kind === "page" || file.providerMetadata.kind === "database")
               .map((file) => ({
                 id: file.id,
                 name: file.name,
                 kind: file.providerMetadata.kind,
                 url: file.url,
-                chosen: chosen.has(file.id),
+                parent: args.parent === undefined ? null : parent,
+                added: chosen.has(file.id),
               }))
-            output(listOf("folders browse", { items, limit: Math.max(1, items.length), has_more: false }))
+            output(
+              listOf("folders browse", {
+                items,
+                limit,
+                has_more: level.cursor !== undefined,
+                paging: "cursor",
+                ...(level.cursor ? { cursor: level.cursor } : {}),
+                args: args.parent === undefined ? {} : { parent },
+                ...(level.cut
+                  ? {
+                      missing: [
+                        {
+                          field: "items",
+                          why: "Notion's search gave only its 10,000 most recently edited results; older top-level pages may be missing",
+                        },
+                      ],
+                    }
+                  : {}),
+              }),
+            )
           })
       },
     },
