@@ -536,7 +536,8 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
     created_time: "2026-01-02T03:04:00.000Z",
     last_edited_time: "2026-01-02T03:04:00.000Z",
     created_by: { object: "user", id: BOT_ID },
-    rich_text: text(comment.markdown),
+    // Notion gives formatting as annotations, so plain_text holds the words without Markdown marks.
+    rich_text: text(comment.markdown.replaceAll(/\*\*|__|~~|`/gu, "")),
     display_name: { type: "integration", resolved_name: "Test bot" },
   })
   const TYPES: Record<string, string> = {
@@ -686,9 +687,10 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
       method: "PATCH",
       path: new RegExp(`^/v1/blocks/(${UUID})/children$`, "u"),
       query: [],
-      body: ["children", "after", "position", "notifications"],
+      body: ["children", "position", "notifications"],
       answer: (id, { body = {} }) => {
         if (!(id in pages)) return notionError(404, "object_not_found")
+        if (!Array.isArray(body.children)) return notionError(400, "validation_error")
         const children = body.children as Record<string, { type?: string; file_upload?: { id?: string } }>[]
         const block = children?.[0] as (Record<string, unknown> & { type?: string }) | undefined
         const type = block?.type ?? ""

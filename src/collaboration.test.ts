@@ -45,14 +45,18 @@ it("comments create starts a discussion, reply answers in it, and list pages thr
   expect(notion.calls.at(-1)).toMatchObject({
     method: "POST",
     path: "/v1/comments",
-    body: { parent: { page_id: PAGE_ID }, markdown: "Fake **first** comment" },
+    body: { parent: { page_id: PAGE_ID }, markdown: "Fake **first** comment", markdown_version: "v2" },
   })
   const replied = await runCli(["personal", "comments", "reply", comment.discussion_id, "--file", "-"], {
     notion,
     stdin: "Fake reply",
   })
   expect(replied.json().item).toMatchObject({ comment: { discussion_id: comment.discussion_id } })
-  expect(notion.calls.at(-1)?.body).toEqual({ discussion_id: comment.discussion_id, markdown: "Fake reply" })
+  expect(notion.calls.at(-1)?.body).toEqual({
+    discussion_id: comment.discussion_id,
+    markdown: "Fake reply",
+    markdown_version: "v2",
+  })
 
   const first = (await runCli(["personal", "comments", "list", PAGE_ID, "--limit", "1"], { notion })).json() as Listed
   expect(first.items).toEqual([
@@ -62,7 +66,7 @@ it("comments create starts a discussion, reply answers in it, and list pages thr
       parent: { type: "page_id", id: PAGE_ID },
       author_id: expect.any(String),
       author_name: "Test bot",
-      text: "Fake **first** comment",
+      text: "Fake first comment",
       attachments: 0,
       created_time: expect.any(String),
       last_edited_time: expect.any(String),

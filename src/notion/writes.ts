@@ -187,8 +187,8 @@ export const liveWrites = (client: Client) => ({
     writing(async () => {
       const body =
         "page" in target
-          ? { parent: { page_id: target.page }, markdown }
-          : { discussion_id: target.discussion, markdown }
+          ? { parent: { page_id: target.page }, markdown, markdown_version: "v2" as const }
+          : { discussion_id: target.discussion, markdown, markdown_version: "v2" as const }
       const comment = parsed(wireComment, await mapped(() => client.comments.create(body)))
       return { id: comment.id, discussion_id: comment.discussion_id, created_time: comment.created_time ?? null }
     }),

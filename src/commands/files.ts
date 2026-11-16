@@ -1,5 +1,6 @@
 import { closeSync, readSync } from "node:fs"
 import { basename } from "node:path"
+import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { itemOf, outputFor, REMOTE_WRITE, renderAnswer } from "@wirecat/cli-core/cli"
 import { Command } from "commander"
@@ -39,10 +40,13 @@ const uploadCommand = () =>
           let filled = 0
           while (filled < length) {
             const got = readSync(fd, bytes, filled, length - filled, offset + filled)
-            if (got === 0) break
+            if (got === 0)
+              throw new CliError("validation_error", `${file} changed while it was read; upload it again`, {
+                sent: false,
+              })
             filled += got
           }
-          return filled === length ? bytes : bytes.slice(0, filled)
+          return bytes
         }
         const { operationId, done } = await write(this, [], (notion) =>
           notion.upload({ page, filename: basename(file), size, read }),
