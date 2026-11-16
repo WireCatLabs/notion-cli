@@ -2,6 +2,26 @@
 
 Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
 
+## 0.4.0 — 16.11.2026
+
+### Added
+
+- `comments list`, `comments create` and `comments reply` read and write the comments on a Notion page, live.
+  `comments list` shows only unresolved comments, as Notion's API gives no others. A comment's text never reaches a
+  run record. See [Comments and files](docs/dev/DESIGN.md#comments-and-files).
+- `files upload <file> --parent <page>` uploads a file and adds it to the end of a page as an image, video, audio, PDF
+  or file block. A file over 20 MB goes in parts of 10 MB. Only a regular file is sent, as with `--file`.
+- Each write checks its own permission (`comments.create`, `files.upload`) and the `api` operations it sends, and
+  takes `--dry-run`.
+
+### Changed — may break callers
+
+- `folders browse` pages: `--limit` (100 by default) and `--cursor` from `page.next_cursor`. At the top of the
+  workspace it reads Notion's search one page at a time instead of all of it, so a large workspace answers within a
+  minute. Each item now says where it sits (`parent`, null at the top) and whether sync already copies it as `added`,
+  the field drive's `folders browse` uses, in place of `chosen`. A database lists nothing inside, as its rows are not
+  folders. When Notion's search was cut at 10,000 results, the answer says so in `missing`.
+
 ## 0.3.0 — 16.11.2026
 
 ### Added
