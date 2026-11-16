@@ -293,3 +293,44 @@ it.runIf(process.platform === "linux")(
     expect(notion.calls).toEqual([])
   },
 )
+
+it("documents.delete deny stops an agent batch with a delete, and bodies that spell in_trash another way", async () => {
+  withPermissions({ "documents.delete": "deny" })
+  const agent = "dddddddd-0000-4000-8000-000000000009"
+  for (const [operation, flag, id, body] of [
+    ["patch-page", "--page-id", PAGE_ID, '{"in_trash":"true"}'],
+    ["patch-page", "--page-id", PAGE_ID, '{"in_trash":false,"in_trash":true}'],
+    ["patch-page", "--page-id", PAGE_ID, '{"in\\u005ftrash":true}'],
+    ["agent-batch", "", "", JSON.stringify({ operations: [{ action: "delete", agent_id: agent }] })],
+  ] as const) {
+    const notion = fakeNotion()
+    const argv = ["personal", "api", operation, ...(flag ? [flag, id] : []), "--body", body, "--json"]
+    const ran = await runCli(argv, { notion })
+    expect(ran.code, `${operation} ${body}`).not.toBe(0)
+    expect(notion.calls, `${operation} ${body}`).toEqual([])
+  }
+  const batch = JSON.stringify({ operations: [{ action: "delete", agent_id: agent }] })
+  const refused = await runCli(["personal", "api", "agent-batch", "--body", batch, "--json"], { notion: fakeNotion() })
+  expect(refused.json()).toMatchObject({ error: { code: "permission_error" } })
+})
+
+it.runIf(process.platform === "linux")("--file never follows a link, and never reads /dev/stdin or a fd", async () => {
+  const dir = join(tmpdir(), "links")
+  rmSync(dir, { recursive: true, force: true })
+  mkdirSync(dir)
+  writeFileSync(join(dir, "plain.md"), "Fake plain text")
+  symlinkSync(join(dir, "plain.md"), join(dir, "link.md"))
+  symlinkSync("/proc/self", join(dir, "me"))
+  const notion = fakeNotion()
+  for (const file of [join(dir, "link.md"), join(dir, "me", "environ"), "/dev/fd/0", "/dev/stdin"]) {
+    const ran = await runCli(["personal", "documents", "create", "--parent", PAGE_ID, "--file", file, "--json"], {
+      notion,
+    })
+    expect(ran.json(), file).toMatchObject({ error: { reason: "file.refused-place" } })
+  }
+  expect(notion.calls).toEqual([])
+  const plain = join(dir, "plain.md")
+  const made = await runCli(["personal", "documents", "create", "--parent", PAGE_ID, "--file", plain], { notion })
+  expect(made.code).toBe(0)
+  expect(notion.calls[0]?.body).toMatchObject({ markdown: "Fake plain text" })
+})

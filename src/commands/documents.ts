@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, statSync } from "node:fs"
+import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from "node:fs"
 import { resolve } from "node:path"
 import { CliError, visibleControls } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
@@ -114,11 +114,49 @@ const write = async <T>(command: Command, extra: readonly string[], act: (notion
 /** Kernel and device files: /proc/self/environ holds the token's variable. */
 const SYSTEM_FILES = /^\/(proc|sys|dev)(\/|$)/u
 
-const readablePath = (path: string) => {
+const realOf = (path: string) => {
   try {
     return realpathSync(path)
   } catch {
     return undefined
+  }
+}
+
+const refusedFile = (file: string) =>
+  new CliError(
+    "validation_error",
+    `${file} is not read: only a regular file goes to Notion, never a link, a system file, a credential file, a ` +
+      "browser profile or a WireCat folder",
+    { reason: "file.refused-place", sent: false },
+  )
+
+/**
+ * One open, then every check on what was opened: a link as the last part is refused (O_NOFOLLOW), so the path
+ * cannot be swapped between the check and the read, and a FIFO does not block the open (O_NONBLOCK). An agent steered
+ * by a page's text must not publish a key, the process's environment or another tool's settings into Notion. The
+ * /proc, /sys and /dev check and the regular-file check go once cli-core's refusedPlace has them (cli-core #3014).
+ */
+const readOwnFile = (file: string, env: NodeJS.ProcessEnv): string => {
+  const outside = (path: string | undefined) =>
+    path !== undefined && (SYSTEM_FILES.test(path) || refusedPlace(path, IDENTITY, env))
+  if (outside(resolve(file)) || outside(realOf(file))) throw refusedFile(file)
+  let fd: number
+  try {
+    fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === "ELOOP" || code === "EMLINK") throw refusedFile(file)
+    throw new CliError("validation_error", `${file}: ${code === "ENOENT" ? "no such file" : "it cannot be read"}`, {
+      sent: false,
+    })
+  }
+  try {
+    // On Linux the open descriptor names the file it really is, whatever happened to the path since the check.
+    const opened = process.platform === "linux" ? realOf(`/proc/self/fd/${fd}`) : undefined
+    if (!fstatSync(fd).isFile() || outside(opened)) throw refusedFile(file)
+    return readFileSync(fd, "utf8")
+  } finally {
+    closeSync(fd)
   }
 }
 
@@ -135,25 +173,7 @@ const markdownOf = async (command: Command, args: { text?: string; file?: string
     })
     return input.toString("utf8")
   }
-  if (args.file !== undefined) {
-    const real = readablePath(args.file)
-    // An agent steered by a page's text must not publish a key, the process's environment or another tool's settings
-    // into Notion. The /proc, /sys and /dev check and the regular-file check go once cli-core's refusedPlace has them
-    // (cli-core #3014).
-    const refused =
-      refusedPlace(args.file, IDENTITY, contextOf(command).env) ||
-      [resolve(args.file), real].some((path) => path !== undefined && SYSTEM_FILES.test(path)) ||
-      (real !== undefined && !statSync(real).isFile())
-    if (refused)
-      throw new CliError(
-        "validation_error",
-        `${args.file} is not read: only a regular file goes to Notion, never a system file, a credential file, a ` +
-          "browser profile or a WireCat folder",
-        { reason: "file.refused-place", sent: false },
-      )
-    if (!real) throw new CliError("validation_error", `${args.file}: no such file`, { sent: false })
-    return readFileSync(real, "utf8")
-  }
+  if (args.file !== undefined) return readOwnFile(args.file, contextOf(command).env)
   if (required)
     throw new CliError("validation_error", "give the page's new text with --text or --file", { sent: false })
   return undefined

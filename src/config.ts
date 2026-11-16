@@ -37,6 +37,9 @@ export const DELETING_OPERATIONS: readonly string[] = operations
   .filter((operation) => operation.effect === "destructive")
   .map((operation) => operation.command)
 
+/** One call that runs up to 100 agent operations, a delete among them. */
+const AGENT_BATCH = "agent-batch"
+
 const DELETING_FIELDS = ["in_trash", "erase_content", "is_archived", "archived"]
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -45,6 +48,12 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 /** A raw call that deletes: by its operation, or by a body that trashes, erases, archives or removes content. */
 export const deletesByBody = (operation: string, body: unknown): boolean => {
   if (DELETING_OPERATIONS.includes(operation)) return true
+  if (operation === AGENT_BATCH)
+    return (
+      isObject(body) &&
+      Array.isArray(body.operations) &&
+      body.operations.some((one) => isObject(one) && one.action === "delete")
+    )
   if (!(TRASHING_OPERATIONS as readonly string[]).includes(operation) || !isObject(body)) return false
   const update = typeof body.type === "string" ? body[body.type] : undefined
   return (
@@ -63,6 +72,8 @@ export const permissions = commandPermissions({
     if (path.join(" ") === "documents update")
       return [...keys, { key: DELETE_KEY, when: "with --allow-deleting-content" }]
     if (path[0] === "api" && DELETING_OPERATIONS.includes(path[1] ?? "")) return [DELETE_KEY]
+    if (path[0] === "api" && path[1] === AGENT_BATCH)
+      return [{ key: DELETE_KEY, when: "an operation's action is delete" }]
     if (path[0] === "api" && (TRASHING_OPERATIONS as readonly string[]).includes(path[1] ?? ""))
       return [{ key: DELETE_KEY, when: TRASHES }]
     return keys
