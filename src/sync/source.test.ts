@@ -648,16 +648,18 @@ describe("changes()", () => {
     expect(decodeCursor(cursor).walkedAt > walkedAt).toBe(later > 24 * HOUR)
   })
 
-  it("walks a 10,000-row database over a few 30 s runs, a page of rows per step, and removes none", async () => {
+  it("walks a database too big for one run's rows over a few 30 s runs, a page of rows per step, and removes none", async () => {
     const notion = new FakeNotion()
     notion.addDatabase({ id: "db", title: "Big", parent: top, sources: ["ds"] })
-    for (let r = 0; r < 10_000; r++)
+    for (let r = 0; r < 3_000; r++)
       notion.addPage({ id: `r${r}`, title: `R${r}`, parent: row("db", "ds"), created: notion.now + r * 1000 })
-    const run = harness(notion, { max: 20_000 })
+    const run = harness(notion, { max: 5_000 })
     await run.sync()
     notion.advance(25 * HOUR)
-    const { runs, cursor, items } = await timedRuns(notion, run, { perCall: 350, ms: 30_000 })
+    // A second a request: about 25 fit in a run, and the 30 pages of rows do not.
+    const { runs, cursor, items } = await timedRuns(notion, run, { perCall: 1000, ms: 30_000 })
     expect(passUnderWay(cursor)).toBe(false)
+    expect(runs).toBeGreaterThan(1)
     expect(runs).toBeLessThan(5)
     expect(items.filter((item) => item.removed)).toEqual([])
   }, 30_000)

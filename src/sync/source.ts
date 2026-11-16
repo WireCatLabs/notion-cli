@@ -255,8 +255,9 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       version: versionOf(block.last_edited_time),
       modifiedAt: block.last_edited_time,
       createdAt: block.created_time,
-      // The block has no link; the page's own comes when its text is read.
-      url: known.get(block.id)?.url ?? "",
+      // The block has no link. Notion's own form is https://app.notion.com/p/{page-id}, and the page's link replaces
+      // it when its text is read (https://developers.notion.com/reference/versioning).
+      url: known.get(block.id)?.url || `https://app.notion.com/p/${block.id.replaceAll("-", "")}`,
       trashed: block.in_trash ?? false,
       canDownload: true,
       providerMetadata: {

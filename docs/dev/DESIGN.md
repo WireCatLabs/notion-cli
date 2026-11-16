@@ -193,6 +193,9 @@ below; the rest a person reads in its output:
   least one signed link and prints no `X-Amz-` or `signature=` query. Use such a page for the check: it fails on a
   page with no file. The form of a signed link in Markdown v2 is not documented; `src/notion/links.ts` cuts every query
   that carries a signature, plain or percent-encoded, wherever the link around it ends.
+- A `child_page` block's `last_edited_time` is its page's, and its `has_children` matches what the page holds. The
+  sync files a child page from its block ([the sync](SYNC.md)); the check warns on a difference and needs a test page
+  with at least one page under it.
 - A renewed personal access token, or a new token of the same connection, keeps the bot id. If it does not, a
   profile refuses its own renewed token as another connection (`profile.other-account`), and the account must become
   the workspace id alone, or the bot's owner.
