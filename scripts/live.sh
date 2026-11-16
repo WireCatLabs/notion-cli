@@ -4,7 +4,8 @@
 # one and the keyring is out of reach, so nothing touches the owner's store, keyring or settings.
 #   scripts/live.sh <page id or link> < token-file
 # The page must hold an uploaded file whose name has parentheses, such as `Screenshot (2).png`: the check fails
-# unless Notion's signed file links were seen and cut.
+# unless Notion's signed file links were seen and cut. It must also hold at least one page under it: the sync files a
+# child page from its child_page block, and the check compares that block with the page (docs/dev/SYNC.md).
 set -euo pipefail
 page=${1:?give a page id or link the token can read: scripts/live.sh <page> < token-file}
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
@@ -45,9 +46,35 @@ node -e '
   if (!(page.signed_links_removed > 0)) throw new Error("no signed file link was cut: use a page with an uploaded file")
   if (/X-Amz-(Signature|Credential)|[?&;]signature=|%3FX-Amz-/i.test(JSON.stringify(page)))
     throw new Error("a signed file link was not cut")' "$work"
+# Read only. A difference is a warning, not a failure: it costs the daily walk work, it loses nothing.
+id=$(node -e '
+  const page = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).item
+  process.stdout.write(page?.id ?? "")' "$work/page.json")
+"${cli[@]}" live api get-block-children --block-id "$id" --json >"$work/children.json"
+child=$(node -e '
+  const answer = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+  const block = (answer.item?.results ?? answer.items ?? []).find((one) => one.type === "child_page")
+  if (!block) throw new Error("the page has no page under it: add one, the sync files child pages from their blocks")
+  process.stdout.write(block.id)' "$work/children.json")
+"${cli[@]}" live api retrieve-a-page --page-id "$child" --json >"$work/child.json"
+"${cli[@]}" live api get-block-children --block-id "$child" --page-size 1 --json >"$work/grandchildren.json"
+node -e '
+  const read = (name) => JSON.parse(require("fs").readFileSync(`${process.argv[1]}/${name}.json`, "utf8"))
+  const listed = read("children")
+  const block = (listed.item?.results ?? listed.items).find((one) => one.id === process.argv[2])
+  const page = read("child").item
+  const inner = read("grandchildren")
+  const holds = (inner.item?.results ?? inner.items ?? []).length > 0
+  const warn = (text) => console.error(`warning: the child_page block ${text}`)
+  if (block.last_edited_time !== page.last_edited_time)
+    warn(`says last edited ${block.last_edited_time}, the page ${page.last_edited_time}`)
+  if (typeof block.has_children !== "boolean") warn("has no has_children")
+  else if (block.has_children !== holds)
+    warn(`says has_children ${block.has_children}, the page holds ${holds ? "blocks" : "none"}`)' "$work" "$child"
 first=$(node -e 'const l = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(l.items[0]?.id ?? "")' "$work/list.json")
 if [ -n "$first" ]; then "${cli[@]}" live databases show "$first" --json >/dev/null; fi
 "${cli[@]}" live doctor --json >/dev/null
 
 "${cli[@]}" live session end --json >/dev/null
-echo "live check passed: describe format 2, sign-in, users/me, databases list and show, documents get, doctor, sign-out"
+echo "live check passed: describe format 2, sign-in, users/me, databases list and show, documents get," \
+  "a child_page block against its page, doctor, sign-out"

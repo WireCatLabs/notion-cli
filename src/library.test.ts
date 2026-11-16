@@ -114,7 +114,7 @@ describe("sync over the shared store", () => {
     expect((await run(["folders", "add", ROW])).code).not.toBe(0)
   })
 
-  it("folders browse lists one level live, and marks what is chosen", async () => {
+  it("folders browse lists one level live with each item's link, and marks what is chosen", async () => {
     const { run } = cli()
     await run(["folders", "add", ROADMAP])
     const top = (await run(["folders", "browse"])).json() as { items: { id: string; chosen: boolean }[] }
@@ -124,8 +124,14 @@ describe("sync over the shared store", () => {
         [LONELY, false],
       ].sort(),
     )
-    const inside = (await run(["folders", "browse", "--parent", ROADMAP])).json() as { items: { id: string }[] }
+    const inside = (await run(["folders", "browse", "--parent", ROADMAP])).json() as {
+      items: { id: string; url: string }[]
+    }
     expect(inside.items.map((item) => item.id).sort()).toEqual([CHILD, TASKS].sort())
+    expect(inside.items.find((item) => item.id === CHILD)?.url).toBe(
+      `https://app.notion.com/p/${CHILD.replaceAll("-", "")}`,
+    )
+    for (const item of inside.items) expect(item.url).toMatch(/^https:\/\//)
   })
 
   it("names what Notion would not give in meta.issues and the answer's warnings, and exits 0", async () => {

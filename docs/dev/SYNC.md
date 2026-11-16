@@ -23,9 +23,16 @@ again only when Notion changed it, and a full walk asks for each page's children
 reads every block that holds others (toggles, columns, lists), since a child page can sit inside one. A child page
 comes from its `child_page` block, which names its id, title, times and authors
 ([block](https://developers.notion.com/reference/block)), so a page of 100 children costs one request, not 101. A
-page under a page has only its title for properties, so nothing is lost. Not yet checked against the live API: that
-a `child_page` block's `last_edited_time` is the page's. If it is not, a walk sends such pages again each day. A
-child database is still read on its own, for its data sources.
+page under a page has only its title for properties, so nothing is lost. The block has no link, so the page gets
+Notion's own form, `https://app.notion.com/p/{page-id}`, until its text is read and the page's link replaces it
+([versioning](https://developers.notion.com/reference/versioning) names that form and says links are "for people to
+open, not stable identifiers"). A child database is still read on its own, for its data sources.
+
+The live check (`scripts/live.sh`) compares a `child_page` block with its page, so the test page needs at least one
+page under it. It warns, and does not fail, when the block's `last_edited_time` differs from the page's: then a walk
+sends such pages again each day, which costs work and loses nothing. It also warns when `has_children` does not match
+what the page holds: the walk skips the listing of a child page whose block says it has no children and under which
+the sync holds nothing.
 
 ## The position between syncs
 
@@ -114,7 +121,13 @@ the rest was synced, and the next sync is likely to leave the same item out. cli
   is cooperative: its deadline is 15 minutes in a terminal and 45 seconds over MCP, unless `--timeout` sets one. A
   sync that stops answers `complete: false`,
   `stopped` and `walk`, exits 0, and names `sync` as its next step. `--rescan` starts the walk over, so it is run once
-  and continued with plain `sync` runs. There is no cap on the size of the chosen folders.
+  and continued with plain `sync` runs.
+- **A big database on a first sync over MCP.** The engine lists a folder in one step: `children()` of a database
+  reads all its rows, 100 a request, at the query pace of about 3 requests a second. That fits a terminal's
+  15 minutes, but not MCP's 45 seconds once the database holds more than about 10,000 to 12,000 rows. Such a
+  first sync stops at that step every run and does not move. Run the first sync of such a database in a terminal,
+  or with a longer `--timeout`. Later syncs read rows a page per step and are not bound this way. A fix needs
+  cli-core's engine to take a listing in parts.
 - **A pass stops before the run's deadline.** Each step of the pass costs one request: one page of a search, one
   database, one page of rows, one page of a page's blocks, or one direct read. A step that needs a page's container
   may read it too, and keeps what it read. Before each request the source checks that the slowest request so far,
