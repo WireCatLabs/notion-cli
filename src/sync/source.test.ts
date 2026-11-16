@@ -872,6 +872,90 @@ describe("changes()", () => {
     expect(run.warnings).toContainEqual(expect.objectContaining({ id: "s2", reason: "notion.left-out" }))
   })
 
+  it("drops the rows of a data source its database no longer lists on a plain sync, and keeps them on a 403", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "DB", parent: top, sources: ["s1", "s2"] })
+    notion.addDatabase({ id: "locked", title: "Locked", parent: top, sources: ["s3", "s4"] })
+    for (const [db, ds] of [
+      ["db", "s1"],
+      ["db", "s2"],
+      ["locked", "s3"],
+      ["locked", "s4"],
+    ] as const)
+      for (let r = 0; r < 5; r++) notion.addPage({ id: `${ds}-${r}`, title: `${ds}-${r}`, parent: row(db, ds) })
+    const run = harness(notion)
+    await run.sync()
+    const rowsOf = (ds: string) => [...run.saved.keys()].filter((key) => key.startsWith(`${ds}-`))
+    expect(rowsOf("s2")).toHaveLength(5)
+    expect(rowsOf("s4")).toHaveLength(5)
+    notion.advance(HOUR)
+    for (const [id, keep] of [
+      ["db", "s1"],
+      ["locked", "s3"],
+    ] as const) {
+      const database = notion.databases.get(id)
+      if (database) Object.assign(database, { sources: [keep], edited: notion.now })
+    }
+    const locked = notion.databases.get("locked")
+    if (locked) locked.restricted = true
+    for (let runs = 0; runs < 10 && !(await run.sync()).complete; runs++);
+    expect(rowsOf("s1")).toHaveLength(5)
+    expect(rowsOf("s2")).toHaveLength(0)
+    expect(rowsOf("s4")).toHaveLength(5)
+    const queried: string[] = []
+    const query = notion.queryDataSource.bind(notion)
+    notion.queryDataSource = async (source: string, body: Parameters<FakeNotion["queryDataSource"]>[1]) => {
+      queried.push(source)
+      return query(source, body)
+    }
+    await run.sync()
+    expect(queried).toContain("s1")
+    expect(queried).not.toContain("s2")
+  })
+
+  for (const scope of ["the workspace", "one page"] as const)
+    it(`does not bring back the rows of a removed data source at the next walk, when ${scope} is chosen`, async () => {
+      const notion = new FakeNotion()
+      notion.addPage({ id: "P", title: "P", parent: top, markdown: "p" })
+      notion.addDatabase({ id: "db", title: "DB", parent: under("P"), sources: ["s1", "s2"] })
+      for (const ds of ["s1", "s2"])
+        for (let r = 0; r < 3; r++) notion.addPage({ id: `${ds}-${r}`, title: `${ds}-${r}`, parent: row("db", ds) })
+      const run = harness(notion, { roots: scope === "one page" ? ["P"] : [WORKSPACE_ROOT] })
+      const until = async () => {
+        for (let runs = 0; runs < 10 && !(await run.sync()).complete; runs++);
+      }
+      const rowsOf = (ds: string) => [...run.saved.keys()].filter((key) => key.startsWith(`${ds}-`))
+      await until()
+      notion.advance(2 * HOUR)
+      const database = notion.databases.get("db")
+      if (database) database.sources = ["s1"]
+      await until()
+      expect(rowsOf("s2")).toHaveLength(0)
+      notion.advance(25 * HOUR)
+      await until()
+      expect(rowsOf("s2")).toHaveLength(0)
+      expect(rowsOf("s1")).toHaveLength(3)
+    })
+
+  it("does not send a database again when Notion lists its data sources in another order", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "DB", parent: top, sources: ["s1", "s2"] })
+    for (const ds of ["s1", "s2"]) notion.addPage({ id: `${ds}-0`, title: ds, parent: row("db", ds) })
+    const run = harness(notion)
+    await run.sync()
+    const retrieve = notion.retrieveDatabase.bind(notion)
+    notion.retrieveDatabase = async (id: string) => {
+      const found = await retrieve(id)
+      return { ...found, data_sources: [...found.data_sources].reverse() }
+    }
+    const database = notion.databases.get("db")
+    if (database) database.edited = notion.now + HOUR
+    notion.advance(HOUR)
+    const before = notion.calls.queryDataSource
+    await run.sync()
+    expect(notion.calls.queryDataSource - before).toBe(2)
+  })
+
   it("first syncs a 15,000-row database within MCP's 45 s runs, a page of rows per step, with a walk that stays small", async () => {
     const notion = new FakeNotion()
     notion.addDatabase({ id: "db", title: "Big", parent: top, sources: ["ds"] })

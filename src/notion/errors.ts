@@ -146,3 +146,11 @@ export const mapped = async <T>(call: () => Promise<T>): Promise<T> => {
     throw failureOf(error)
   }
 }
+
+export const isNotFound = (error: unknown) => isCliError(error) && error.code === "not_found"
+/** Answers about one item, not the sync: a linked database view answers 404 by design, a restricted page 403. */
+export const isItemError = (error: unknown) =>
+  isCliError(error) && (error.code === "not_found" || error.code === "permission_error")
+/** Notion's own 400, such as a list position it no longer takes; not this code's refusals, which carry no status. */
+export const isRefused = (error: unknown) =>
+  isCliError(error) && error.code === "validation_error" && error.details.status === 400

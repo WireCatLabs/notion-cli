@@ -7,6 +7,21 @@ import type { FrontMatterValue } from "./front-matter.js"
 /** The folder that stands for everything the token sees, the scope when no folder is chosen. */
 export const WORKSPACE_ROOT = "notion-workspace"
 
+export const parentId = (parent: NotionParent) => {
+  switch (parent.type) {
+    case "workspace":
+      return WORKSPACE_ROOT
+    case "page_id":
+      return parent.page_id
+    case "data_source_id":
+      return parent.data_source_id
+    case "database_id":
+      return parent.database_id
+    case "block_id":
+      return parent.block_id
+  }
+}
+
 export type NotionKind = "workspace" | "page" | "row" | "database"
 
 export interface NotionIdentity {
@@ -78,3 +93,18 @@ export interface SyncWarning {
   message: string
   retry_after_ms?: number
 }
+
+export interface Listing {
+  files: NotionFile[]
+  /** Known items confirmed deleted, trashed or unshared by a direct read. */
+  gone: string[]
+  /** Known items that are still there, under another parent. */
+  moved: NotionFile[]
+}
+
+/** A database's data sources as a set, as Notion may list them in any order. */
+export const sourceIds = (file: NotionFile | undefined) =>
+  file?.providerMetadata.dataSources
+    ?.map((item) => item.id)
+    .sort()
+    .join()
