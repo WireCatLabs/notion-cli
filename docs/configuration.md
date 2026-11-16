@@ -17,6 +17,13 @@ notion personal config unset limit
 key. Over MCP there is no one to ask, so `ask` lets the command run. `WCNOTION_READ_ONLY=1` refuses every write, whatever
 the permissions say.
 
+Creating, changing and restoring a page is `allow` by default. `documents.delete` is `ask`, and an update with
+`--allow-deleting-content` asks under the same key, since it deletes child pages. To keep an agent from deleting
+pages over MCP, set `documents.delete` to `deny`. That holds for the raw `api` commands too: an operation that deletes,
+such as `delete-a-block`, and a call whose body trashes, erases, archives or removes content also check
+`documents.delete`. Each page write also checks the key of
+the API operation it sends, such as `api.patch-page` for `documents delete`, so denying that operation stops both.
+
 ## Run records
 
 A command that fails is kept as a run, for `notion runs list` and `runs show`. A command you add that does its work

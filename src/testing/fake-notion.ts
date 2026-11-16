@@ -46,6 +46,9 @@ export interface FakePage {
   unknown_block_ids?: string[]
   /** Notion cut the page at its own limit; by default only when some blocks are unknown. */
   truncated?: boolean
+  /** Set by a create's title or a write's trash; a page without one is titled "Test row". */
+  title?: string
+  in_trash?: boolean
 }
 
 export interface FakeNotionOptions {
@@ -62,6 +65,8 @@ export interface FakeNotionOptions {
   /** Every request is answered with this. */
   failWith?: Answer
   dataSources?: number
+  /** What a Markdown update answers in `warnings`, as Notion does for a part it changed or left out. */
+  updateWarnings?: { code: string; message: string }[]
   /**
    * A whole workspace behind the same strict routes: search, pages, databases, queries and blocks answer from it, so
    * a sync runs against one data model with the request checks of this fake.
@@ -352,15 +357,16 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
     last_edited_time: "2026-01-03T04:05:00.000Z",
     created_by: { object: "user", id: BOT_ID },
     last_edited_by: { object: "user", id: BOT_ID },
-    in_trash: false,
+    in_trash: pages[id]?.in_trash ?? false,
     is_locked: false,
     parent: { type: "data_source_id", data_source_id: SOURCE_ID, database_id: DATABASE_ID },
     url: `https://www.notion.so/${id.replaceAll("-", "")}`,
     public_url: null,
     icon: null,
     cover: null,
-    properties: { Name: { id: "title", type: "title", title: text("Test row") } },
+    properties: { Name: { id: "title", type: "title", title: text(pages[id]?.title ?? "Test row") } },
   })
+  let created = 0
   const block = (id: string) => ({
     object: "block",
     id,
@@ -381,12 +387,95 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
       answer: (id) => (id in pages ? { status: 200, body: page(id) } : notionError(404, "object_not_found")),
     },
     {
-      // https://developers.notion.com/reference/patch-page
+      // https://developers.notion.com/reference/patch-page, https://developers.notion.com/reference/trash-page
       method: "PATCH",
       path: new RegExp(`^/v1/pages/(${UUID})$`, "u"),
       query: [],
       body: ["properties", "icon", "cover", "in_trash", "is_locked"],
-      answer: (id) => (id in pages ? { status: 200, body: page(id) } : notionError(404, "object_not_found")),
+      answer: (id, { body = {} }) => {
+        const held = pages[id]
+        if (!held) return notionError(404, "object_not_found")
+        if (body.in_trash !== undefined && typeof body.in_trash !== "boolean")
+          return notionError(400, "validation_error")
+        if (typeof body.in_trash === "boolean") held.in_trash = body.in_trash
+        return { status: 200, body: page(id) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/post-page, with Markdown as in
+      // https://developers.notion.com/guides/data-apis/working-with-markdown-content
+      method: "POST",
+      path: /^\/v1\/pages$/u,
+      query: [],
+      body: [
+        "parent",
+        "properties",
+        "icon",
+        "cover",
+        "content",
+        "children",
+        "markdown",
+        "allow_async",
+        "markdown_version",
+        "template",
+        "position",
+        "notifications",
+      ],
+      answer: (_, { body = {} }) => {
+        const parent = body.parent as { page_id?: unknown } | undefined
+        if (typeof parent?.page_id !== "string" || !new RegExp(`^${UUID}$`, "u").test(parent.page_id))
+          return notionError(400, "validation_error")
+        if (!pages[parent.page_id] || pages[parent.page_id]?.in_trash) return notionError(404, "object_not_found")
+        if (body.markdown_version !== undefined && (body.markdown === undefined || body.markdown_version !== "v2"))
+          return notionError(400, "validation_error")
+        const markdown = typeof body.markdown === "string" ? body.markdown : ""
+        const named = (body.properties as { title?: { title?: { text?: { content?: string } }[] } } | undefined)?.title
+          ?.title?.[0]?.text?.content
+        const heading = /^# (.+)$/mu.exec(markdown)?.[1]
+        created += 1
+        const id = `f0f0f0f0-0000-4000-8000-${String(created).padStart(12, "0")}`
+        pages[id] = { markdown, title: named ?? heading ?? "" }
+        return { status: 200, body: page(id) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/update-page-markdown: a child page or database whose tag the new
+      // text leaves out is refused unless the update allows deleting it.
+      method: "PATCH",
+      path: new RegExp(`^/v1/pages/(${UUID})/markdown$`, "u"),
+      query: [],
+      body: [
+        "allow_async",
+        "markdown_version",
+        "type",
+        "insert_content",
+        "replace_content_range",
+        "update_content",
+        "replace_content",
+      ],
+      answer: (id, { body = {} }) => {
+        const held = pages[id]
+        if (!held) return notionError(404, "object_not_found")
+        const replace = body.replace_content as { new_str?: unknown; allow_deleting_content?: unknown } | undefined
+        if (body.markdown_version !== "v2" || body.type !== "replace_content" || typeof replace?.new_str !== "string")
+          return notionError(400, "validation_error")
+        const children = held.markdown.match(/<(page|database)\b[^>]*>.*?<\/\1>/gsu) ?? []
+        const dropped = children.filter((tag) => !(replace.new_str as string).includes(tag))
+        if (dropped.length > 0 && replace.allow_deleting_content !== true) return notionError(400, "validation_error")
+        held.markdown = replace.new_str
+        const warnings = options.updateWarnings ?? []
+        return {
+          status: 200,
+          body: {
+            object: "page_markdown",
+            id,
+            markdown: held.markdown,
+            truncated: false,
+            unknown_block_ids: [],
+            ...(warnings.length > 0 ? { warnings } : {}),
+          },
+        }
+      },
     },
     {
       // https://developers.notion.com/reference/query-a-data-source

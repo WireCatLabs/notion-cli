@@ -119,3 +119,55 @@ it("mcp serve offers the shared documents commands by what they read and write",
     expect(await mcp.close()).toBe(0)
   }
 })
+
+it("an agent writes pages through the write tool; a delete at ask goes ahead there, at deny it is refused", async () => {
+  const notion = fakeNotion()
+  const options: RunOptions & ServiceEnvironment = { tty: false, keyring: signedIn(), fetch: notion.fetch }
+  const mcp = await mcpOverStdio((streams) => run(["personal", "mcp", "serve"], { ...options, ...streams }))
+  try {
+    const viaRead = await mcp.call("notion_read", { command: "documents restore", arguments: { page: PAGE_ID } })
+    expect(viaRead.isError).toBe(true)
+    expect(notion.calls).toEqual([])
+    const restored = await mcp.call("notion_write", { command: "documents restore", arguments: { page: PAGE_ID } })
+    expect(restored.body).toMatchObject({ item: { page: { id: PAGE_ID, in_trash: false } } })
+    const deleted = await mcp.call("notion_write", { command: "documents delete", arguments: { page: PAGE_ID } })
+    expect(deleted.body).toMatchObject({ item: { page: { id: PAGE_ID, in_trash: true } } })
+  } finally {
+    expect(await mcp.close()).toBe(0)
+  }
+  const denied = await mcpOverStdio((streams) =>
+    run(["personal", "mcp", "serve", "--permission", "documents.delete=deny"], { ...options, ...streams }),
+  )
+  try {
+    const refused = await denied.call("notion_write", { command: "documents delete", arguments: { page: PAGE_ID } })
+    expect(refused.isError).toBe(true)
+    expect(JSON.stringify(refused.body)).toContain("permission_error")
+    expect(notion.calls).toHaveLength(2)
+  } finally {
+    expect(await denied.close()).toBe(0)
+  }
+})
+
+it("over MCP a page's text never comes from the server's stdin or from a credential file", async () => {
+  const notion = fakeNotion()
+  const options: RunOptions & ServiceEnvironment = { tty: false, keyring: signedIn(), fetch: notion.fetch }
+  const mcp = await mcpOverStdio((streams) => run(["personal", "mcp", "serve"], { ...options, ...streams }))
+  try {
+    const piped = await mcp.call("notion_write", {
+      command: "documents update",
+      arguments: { page: PAGE_ID, file: "-" },
+    })
+    expect(piped.isError).toBe(true)
+    expect(JSON.stringify(piped.body)).toContain("input.invalid")
+    const key = await mcp.call("notion_write", {
+      command: "documents create",
+      arguments: { parent: PAGE_ID, file: join(process.env.HOME ?? "", ".ssh", "id_ed25519") },
+    })
+    expect(key.isError).toBe(true)
+    expect(JSON.stringify(key.body)).toContain("file.refused-place")
+    expect(notion.calls).toEqual([])
+    expect((await mcp.call("notion_read", { command: "doctor" })).isError).toBeFalsy()
+  } finally {
+    expect(await mcp.close()).toBe(0)
+  }
+})

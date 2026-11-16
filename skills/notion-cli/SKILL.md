@@ -32,6 +32,12 @@ yourself; if none is given, run a command without one and read the profiles the 
   `notion.timeout-too-short` means the run had no time to keep anything: run it again with a longer `--timeout`.
 - A refusal with reason `profile.account-taken` or `profile.other-account` means the token belongs to another
   profile's Notion connection. Tell the owner which profile the error names; never sign out a profile yourself.
+- `notion <profile> documents create --parent <page> --text "<text>" --json` makes a page under another one;
+  `documents update <page> --file <path> --json` replaces its whole text, so read it with `documents get` first and
+  keep every `<page>` and `<database>` tag. A refusal with reason `notion.text-refused` most often means the
+  new text drops a child page or database: put its tag back. Pass `--allow-deleting-content` only when the owner asked to
+  delete it. `documents delete <page>` moves a page to Notion's trash and `documents restore <page>` brings it back.
+  An `outcome_unknown` error means the write may have happened: read the page before you repeat it.
 - `notion <profile> session status --check --json` says whether the token works, and for which workspace.
 
 Find the rest with the tool itself: `notion commands --json`, `notion help <command>`, `notion doctor --json`.

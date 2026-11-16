@@ -17,6 +17,7 @@ import { NOTION } from "./notion/errors.js"
 import { type LiveReads, liveReads } from "./notion/notion.js"
 import { notionClock, notionPort } from "./notion/port.js"
 import type { NotionReads } from "./notion/reads.js"
+import { type LiveWrites, liveWrites } from "./notion/writes.js"
 
 /** What a test hands `run()` beside cli-core's own: the fake Notion in place of the network (WC-ARCH-10). */
 export interface ServiceEnvironment extends BaseEnvironment {
@@ -92,3 +93,7 @@ export const withNotion = <T>(command: Command, body: (notion: LiveReads) => Pro
   const token = tokenOf(command)
   return contextOf(command).run((events) => body(notionFor(command, token, events)))
 }
+
+/** The writes' client for one run, the same transport as the reads'; the token is read before the write is guarded. */
+export const notionWritesFor = (command: Command, token: string, events: EventSink): LiveWrites =>
+  liveWrites(notionClient({ token, ...transportOf(command, events) }))

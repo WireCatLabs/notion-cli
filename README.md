@@ -4,8 +4,8 @@
 MCP. It signs in with your own Notion token, kept in your system keyring.
 
 **Status: in development.** It signs in, reads live from Notion, and keeps a copy of your pages on your computer,
-searchable offline with the rest of WireCat. Next it searches database rows by their properties, then writes pages,
-and later keeps a folder of Markdown files in step with a Notion page tree. The order of work is in [docs/dev/DESIGN.md](docs/dev/DESIGN.md).
+searchable offline with the rest of WireCat, and creates, changes and deletes pages. Next it searches database rows by
+their properties, and later keeps a folder of Markdown files in step with a Notion page tree. The order of work is in [docs/dev/DESIGN.md](docs/dev/DESIGN.md).
 
 ## What it does now
 
@@ -20,6 +20,10 @@ and later keeps a folder of Markdown files in step with a Notion page tree. The 
 - `notion personal search <words>` searches the copy offline, in Lucene syntax. `documents list|show|export|context`
   read it, `status` says how far the sync is, and `tags`, `notes`, `memories` and `facts` keep your own notes on a
   page. `memo search` and `search all` find the pages too.
+- `notion personal documents create --parent <page> --file notes.md` makes a page from Markdown, `documents update
+  <page> --file page.md` replaces a page's text, `documents delete <page>` moves it to Notion's trash after asking, and
+  `documents restore <page>` brings it back. An update that would delete a child page or database needs
+  `--allow-deleting-content`; `--dry-run` shows what a write would do and sends nothing.
 - `notion personal databases list` lists the databases the token sees; `databases show <id or link>` gives each data
   source's id and its properties.
 - `notion doctor`, `notion personal mcp serve` and the other commands every WireCat CLI shares.

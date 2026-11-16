@@ -1,8 +1,8 @@
 # notion — design
 
-Written by `npx @wirecat/cli-template new`, then filled in during design. Steps 1 and 2 below are built: sign-in with
-a token, `doctor`, `documents get`, `databases list|show`, read live, and the sync into the shared store with search,
-the local reads and the knowledge commands.
+Written by `npx @wirecat/cli-template new`, then filled in during design. Steps 1, 2 and 5 below are built: sign-in
+with a token, `doctor`, `documents get`, `databases list|show`, read live, the sync into the shared store with search,
+the local reads and the knowledge commands, and the page writes.
 
 ## Answers
 
@@ -37,7 +37,7 @@ The work goes in this order, each step one pull request:
 2. ~~Sync into the shared store, search and MCP.~~ Done: cli-core's shared documents commands over Notion.
 3. Databases: their rows, with their properties.
 4. Search by a property (`status:Done`).
-5. Writes: create, update and delete a page.
+5. ~~Writes: create, update and delete a page.~~ Done: see [Writes](#writes).
 6. A local folder kept in step with a Notion page tree.
 7. The raw API, comments and files.
 8. Sign-in in the browser (OAuth), through the person's own Notion connection.
@@ -172,6 +172,40 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
    As in gcal-cli and drive-cli, creating and updating a page is allowed, and deleting one asks first. Deleting child
    pages through an update needs its own flag on top. No command shares a page or changes who can see it.
 
+## Writes
+
+`documents create|update|delete|restore` change pages live, as gcal-cli changes events. Each runs through cli-core's
+guard and send journal, with the command's own permission key, and answers with an `operation_id`.
+
+- **create** sends [create a page](https://developers.notion.com/reference/post-page) with `markdown` (version 2)
+  under a parent page. With no `--title`, Notion takes the text's first `# heading`. A row of a database is not
+  created here: its title property has a name of its own, and its other properties are step 3's.
+- **update** replaces the whole text with `replace_content` of
+  [update page Markdown](https://developers.notion.com/reference/update-page-markdown). Notion refuses a text that
+  leaves out a child page's or database's tag unless `allow_deleting_content` is set, which `--allow-deleting-content`
+  sends. Notion's refusal is a plain `validation_error`, also given to a text over 5,000 blocks, so it is mapped
+  to `notion.text-refused` with both causes named; Notion's own message is not repeated, as it quotes titles. Notion's `warnings` for a part it changed or left out are reported by their code only. A
+  partial edit (`update_content`) waits for mirrors, step 6.
+- **delete** and **restore** set `in_trash` with [update a page](https://developers.notion.com/reference/trash-page).
+  The API has no permanent delete, so `delete` is always undone by `restore`.
+- **Permissions**, as gcal-cli and drive-cli: create, update and restore are `allow`; `documents.delete` is `ask`. An
+  update with `--allow-deleting-content` also checks `documents.delete`, so it asks too, in one question. Over MCP
+  `ask` goes ahead (cli-core's rule), so `deny` is what keeps an agent from deleting. Each write also checks the key of
+  the `api` operation it sends (`api.post-page`, `api.update-page-markdown`, `api.patch-page`), so denying the
+  operation cannot be got round through `documents`. The other way round, a raw `api` call that deletes also checks
+  `documents.delete`, as gcal-cli's `api` checks `events.delete` for a body that cancels an event: every operation
+  whose method deletes (`delete-a-block`, which may be a page, `delete-a-comment`, `delete-view` and the rest), and a
+  body that sets `in_trash`, `erase_content` or `is_archived` to `true`, allows deleting content, or sets a data
+  source's property to `null`, which removes it with its values. The list comes from a scan of Notion's OpenAPI
+  document for such fields. `--dry-run` and `WCNOTION_READ_ONLY` are cli-core's.
+- **Files.** `--file` takes only a regular file, after following links, and refuses `/proc`, `/sys` and `/dev`
+  (`/proc/self/environ` holds `WCNOTION_TOKEN`), credential files, browser profiles and the WireCat folders, with
+  cli-core's `refusedPlace`, as a messenger's file send does: an agent steered by a page's text must not publish a
+  key. The `/proc` and regular-file check here goes once cli-core's `refusedPlace` has it (cli-core #3014).
+- **Never sent twice.** A 5xx, which Notion also gives a request it ended after 60 s, no answer, or an answer that
+  cannot be read is `outcome_unknown`: the page may have changed, so it is read before the write is repeated.
+- The local copy is not changed by a write; the next `sync` brings it in step.
+
 ## Keeping a local folder in step
 
 `mirrors` uses cli-core's mirror engine, as drive-cli does: a three-way merge of Markdown blocks, conflicts settled
@@ -185,7 +219,7 @@ deleted.
 The strict fake in `src/testing/fake-notion.ts` is built from Notion's reference only; no answer was captured from a
 live workspace. `bin/notion-live <page>` checks the real API through `scripts/live.sh`, with a temporary profile that
 stores nothing, and records the pass in `docs/dev/live-checks.txt` for `bin/release`. It fails on the first two points
-below; the rest a person reads in its output:
+below and on the write round trip after them; the rest a person reads in its output:
 
 - `GET /v1/users/me` gives `bot.workspace_id` for both kinds of token. The account is that id and the bot's id; the
   reference lists the field but its example leaves it out, and sign-in refuses an answer without it.
@@ -203,6 +237,12 @@ below; the rest a person reads in its output:
 - On a page past about 20,000 blocks, the `<unknown url="…"/>` tag names its block id, so the fetched part lands in
   place; otherwise it is added after the page.
 - `databases list` rows carry a data source's title, and `parent.database_id`, in search results.
+
+The check writes, but only under the page it is given, the owner's test page "WireCat Test". It creates one page
+`wirecat-live-<time>` there and a page under it, reads the text back, replaces it, checks that an update dropping the
+child page is refused with `notion.text-refused`, trashes and restores the page, checking `in_trash` each time, and
+leaves it in Notion's trash. Its temporary profile allows `documents.delete`, so no question stops the run; a check
+that fails half way trashes its page on the way out.
 
 ## Open questions for the owner
 

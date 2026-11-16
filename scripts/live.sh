@@ -6,6 +6,8 @@
 # The page must hold an uploaded file whose name has parentheses, such as `Screenshot (2).png`: the check fails
 # unless Notion's signed file links were seen and cut. It must also hold at least one page under it: the sync files a
 # child page from its child_page block, and the check compares that block with the page (docs/dev/SYNC.md).
+# It writes only under that page: it creates one page `wirecat-live-<time>` there with a page under it, changes,
+# trashes and restores it, and leaves it in Notion's trash. No other page is changed (docs/dev/DESIGN.md, Writes).
 set -euo pipefail
 page=${1:?give a page id or link the token can read: scripts/live.sh <page> < token-file}
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
@@ -29,8 +31,15 @@ mkdir -p "$HOME"
   const answer = JSON.parse(require("fs").readFileSync(0, "utf8"))
   if (answer.wcat_describe !== 2 || !/^[0-9a-f]{64}$/.test(answer.manifest_sha256)) throw new Error("not format 2")'
 
+# The check's own profile allows documents.delete, so the trash steps run without a question; the file is in $work.
+mkdir -p "$WCNOTION_CONFIG_DIR"
+printf '%s\n' '{"profiles":{"live":{"permissions":{"documents.delete":"allow"}}}}' >"$WCNOTION_CONFIG_DIR/config.json"
+
 "${cli[@]}" live session start --credential-storage file --json >/dev/null
-trap '"${cli[@]}" live session end --json >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
+made=""
+# A check that fails half way still leaves its page in the trash, never in the workspace.
+trap '[ -z "$made" ] || "${cli[@]}" live documents delete "$made" --json >/dev/null 2>&1 || true
+  "${cli[@]}" live session end --json >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
 "${cli[@]}" live session status --check --json >"$work/status.json"
 "${cli[@]}" live databases list --limit 5 --json >"$work/list.json"
@@ -75,6 +84,45 @@ first=$(node -e 'const l = JSON.parse(require("fs").readFileSync(process.argv[1]
 if [ -n "$first" ]; then "${cli[@]}" live databases show "$first" --json >/dev/null; fi
 "${cli[@]}" live doctor --json >/dev/null
 
+# One write round trip under the test page.
+field() { node -e '
+  const answer = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+  const value = process.argv[2].split(".").reduce((one, key) => one?.[key], answer)
+  if (value === undefined) throw new Error(`${process.argv[1]} has no ${process.argv[2]}`)
+  process.stdout.write(String(value))' "$work/$1.json" "$2"; }
+holds() { node -e '
+  const page = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).item
+  if (!page.markdown.includes(process.argv[2])) throw new Error(`documents get does not show ${process.argv[2]}`)' \
+  "$work/$1.json" "$2"; }
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+"${cli[@]}" live documents create --parent "$page" --title "wirecat-live-$stamp" \
+  --text "Written by the WireCat live check, first-$stamp" --json >"$work/created.json"
+made=$(field created item.page.id)
+[ "$(field created item.page.title)" = "wirecat-live-$stamp" ] || { echo "the new page has another title" >&2; exit 1; }
+"${cli[@]}" live documents get "$made" --json >"$work/first.json"
+holds first "first-$stamp"
+"${cli[@]}" live documents update "$made" --text "Changed by the WireCat live check, second-$stamp" \
+  --json >"$work/updated.json"
+"${cli[@]}" live documents get "$made" --json >"$work/second.json"
+holds second "second-$stamp"
+"${cli[@]}" live documents create --parent "$made" --title "wirecat-live-child-$stamp" --json >/dev/null
+if "${cli[@]}" live documents update "$made" --text "Drops the child, third-$stamp" --json \
+  >/dev/null 2>"$work/dropped.json"; then
+  echo "an update that drops a child page was not refused" >&2
+  exit 1
+fi
+[ "$(field dropped error.reason)" = "notion.text-refused" ] || { echo "the refusal is not notion.text-refused" >&2; exit 1; }
+"${cli[@]}" live documents get "$made" --json >"$work/kept.json"
+holds kept "second-$stamp"
+"${cli[@]}" live documents delete "$made" --json >"$work/trashed.json"
+[ "$(field trashed item.page.in_trash)" = "true" ] || { echo "delete left the page out of the trash" >&2; exit 1; }
+"${cli[@]}" live documents restore "$made" --json >"$work/restored.json"
+[ "$(field restored item.page.in_trash)" = "false" ] || { echo "restore left the page in the trash" >&2; exit 1; }
+"${cli[@]}" live documents delete "$made" --json >"$work/left.json"
+[ "$(field left item.page.in_trash)" = "true" ] || { echo "the last delete left the page out of the trash" >&2; exit 1; }
+made=""
+
 "${cli[@]}" live session end --json >/dev/null
 echo "live check passed: describe format 2, sign-in, users/me, databases list and show, documents get," \
-  "a child_page block against its page, doctor, sign-out"
+  "a child_page block against its page, doctor, a page created, read, updated, refused, trashed and restored" \
+  "under the test page and left in the trash, sign-out"
