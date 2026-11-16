@@ -10,6 +10,7 @@ import type {
   NotionPageMarkdown,
   NotionReads,
   NotionSelf,
+  NotionUserDetail,
 } from "./reads.js"
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
@@ -55,6 +56,8 @@ export const notionClock = () => {
 export const notionPort = (client: Client, clock?: ReturnType<typeof notionClock>): NotionReads => ({
   ...(clock ? { serverTime: clock.time } : {}),
   self: async () => kind<NotionSelf>("user", await mapped(() => client.users.me({}))),
+  retrieveUser: async (id) =>
+    kind<NotionUserDetail>("user", await mapped(() => client.users.retrieve({ user_id: id }))),
   search: async (request) =>
     list<NotionPage | NotionDataSource>(["page", "data_source"], await mapped(() => client.search({ ...request }))),
   queryDataSource: async (id, request) =>

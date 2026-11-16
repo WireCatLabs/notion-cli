@@ -13,6 +13,7 @@ import type {
   NotionSearchRequest,
   NotionSelf,
   NotionTimestampFilter,
+  NotionUserDetail,
 } from "../notion/reads.js"
 
 /**
@@ -43,6 +44,16 @@ export interface FakePage {
   editedBy?: string
 }
 
+export interface FakeUser {
+  id: string
+  name: string
+  type?: "person" | "bot"
+  email?: string
+}
+
+/** What the connection may read of users: nothing, names only, or names and email addresses. */
+export type FakeUserAccess = "none" | "names" | "emails"
+
 export interface FakeDatabase {
   id: string
   title: string
@@ -67,6 +78,8 @@ export class FakeNotion implements NotionReads {
   now: number
   readonly pages = new Map<string, FakePage>()
   readonly databases = new Map<string, FakeDatabase>()
+  readonly users = new Map<string, FakeUser>()
+  userAccess: FakeUserAccess = "emails"
   /** Plain blocks (columns, toggles) that hold child pages, by id, with their parent. */
   readonly blocks = new Map<string, NotionParent>()
   /** Pages search leaves out, as Notion's own docs say it may. */
@@ -77,6 +90,7 @@ export class FakeNotion implements NotionReads {
   dateHeader = true
   readonly calls: Record<Method, number> = {
     self: 0,
+    retrieveUser: 0,
     search: 0,
     queryDataSource: 0,
     retrievePage: 0,
@@ -208,6 +222,26 @@ export class FakeNotion implements NotionReads {
   async self(): Promise<NotionSelf> {
     this.enter("self")
     return { object: "user", id: "bot-1", type: "bot", bot: { workspace_id: "ws-1", owner: { type: "user" } } }
+  }
+
+  addUser(user: FakeUser) {
+    this.users.set(user.id, user)
+  }
+
+  async retrieveUser(id: string): Promise<NotionUserDetail> {
+    this.enter("retrieveUser", id)
+    if (this.userAccess === "none")
+      throw new CliError("permission_error", "Insufficient permissions for this endpoint", { status: 403 })
+    const user = this.users.get(id)
+    if (!user) throw notFound(`user ${id}`)
+    const type = user.type ?? "person"
+    return {
+      object: "user",
+      id,
+      name: user.name,
+      type,
+      ...(type === "person" ? { person: this.userAccess === "emails" && user.email ? { email: user.email } : {} } : {}),
+    }
   }
 
   async search(request: NotionSearchRequest): Promise<NotionList<NotionPage | NotionDataSource>> {

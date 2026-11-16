@@ -12,7 +12,7 @@
  * - A list answer cut at Notion's 10,000-result cap carries `request_status.type: "incomplete"`; search too.
  *
  * Endpoint pages: https://developers.notion.com/reference/post-search, /query-a-data-source, /retrieve-a-page,
- * /retrieve-a-database, /retrieve-a-block, /get-block-children, /retrieve-page-markdown, /get-self.
+ * /retrieve-a-database, /retrieve-a-block, /get-block-children, /retrieve-page-markdown, /get-self, /get-user.
  */
 
 export interface NotionUser {
@@ -20,6 +20,15 @@ export interface NotionUser {
   id: string
   /** Partial users carry only the id. */
   name?: string | null
+}
+
+/**
+ * A whole user. `person.email` is there only when the connection may read user information including email addresses
+ * (https://developers.notion.com/reference/capabilities).
+ */
+export interface NotionUserDetail extends NotionUser {
+  type?: "person" | "bot"
+  person?: { email?: string }
 }
 
 export type NotionParent =
@@ -188,6 +197,8 @@ export interface NotionSelf {
 export interface NotionReads {
   /** `GET /v1/users/me`. */
   self(): Promise<NotionSelf>
+  /** `GET /v1/users/{id}`; 403 when the connection may not read user information. */
+  retrieveUser(id: string): Promise<NotionUserDetail>
   /** `POST /v1/search`, without a text query. */
   search(request: NotionSearchRequest): Promise<NotionList<NotionPage | NotionDataSource>>
   /** `POST /v1/data_sources/{id}/query`. */

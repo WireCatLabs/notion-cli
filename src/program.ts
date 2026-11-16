@@ -10,6 +10,7 @@ import {
   ProfileTokenStore,
   type ProgramDefinition,
   type ProgramOptions,
+  profilesHere,
   type RunOptions,
   run as runShared,
   runsCommand,
@@ -26,6 +27,7 @@ import { libraryCommands } from "./commands/library.js"
 import { sessionCommand } from "./commands/session.js"
 import { configuration } from "./config.js"
 import { IDENTITY, PACKAGE, SKILL } from "./identity.js"
+import { userAccessOf } from "./library.js"
 
 const update = appUpdate({
   packageName: PACKAGE,
@@ -38,6 +40,26 @@ const update = appUpdate({
   enabled: (env) => configuration.resolveSettings({}, { env, needsProfile: false }).updateCheck,
   offVariables: [`${IDENTITY.envPrefix}_NO_UPDATE_CHECK`],
 })
+
+/** What each profile's last sync could read of Notion users: without email addresses no author becomes a person. */
+const userInformation = (env: NodeJS.ProcessEnv) => {
+  const found = Object.fromEntries(
+    profilesHere(IDENTITY, [], env).flatMap((profile) => {
+      const access = userAccessOf(env, profile)
+      return access ? [[profile, access]] : []
+    }),
+  )
+  const short = Object.entries(found).filter(([, access]) => access !== "emails")
+  return {
+    fields: { user_information: found },
+    notes: short.map(
+      ([profile, access]) =>
+        `profile ${profile}: the Notion connection reads ${access === "none" ? "no user information" : "user names without email addresses"}, ` +
+        'so page authors and editors are not matched to people; turn on "Read user information including email ' +
+        "addresses\" in the connection's capabilities, then sync",
+    ),
+  }
+}
 
 const mcpCommand = () =>
   appMcpCommand(IDENTITY, configuration, {
@@ -70,7 +92,7 @@ export const definition = (): ProgramDefinition => ({
     commentsCommand(),
     filesCommand(),
     apiCommand(),
-    appDoctorCommand(IDENTITY, configuration, { packageName: PACKAGE }),
+    appDoctorCommand(IDENTITY, configuration, { packageName: PACKAGE, local: userInformation }),
     skillCommand(IDENTITY, SKILL),
     mcpCommand(),
     upgradeCommand(IDENTITY, PACKAGE, (command) => ({

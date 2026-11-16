@@ -15,7 +15,7 @@ import type { SourceContent, SourceState, SourceStatePort, SourceWalk } from "@w
 import { acquireLock } from "@wirecat/cli-core/files"
 import type { MessageStore } from "@wirecat/cli-core/store"
 import { IDENTITY } from "./identity.js"
-import { type NotionFile, WORKSPACE_ROOT } from "./sync/source.js"
+import { type NotionFile, type UserAccess, WORKSPACE_ROOT } from "./sync/source.js"
 
 // What the shared documents commands keep for one profile, beside the shared store: the chosen folders, the sync's
 // checkpoint, its walk and one snapshot per page, each a private file under the profile's state folder.
@@ -117,6 +117,20 @@ export const syncState = (env: NodeJS.ProcessEnv, profile: string, principal: st
     removeWalk: () => rmSync(join(dir, "walk.json"), { force: true }),
     saveSnapshot: (content) => writeJson(snapshot(content.metadata.id), content),
     removeSnapshot: (id) => rmSync(snapshot(id), { force: true }),
+  }
+}
+
+const usersFile = (env: NodeJS.ProcessEnv, profile: string) => join(profileDir(env, profile), "sync", "users.json")
+
+/** What the last sync could read of Notion users, for `doctor`. */
+export const saveUserAccess = (env: NodeJS.ProcessEnv, profile: string, access: UserAccess) =>
+  writeJson(usersFile(env, profile), { access, checked_at: new Date().toISOString() })
+
+export const userAccessOf = (env: NodeJS.ProcessEnv, profile: string): UserAccess | undefined => {
+  try {
+    return readJson<{ access?: UserAccess }>(usersFile(env, profile))?.access
+  } catch {
+    return undefined
   }
 }
 

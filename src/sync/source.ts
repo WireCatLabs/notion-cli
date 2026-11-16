@@ -11,7 +11,6 @@ import type {
   NotionPage,
   NotionParent,
   NotionReads,
-  NotionUser,
 } from "../notion/reads.js"
 import { browseLevel, type NotionSource } from "./browse.js"
 import {
@@ -29,7 +28,6 @@ import {
 import {
   type Listing,
   type NotionFile,
-  type NotionIdentity,
   type NotionKind,
   type NotionSourceOptions,
   parentId,
@@ -40,6 +38,7 @@ import {
 } from "./files.js"
 import { frontMatter, frontMatterLines, titleOf } from "./front-matter.js"
 import { pageText } from "./markdown.js"
+import { pagePeople } from "./users.js"
 
 export {
   isNotionDocument,
@@ -51,6 +50,7 @@ export {
   type NotionSourceOptions,
   type SyncWarning,
   UNTITLED,
+  type UserAccess,
   WORKSPACE_ROOT,
 } from "./files.js"
 
@@ -101,6 +101,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
   const reads: NotionReads = {
     self: counted(notion.self),
+    retrieveUser: counted(notion.retrieveUser),
     search: counted(notion.search),
     queryDataSource: counted(notion.queryDataSource),
     retrievePage: counted(notion.retrievePage),
@@ -898,17 +899,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return { items: [...items.values()], cursor: encodeCursor(cursor) }
   }
 
-  const people = (page: NotionPage): NotionIdentity[] => {
-    const found = new Map<string, NotionIdentity>()
-    const add = (user: NotionUser | undefined, role: string) => {
-      if (user) found.set(`${role}:${user.id}`, { id: user.id, ...(user.name ? { name: user.name } : {}), role })
-    }
-    add(page.created_by, "author")
-    add(page.last_edited_by, "editor")
-    for (const [name, value] of Object.entries(page.properties))
-      if (value.type === "people") for (const user of value.people) add(user, `property:${name}`)
-    return [...found.values()]
-  }
+  const people = pagePeople(reads, warn, options.userAccess)
 
   const content = async (id: string, maxChars?: number): Promise<SourceContent<NotionFile>> => {
     containers = new Map()
@@ -925,21 +916,21 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         })
     })
     const fields = frontMatter(page.properties)
-    const metadata: NotionFile = {
-      ...file,
-      providerMetadata: {
-        ...file.providerMetadata,
-        frontMatter: fields,
-        people: people(page),
-        ...(body.missing ? { missingBlocks: body.missing } : {}),
-      },
-    }
     const searchable = [file.name, ...frontMatterLines(fields), body.markdown].filter(Boolean).join("\n\n")
     if (maxChars !== undefined && searchable.length > maxChars)
       throw new CliError("validation_error", "the page is longer than the text limit", {
         reason: "source.text-limit",
         text_limit: maxChars,
       })
+    const metadata: NotionFile = {
+      ...file,
+      providerMetadata: {
+        ...file.providerMetadata,
+        frontMatter: fields,
+        people: await people(page),
+        ...(body.missing ? { missingBlocks: body.missing } : {}),
+      },
+    }
     return { metadata, markdown: body.markdown, text: withoutSignedLinks(searchable).text, tabs: [] }
   }
 

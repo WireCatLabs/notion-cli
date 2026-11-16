@@ -30,6 +30,10 @@ The command asks for the token without showing it, or reads it from stdin. It ta
   which acts with your own rights;
 - an internal connection's token, which sees only the pages shared with that connection.
 
+For a connection, turn on "Read user information including email addresses" in its
+[capabilities](https://developers.notion.com/reference/capabilities). Without it, sync keeps a page's author and editor
+by Notion id only and cannot match them to the people you know by email.
+
 Notion checks the token first. Then it goes into the OS keyring. Where no keyring works, add
 `--credential-storage file` to keep it in a private file. `notion personal session end` forgets the token on this computer. The token itself
 stays valid in Notion.
