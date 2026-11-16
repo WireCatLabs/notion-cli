@@ -1,4 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
+import { type Deadline, runBudget } from "@wirecat/cli-core/background"
 import {
   type SourceContent,
   type SourceIndex,
@@ -40,6 +41,8 @@ interface Settings {
   /** How far this computer's clock is ahead of Notion's. */
   skew?: number
   max?: number
+  /** A run's deadline on a clock of the test's own, which the budget reads. */
+  deadline?: () => { deadline: Deadline; now: () => number }
 }
 
 const harness = (notion: FakeNotion, settings: Settings = {}) => {
@@ -99,7 +102,9 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
   const run = { source: sourceOf() }
   const sync = (rescan = false) => {
     run.source = sourceOf()
+    const timed = settings.deadline?.()
     return syncDocuments<NotionFile>({
+      ...(timed ? { budget: runBudget({ deadline: timed.deadline, now: timed.now }), deadline: timed.deadline } : {}),
       source: run.source,
       index,
       state: port,
@@ -130,6 +135,7 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
     warnings,
     reads,
     state: () => state,
+    walk: () => walk,
   }
 }
 
@@ -779,6 +785,134 @@ describe("changes()", () => {
     expect(run.warnings).toContainEqual(expect.objectContaining({ message: expect.stringMatching(/most recently/) }))
     expect(notion.calls.queryDataSource).toBeGreaterThanOrEqual(250)
   }, 20_000)
+
+  it("lists a database and a page a page at a time, as children() lists them whole", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "Rows", parent: top, sources: ["ds", "ds2"] })
+    for (let r = 0; r < 250; r++)
+      notion.addPage({ id: `r${r}`, title: `R${r}`, parent: row("db", "ds"), created: notion.now + r * 1000 })
+    notion.addPage({ id: "other", title: "Other", parent: row("db", "ds2") })
+    notion.addPage({ id: "hub", title: "Hub", parent: top })
+    for (let c = 0; c < 150; c++) notion.addPage({ id: `c${c}`, title: `C${c}`, parent: under("hub") })
+    const source = notionSource(notion, { now: () => notion.now })
+    for (const folder of ["db", "hub"]) {
+      const ids: string[] = []
+      let cursor: string | undefined
+      let calls = 0
+      do {
+        const page = await source.childrenPage?.(folder, cursor)
+        ids.push(...(page?.files ?? []).map((file) => file.id))
+        cursor = page?.cursor
+        calls++
+      } while (cursor)
+      expect(calls).toBeGreaterThan(1)
+      expect(new Set(ids)).toEqual(new Set((await source.children(folder)).map((file) => file.id)))
+    }
+  })
+
+  it("lists a folder again from its start when Notion no longer takes the saved position (400), once a run", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: "hub", title: "Hub", parent: top })
+    for (let c = 0; c < 150; c++) notion.addPage({ id: `c${c}`, title: `C${c}`, parent: under("hub") })
+    const source = notionSource(notion, { now: () => notion.now })
+    const refused = () => new CliError("validation_error", "start_cursor is not valid", { status: 400 })
+    notion.failNext("blockChildren", refused())
+    // On the first page there is no saved position: the 400 is the answer, and nothing counts as gone.
+    await expect(source.childrenPage?.("hub")).rejects.toMatchObject({ code: "validation_error" })
+    const first = await source.childrenPage?.("hub")
+    notion.failNext("blockChildren", refused())
+    await expect(source.childrenPage?.("hub", first?.cursor)).rejects.toMatchObject({
+      code: "not_found",
+      details: { reason: "notion.listing-stale" },
+    })
+    // The same folder going stale again in this run is a real refusal: listing it over and over would never end.
+    notion.failNext("blockChildren", refused())
+    await expect(source.childrenPage?.("hub", first?.cursor)).rejects.toMatchObject({ code: "validation_error" })
+    await expect(source.childrenPage?.("hub", "not-a-position")).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("fails on a block inside a page whose children Notion refuses (400) every time, instead of listing it forever", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: "p", title: "P", parent: top, markdown: "p" })
+    notion.blocks.set("col", under("p"))
+    notion.addPage({ id: "q", title: "Q", parent: { type: "block_id", block_id: "col" }, markdown: "q" })
+    const original = notion.blockChildren.bind(notion)
+    notion.blockChildren = async (id: string, start?: string) => {
+      if (id === "col")
+        throw new CliError("validation_error", "Block type meeting_notes is not supported", { status: 400 })
+      return original(id, start)
+    }
+    const run = harness(notion, { deadline: () => ({ deadline: { endsAt: 45_000, ms: 45_000 }, now: () => 0 }) })
+    let failure: unknown
+    for (let runs = 0; runs < 50 && !failure; runs++)
+      try {
+        if ((await run.sync()).complete) break
+      } catch (error) {
+        failure = error
+      }
+    expect(failure).toMatchObject({ code: "validation_error" })
+  })
+
+  it("keeps the rows of a data source Notion refuses (403) on a rescan", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "DB", parent: top, sources: ["s1", "s2"] })
+    for (const ds of ["s1", "s2"])
+      for (let r = 0; r < 5; r++) notion.addPage({ id: `${ds}-${r}`, title: `${ds}-${r}`, parent: row("db", ds) })
+    const run = harness(notion)
+    await run.sync()
+    expect([...run.saved.keys()].filter((key) => key.startsWith("s2"))).toHaveLength(5)
+    const original = notion.queryDataSource.bind(notion)
+    notion.queryDataSource = async (source: string, body: Parameters<FakeNotion["queryDataSource"]>[1]) => {
+      if (source === "s2") throw new CliError("permission_error", "may not query", { status: 403 })
+      return original(source, body)
+    }
+    notion.advance(HOUR)
+    for (let runs = 0; runs < 10 && !(await run.sync(runs === 0)).complete; runs++);
+    expect([...run.saved.keys()].filter((key) => key.startsWith("s2"))).toHaveLength(5)
+    expect(run.warnings).toContainEqual(expect.objectContaining({ id: "s2", reason: "notion.left-out" }))
+  })
+
+  it("first syncs a 15,000-row database within MCP's 45 s runs, a page of rows per step, with a walk that stays small", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "Big", parent: top, sources: ["ds"] })
+    for (let r = 0; r < 15_000; r++)
+      notion.addPage({
+        id: `r${r}`,
+        title: `R${r}`,
+        parent: row("db", "ds"),
+        created: notion.now - 300 * HOUR + r * 1000,
+      })
+    // About 3 requests a second, Notion's pace; cli-core ends a run at its deadline.
+    let clock = 0
+    const timed = new Proxy(notion, {
+      get: (target, name, receiver) => {
+        const value = Reflect.get(target, name, receiver)
+        if (typeof value !== "function" || name === "serverTime") return value
+        return (...args: unknown[]) => {
+          clock += 350
+          if (clock > 45_000) throw new CliError("timeout", "the command did not finish within 45000ms")
+          return value.apply(target, args)
+        }
+      },
+    })
+    const run = harness(timed, {
+      max: 50,
+      deadline: () => {
+        clock = 0
+        return { deadline: { endsAt: 45_000, ms: 45_000 }, now: () => clock }
+      },
+    })
+    let runs = 0
+    let deepest = 0
+    do {
+      runs++
+      await run.sync()
+      deepest = Math.max(deepest, run.walk()?.stack.length ?? 0)
+    } while (run.walk() && runs < 30)
+    expect(run.walk()).toBeUndefined()
+    expect(runs).toBeGreaterThan(1)
+    expect(deepest).toBeLessThanOrEqual(2)
+  }, 30_000)
 
   it("stops with an error naming the database when more than 10,000 rows share one minute", async () => {
     const notion = new FakeNotion()

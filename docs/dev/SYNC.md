@@ -122,12 +122,16 @@ the rest was synced, and the next sync is likely to leave the same item out. cli
   sync that stops answers `complete: false`,
   `stopped` and `walk`, exits 0, and names `sync` as its next step. `--rescan` starts the walk over, so it is run once
   and continued with plain `sync` runs.
-- **A big database on a first sync over MCP.** The engine lists a folder in one step: `children()` of a database
-  reads all its rows, 100 a request, at the query pace of about 3 requests a second. That fits a terminal's
-  15 minutes, but not MCP's 45 seconds once the database holds more than about 10,000 to 12,000 rows. Such a
-  first sync stops at that step every run and does not move. Run the first sync of such a database in a terminal,
-  or with a longer `--timeout`. Later syncs read rows a page per step and are not bound this way. A fix needs
-  cli-core's engine to take a listing in parts.
+- **A folder is listed a page at a time** (cli-core's `childrenPage`). A database gives a page of rows a step, read
+  from the last row's minute on; a page gives a page of its blocks a step. The engine keeps the position in its walk
+  file (`listing` in a stack entry), so a first sync of a database of any size moves on in every run, also over MCP's
+  45 seconds. Known children a page did not show are read directly before any counts as gone: for rows, those
+  created within the span the page covered; for a page, those missing once its last block is listed. Notion answers
+  400 `validation_error` to a `start_cursor` it no longer takes. When the request sent with the saved
+  `start_cursor` gets it, the answer becomes `not_found` (`notion.listing-stale`), and the engine lists the folder
+  again from its first page and drops nothing. Any other 400 is an ordinary error, such as a block inside the page
+  whose children Notion cannot list. A folder that goes stale a second time in one run fails with the 400 too, so it
+  cannot be listed again forever. The workspace itself is still one listing: search has no order to resume by.
 - **A pass stops before the run's deadline.** Each step of the pass costs one request: one page of a search, one
   database, one page of rows, one page of a page's blocks, or one direct read. A step that needs a page's container
   may read it too, and keeps what it read. Before each request the source checks that the slowest request so far,
@@ -149,8 +153,9 @@ the rest was synced, and the next sync is likely to leave the same item out. cli
   skipped with a `notion.left-out` warning, and the rest of the page is read. The pages the sync holds under a
   skipped block are read one by one instead. A block Notion answers 403 for while the page's Markdown is read is
   skipped the same way, with a warning, and the page keeps the rest of its text. A data source of a database that
-  Notion will not query (404 or 403) is left out with a warning; the database's other data sources still sync, and
-  the rows already held are read one by one before any counts as gone.
+  Notion will not query (404 or 403) is left out with a warning; the database's other data sources still sync. In
+  the daily walk the rows already held are read one by one before any counts as gone; in the engine's walk (a first
+  sync or `--rescan`) they are kept as they are.
 - **Only a 404 or the trash removes.** A 403 on a page or a database the sync holds keeps it and its rows as they
   were, with a `notion.kept-unconfirmed` warning: a 403 says nothing about whether the item is still there.
 - **A failure partway** (a 429 after the client's retries, Notion down) ends the pass early. The work done is

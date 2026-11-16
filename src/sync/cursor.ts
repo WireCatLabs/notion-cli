@@ -86,3 +86,45 @@ export const decodeCursor = (token: string): SyncCursor => {
     })
   return result.output
 }
+
+const LIST_PREFIX = "notion-list1."
+
+const ListPosition = v.variant("k", [
+  v.object({
+    k: v.literal("rows"),
+    /** The data sources left, the one being read first. */
+    sources: v.pipe(v.array(v.string()), v.minLength(1)),
+    after: v.optional(v.string()),
+    start: v.optional(v.string()),
+    seen: v.optional(v.array(v.string())),
+  }),
+  v.object({
+    k: v.literal("blocks"),
+    blocks: v.pipe(v.array(v.object({ id: v.string(), start: v.optional(v.string()) })), v.minLength(1)),
+    seen: v.array(v.string()),
+  }),
+])
+
+/** Where a folder's listing stopped, kept by the engine's walk between its steps. */
+export type ListPosition = v.InferOutput<typeof ListPosition>
+
+export const encodeListPosition = (position: ListPosition) =>
+  `${LIST_PREFIX}${Buffer.from(JSON.stringify(position)).toString("base64url")}`
+
+/** A position this code cannot read is one Notion would not take either: the engine lists the folder again. */
+export const decodeListPosition = (token: string): ListPosition => {
+  let parsed: unknown
+  try {
+    parsed = token.startsWith(LIST_PREFIX)
+      ? JSON.parse(Buffer.from(token.slice(LIST_PREFIX.length), "base64url").toString("utf8"))
+      : undefined
+  } catch {
+    parsed = undefined
+  }
+  const result = v.safeParse(ListPosition, parsed)
+  if (!result.success)
+    throw new CliError("not_found", "the saved listing position is not one this version reads; it is listed again", {
+      reason: "notion.listing-stale",
+    })
+  return result.output
+}
