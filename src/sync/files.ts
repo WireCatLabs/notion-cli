@@ -27,9 +27,15 @@ export type NotionKind = "workspace" | "page" | "row" | "database"
 export interface NotionIdentity {
   id: string
   name?: string
+  /** Only for an author or editor, and only when the connection may read email addresses. */
+  email?: string
+  bot?: boolean
   /** `author`, `editor`, or `property:<name>` for a people property. */
   role: string
 }
+
+/** What the connection may read of users, as the first lookup in a run found it. */
+export type UserAccess = "none" | "names" | "emails"
 
 export interface NotionMetadata {
   kind: NotionKind
@@ -86,6 +92,8 @@ export interface NotionSourceOptions {
   maxRequests?: number
   /** This computer's clock, for the walk schedule only; Notion's timestamps are never compared with it. */
   now?: () => number
+  /** Called once a run has learned what it may read of users. */
+  userAccess?: (access: UserAccess) => void
   /** An item or a step left out of this sync, and why; the sync went on without it. */
   warn?: (warning: SyncWarning) => void
   /**

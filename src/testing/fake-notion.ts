@@ -210,6 +210,13 @@ const workspaceRoutes = (workspace: FakeWorkspace): Route[] => [
       })),
   },
   {
+    // https://developers.notion.com/reference/get-user
+    method: "GET",
+    path: new RegExp(`^/v1/users/(${UUID})$`, "u"),
+    query: [],
+    answer: (id) => fromWorkspace(() => workspace.retrieveUser(id)),
+  },
+  {
     method: "GET",
     path: new RegExp(`^/v1/blocks/(${UUID})$`, "u"),
     query: [],
@@ -260,6 +267,23 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
             ...(options.noWorkspaceId ? {} : { workspace_id: WORKSPACE_ID }),
             workspace_limits: { max_file_upload_size_in_bytes: 5242880 },
           },
+        },
+      }),
+    },
+    {
+      // https://developers.notion.com/reference/get-user; a workspace above answers from its own users.
+      method: "GET",
+      path: new RegExp(`^/v1/users/(${UUID})$`, "u"),
+      query: [],
+      answer: (id) => ({
+        status: 200,
+        body: {
+          object: "user",
+          id,
+          type: "person",
+          name: "Test Person",
+          avatar_url: null,
+          person: { email: "test.person@example.invalid" },
         },
       }),
     },

@@ -8,7 +8,8 @@
 # child page from its child_page block, and the check compares that block with the page (docs/dev/SYNC.md).
 # It writes only under that page: it creates one page `wirecat-live-<time>` there with a page under it, changes,
 # trashes and restores it, comments on it, replies, uploads a small text file to it, and leaves it in Notion's trash.
-# No other page is changed (docs/dev/DESIGN.md, Writes). The token needs the read and insert comments capabilities.
+# No other page is changed (docs/dev/DESIGN.md, Writes). The token needs the read and insert comments capabilities, and
+# user information including email addresses.
 set -euo pipefail
 page=${1:?give a page id or link the token can read: scripts/live.sh <page> < token-file}
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
@@ -81,6 +82,14 @@ node -e '
   if (typeof block.has_children !== "boolean") warn("has no has_children")
   else if (block.has_children !== holds)
     warn(`says has_children ${block.has_children}, the page holds ${holds ? "blocks" : "none"}`)' "$work" "$child"
+"${cli[@]}" live api get-self --json >"$work/self.json"
+bot=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).item.id)' \
+  "$work/self.json")
+"${cli[@]}" live api get-user --user-id "$bot" --json >"$work/user.json"
+node -e '
+  const read = (name) => JSON.parse(require("fs").readFileSync(`${process.argv[1]}/${name}.json`, "utf8")).item
+  if (typeof read("user").name !== "string" || read("user").name !== read("self").name)
+    throw new Error("users/{id} gave no name for the bot: the token needs user information capabilities")' "$work"
 first=$(node -e 'const l = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(l.items[0]?.id ?? "")' "$work/list.json")
 if [ -n "$first" ]; then "${cli[@]}" live databases show "$first" --json >/dev/null; fi
 "${cli[@]}" live doctor --json >/dev/null
@@ -137,6 +146,6 @@ printf 'Uploaded by the WireCat live check, %s\n' "$stamp" >"$work/wirecat-live-
 made=""
 
 "${cli[@]}" live session end --json >/dev/null
-echo "live check passed: describe format 2, sign-in, users/me, databases list and show, documents get," \
+echo "live check passed: describe format 2, sign-in, users/me, the bot's name from users/{id}, databases list and show, documents get," \
   "a child_page block against its page, doctor, a page created, read, updated, refused, commented on, replied to," \
   "given a file, trashed and restored under the test page and left in the trash, sign-out"

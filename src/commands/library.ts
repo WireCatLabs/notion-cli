@@ -36,6 +36,7 @@ import {
   readSnapshot,
   rootsOf,
   saveFolders,
+  saveUserAccess,
   syncState,
   TEXT_LIMIT,
   walkUnderWay,
@@ -209,6 +210,7 @@ export const libraryCommands = (): Command[] => {
   const sourceFor = (reads: Parameters<typeof notionSource>[0], held = false, deadline?: Deadline) =>
     notionSource(reads, {
       roots: rootsOf(env(), profile()),
+      userAccess: (access) => saveUserAccess(env(), profile(), access),
       ...(held ? { known: () => knownOf(syncState(env(), profile(), "").read()) } : {}),
       warn: (warning) => warnings.push(warning),
       ...(deadline ? { deadline } : {}),

@@ -8,6 +8,7 @@ import { documentCommandsContract } from "@wirecat/cli-core/documents/testing"
 import { describe, expect, it } from "vitest"
 import { NOTION_WORDS } from "./commands/library.js"
 import { IDENTITY } from "./identity.js"
+import { openStore } from "./library.js"
 import type { NotionParent } from "./notion/reads.js"
 import { createProgram } from "./program.js"
 import { passUnderWay } from "./sync/source.js"
@@ -640,6 +641,109 @@ describe("the knowledge layer and the catalog over the local copy", () => {
     })
     expect((await run(["identities", "link", ROADMAP, id(90), "person:nobody"])).json()).toMatchObject({
       error: { reason: "identity.no-person" },
+    })
+  })
+
+  describe("page authors and editors as people", () => {
+    const AUTHOR = id(90)
+    const EDITOR = id(92)
+    const authored = (access: "none" | "names" | "emails" = "emails") => {
+      const notion = workspace()
+      notion.edit(ROADMAP, { editedBy: EDITOR })
+      notion.addUser({ id: AUTHOR, name: "Ada Fake", email: "ada@example.invalid" })
+      notion.addUser({ id: EDITOR, name: "Bob Fake", email: "bob@example.invalid" })
+      notion.userAccess = access
+      return cli(notion)
+    }
+    const withPeople = async <T>(env: NodeJS.ProcessEnv, fn: (store: Awaited<ReturnType<typeof openStore>>) => T) => {
+      const store = await openStore(env, true)
+      try {
+        return await fn(store)
+      } finally {
+        await store.close()
+      }
+    }
+    const personWithEmail = (env: NodeJS.ProcessEnv, email: string) =>
+      withPeople(env, async (store) => {
+        const key = { provider: "fake-mail", account: "fake-account" }
+        await store.accounts.saveAccount(key, { name: "Fake mail" })
+        await store.people.savePeople(key, [{ id: `mail-${email}`, name: "Mail Fake", email }])
+        return (await store.people.personOf({ provider: key.provider, id: `mail-${email}` }))?.uid as string
+      })
+    const pagesOf = (env: NodeJS.ProcessEnv, uid: string) =>
+      withPeople(env, async (store) =>
+        (await store.notes.links({ to: `person:${uid}` })).map((link) => ({
+          role: link.role,
+          provenance: link.provenance,
+          from: link.from,
+        })),
+      )
+
+    it("identities list names the author and editor Notion gives, each asked once a run", async () => {
+      const { run, http } = authored()
+      await run(["sync"])
+      const listed = (await run(["identities", "list", ROADMAP])).json() as {
+        item: { items: Record<string, unknown>[] }
+      }
+      expect(listed.item.items).toEqual([
+        expect.objectContaining({ remote_id: AUTHOR, role: "owner", name: "Ada Fake", person: expect.any(Object) }),
+        expect.objectContaining({
+          remote_id: EDITOR,
+          role: "last-editor",
+          name: "Bob Fake",
+          person: expect.any(Object),
+        }),
+      ])
+      expect(http.calls.filter((call) => call.path === `/v1/users/${AUTHOR}`)).toHaveLength(1)
+    })
+
+    it("links the page to the person who has the author's email address", async () => {
+      const { run, env } = authored()
+      const uid = await personWithEmail(env, "ada@example.invalid")
+      await run(["sync"])
+      const ref = (
+        (await run(["identities", "list", ROADMAP])).json() as { item: { items: { person: { ref: string } }[] } }
+      ).item.items[0]?.person.ref
+      expect(ref).toBe(`person:${uid}`)
+      expect(await pagesOf(env, uid)).toEqual([
+        expect.objectContaining({ role: "owner", provenance: "notion:pages.retrieve" }),
+      ])
+      const related = await withPeople(env, (store) =>
+        store.knowledge.listRelations({ about: `person:${uid}`, limit: 10 }),
+      )
+      expect(JSON.stringify(related)).toContain("notion:pages.retrieve")
+    })
+
+    it("identities link joins an editor to a person and moves the page's link to them", async () => {
+      const { run, env } = authored("names")
+      const uid = await personWithEmail(env, "someone@example.invalid")
+      const synced = (await run(["sync"])).json() as { meta: { issues?: { reason: string }[] } }
+      expect(synced.meta.issues).toContainEqual(expect.objectContaining({ reason: "notion.no-user-email" }))
+      expect(await pagesOf(env, uid)).toEqual([])
+      const linked = await run(["identities", "link", ROADMAP, EDITOR, `person:${uid}`])
+      expect(linked.code, linked.out).toBe(0)
+      expect(await pagesOf(env, uid)).toEqual([expect.objectContaining({ role: "last-editor" })])
+    })
+
+    it("keeps authors by id when the connection reads no user information, and doctor says so", async () => {
+      const { run, http, env } = authored("none")
+      const synced = (await run(["sync"])).json() as { meta: { issues?: { reason: string }[] } }
+      expect(synced.meta.issues).toContainEqual(expect.objectContaining({ reason: "notion.no-user-information" }))
+      expect(
+        http.calls.filter((call) => call.path.startsWith("/v1/users/") && call.path !== "/v1/users/me"),
+      ).toHaveLength(1)
+      const listed = (await run(["identities", "list", ROADMAP])).json() as {
+        item: { items: Record<string, unknown>[] }
+      }
+      expect(listed.item.items).toEqual([
+        expect.objectContaining({ remote_id: AUTHOR, person: null }),
+        expect.objectContaining({ remote_id: EDITOR, person: null }),
+      ])
+      const uid = await personWithEmail(env, "someone@example.invalid")
+      expect((await run(["identities", "link", ROADMAP, AUTHOR, `person:${uid}`])).code).toBe(0)
+      expect(await pagesOf(env, uid)).toEqual([expect.objectContaining({ role: "owner" })])
+      const doctor = await runCli(["doctor", "--json"], { notion: http, keyring: signedIn(), env })
+      expect(doctor.json()).toMatchObject({ item: { user_information: { personal: "none" } } })
     })
   })
 

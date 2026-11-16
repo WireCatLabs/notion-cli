@@ -1,11 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import { documentIngestion, documentKnowledge } from "@wirecat/cli-core/documents"
 import { type DocumentKnowledgePort, factItem, memoryItem } from "@wirecat/cli-core/documents/cli"
-import type { MessageStore } from "@wirecat/cli-core/store"
+import type { LinkInput, MessageStore } from "@wirecat/cli-core/store"
 import { PROVIDER } from "./library.js"
 import type { NotionFile, NotionIdentity } from "./sync/source.js"
 
 const external = (id: string) => `${id}.md`
+const PROVENANCE = "notion:pages.retrieve"
 
 export const ingestionOf = (store: MessageStore) =>
   documentIngestion<NotionFile>(store, {
@@ -23,6 +24,16 @@ export const ingestionOf = (store: MessageStore) =>
       ...(file.modifiedAt ? { modifiedAt: file.modifiedAt } : {}),
       metadata: { notion_kind: file.providerMetadata.kind },
     }),
+    // A catalog entry comes from the sync's listing, which names no authors; only a page's read does.
+    observed: async (principal, file, documentId) => {
+      if (file.providerMetadata.people)
+        await saveContributors(
+          store,
+          principal,
+          { pageId: file.id, people: file.providerMetadata.people, modifiedAt: file.modifiedAt ?? null },
+          documentId,
+        )
+    },
     frontMatter: ({ metadata }) => ({
       source: PROVIDER.name,
       sourceUrl: metadata.url,
@@ -41,8 +52,77 @@ const ROLES: Record<string, "owner" | "last-editor"> = { author: "owner", editor
 const contributors = (frontMatter: unknown) =>
   ((frontMatter as { people?: NotionIdentity[] } | null)?.people ?? []).flatMap((person) => {
     const role = ROLES[person.role]
-    return role ? [{ ...person, role }] : []
+    // A page this tool wrote names the connection's own bot as its editor; a bot is no one to know.
+    return role && !person.bot ? [{ ...person, role }] : []
   })
+
+interface PageAuthors {
+  pageId: string
+  people?: NotionIdentity[]
+  modifiedAt?: string | null
+}
+
+/**
+ * Saves a page's creator and last editor as Notion identities, merged by exact email with the person who has it, and
+ * links the page to their people. Without `register` it only points the links at whoever the identities belong to now;
+ * `"all"` saves an identity known by its id alone too, for the owner to link by hand.
+ */
+const saveContributors = async (
+  store: MessageStore,
+  principal: string,
+  page: PageAuthors,
+  documentId: string,
+  register: boolean | "all" = true,
+) => {
+  const found = contributors(page)
+  const key = { provider: PROVIDER.name, account: principal }
+  // A Notion id alone would make a person with no name or address in every tool's store.
+  const known = register === "all" ? found : register ? found.filter((person) => person.name || person.email) : []
+  if (known.length) {
+    await store.accounts.saveAccount(key, { name: "Notion" })
+    const unique = new Map(known.map((person) => [person.id, person]))
+    await store.people.savePeople(
+      key,
+      [...unique.values()].map((person) => ({
+        id: person.id,
+        name: person.name ?? null,
+        ...(person.email ? { email: person.email } : {}),
+        ...(person.bot ? { isBot: true } : {}),
+      })),
+    )
+  }
+  const links: Omit<LinkInput, "from" | "origin">[] = []
+  for (const person of found) {
+    const linked = await store.people.personOf({ provider: PROVIDER.name, id: person.id })
+    if (linked)
+      links.push({
+        kind: "related-to",
+        to: `person:${linked.uid}`,
+        role: person.role,
+        evidence: JSON.stringify({ pageId: page.pageId, modifiedAt: page.modifiedAt ?? null, user: person.id }),
+        provenance: PROVENANCE,
+        confirmed: false,
+      })
+  }
+  await store.notes.replaceFileLinks(documentId, links)
+}
+
+/** Every synced Notion page that names this user: a decision about their identity moves the page's links too. */
+const refreshLinks = async (store: MessageStore, remoteId: string) => {
+  const PAGE = 500
+  for (const folder of await store.notes.documentsAccounts()) {
+    if (folder.account?.provider !== PROVIDER.name) continue
+    for (let offset = 0; ; offset += PAGE) {
+      const page = await store.notes.notes({ folderId: folder.id, source: "file", limit: PAGE, offset })
+      for (const note of page.items) {
+        const data = note.frontMatter as (PageAuthors & { source?: string }) | null
+        if (data?.source !== PROVIDER.name || !contributors(data).some((person) => person.id === remoteId)) continue
+        await saveContributors(store, folder.account.account, data, note.id, false)
+      }
+      if (!page.hasMore) break
+    }
+  }
+}
 
 export const knowledgeOf = (store: MessageStore, principal: string): DocumentKnowledgePort => {
   const ingestion = ingestionOf(store)
@@ -95,11 +175,15 @@ export const knowledgeOf = (store: MessageStore, principal: string): DocumentKno
       const known = person?.identities[0]
       if (!known)
         throw new CliError("not_found", "the target person has no known identity", { reason: "identity.no-person" })
-      return store.people.linkIdentities(
+      // A copy synced before authors were saved has the user in its front matter only.
+      await saveContributors(store, account, note.frontMatter as PageAuthors, note.id, "all")
+      const linked = await store.people.linkIdentities(
         known,
         { provider: PROVIDER.name, id: remoteId },
         { method: "manual", by: PROVIDER.name },
       )
+      await refreshLinks(store, remoteId)
+      return linked
     },
   }
   return port

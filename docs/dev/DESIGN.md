@@ -128,7 +128,13 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
    - The page text is Notion's own Markdown export
      ([retrieve a page as Markdown](https://developers.notion.com/reference/retrieve-page-markdown), version 2). A
      row's properties go into its front matter, so they are searchable as words from step 3, and as fields from
-     step 4. Authors and editors are recorded as identities.
+     step 4. A page's creator and last editor become Notion identities in the shared store, with the roles `owner`
+     and `last-editor`, and the page is linked to their people. Their names and email addresses come from
+     [retrieve a user](https://developers.notion.com/reference/get-user), asked once per user and run. An email
+     address joins the identity to the person who has it, as drive-cli does. That needs the connection's capability
+     to read user information including email addresses; without it the sync keeps the id, and says so in its issues
+     and in `doctor`. A page read before this keeps no identities until it changes, or until `identities link` names
+     one.
    - File links that Notion signs carry a secret and expire after an hour. They are removed from the text before it
      is stored.
 2. **How it syncs.** On demand (`sync`), on a schedule (`jobs`), and kept running by `mirrors watch`. Notion has no
@@ -252,6 +258,8 @@ below and on the write round trip after them; the rest a person reads in its out
 - A renewed personal access token, or a new token of the same connection, keeps the bot id. If it does not, a
   profile refuses its own renewed token as another connection (`profile.other-account`), and the account must become
   the workspace id alone, or the bot's owner.
+- `GET /v1/users/{id}` with the bot's own id answers with its name (not yet checked live). The reference says a
+  connection without user information capabilities is refused with 403; the sync then keeps authors by id only.
 - `bot.owner.type` is `user` for a personal access token and `workspace` for an internal connection's token.
 - On a page past about 20,000 blocks, the `<unknown url="…"/>` tag names its block id, so the fetched part lands in
   place; otherwise it is added after the page.
