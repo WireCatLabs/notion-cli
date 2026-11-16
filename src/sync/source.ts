@@ -143,6 +143,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
   }
 
   // The state the engine holds does not change while the source lists, and parsing it costs as much as a request.
+  /** Folders listed again in this run after Notion stopped taking their saved position. */
+  const restarted = new Set<string>()
   let held: Map<string, NotionFile> | undefined
   let known = new Map<string, NotionFile>()
   // Containers resolved within one call; a page's parent is re-read on the next one, as it may have moved.
@@ -366,6 +368,18 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return { pages, databases, blocks, seen }
   }
 
+  /** A database a page's listing names; a linked view of one elsewhere answers 404, and is left out with a warning. */
+  const childDatabase = async (id: string) => {
+    try {
+      return await databaseFile(await reads.retrieveDatabase(id))
+    } catch (error) {
+      if (!isItemError(error)) throw error
+      const code = (error as CliError).code
+      warn({ id, code, reason: "notion.child-unreadable", message: "a child Notion would not give was left out" })
+      return undefined
+    }
+  }
+
   const searchPage = (kind: "page" | "data_source", start: string | undefined) =>
     reads.search({
       filter: { property: "object", value: kind },
@@ -488,8 +502,11 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     const listing: Listing = { files: [], gone: [], moved: [] }
     // Notion answers 400 validation_error to a start_cursor it no longer takes. On a later page that is the saved
     // position going stale: as not_found the engine lists the folder again from its first page and drops nothing.
-    const stale = (error: unknown) => {
-      if (token === undefined || !isRefused(error)) return error
+    // Only the request sent with the saved start_cursor: a 400 on any other (a block Notion cannot list) is the
+    // answer. A folder already listed again in this run that goes stale again fails, so it cannot loop.
+    const stale = (error: unknown, start: string | undefined) => {
+      if (token === undefined || start === undefined || !isRefused(error) || restarted.has(id)) return error
+      restarted.add(id)
       return new CliError("not_found", `Notion no longer takes the saved position in ${id}; it is listed again`, {
         reason: "notion.listing-stale",
       })
@@ -500,13 +517,16 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       try {
         page = await rowsPage(id, source, at, null)
       } catch (error) {
-        if (!isItemError(error)) throw stale(error)
+        if (!isItemError(error)) throw stale(error, at.start)
         warn({
           id: source,
           code: (error as CliError).code,
           reason: "notion.left-out",
           message: `a data source of database ${id} was left out: Notion would not query it`,
         })
+        // Its rows stay as the sync holds them: a refusal says nothing of them, and the walk drops what it does not list.
+        for (const file of known.values())
+          if (file.providerMetadata.kind === "row" && file.providerMetadata.parent?.id === source) files.push(file)
         const rest = at.sources.slice(1)
         return rest.length ? { files, cursor: encodeListPosition({ k: "rows", sources: rest }) } : { files }
       }
@@ -524,22 +544,13 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     try {
       page = await blocksPage(at)
     } catch (error) {
-      throw stale(error)
+      throw stale(error, at.blocks[0]?.start)
     }
     for (const block of page.pages) files.push(childPageFile(block, id))
-    for (const database of page.databases)
-      try {
-        const file = await databaseFile(await reads.retrieveDatabase(database))
-        if (!file.trashed) files.push(file)
-      } catch (error) {
-        if (!isItemError(error)) throw error
-        warn({
-          id: database,
-          code: (error as CliError).code,
-          reason: "notion.child-unreadable",
-          message: "a child Notion would not give was left out",
-        })
-      }
+    for (const database of page.databases) {
+      const file = await childDatabase(database)
+      if (file && !file.trashed) files.push(file)
+    }
     const { blocks, seen } = page
     if (blocks.length) return { files, cursor: encodeListPosition({ k: "blocks", blocks, seen }) }
     const shown = new Set(seen)
@@ -753,20 +764,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     }
 
     const child = async (task: Extract<SyncTask, { t: "child" }>) => {
-      let file: NotionFile
-      try {
-        file = await databaseFile(await reads.retrieveDatabase(task.id))
-      } catch (error) {
-        if (!isItemError(error)) throw error
-        warn({
-          id: task.id,
-          code: (error as CliError).code,
-          reason: "notion.child-unreadable",
-          message: "a child Notion would not give was left out",
-        })
-        return
-      }
-      if (file.trashed) return
+      const file = await childDatabase(task.id)
+      if (!file || file.trashed) return
       if (unheld(file)) emit(file)
       queue({ t: "walk", id: file.id, kind: "database" })
     }
