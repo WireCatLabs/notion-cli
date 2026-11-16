@@ -717,6 +717,55 @@
     },
     {
       "path": [
+        "comments",
+        "list"
+      ],
+      "summary": "list the open comments on a Notion page or block, live",
+      "effects": {
+        "remote": "read",
+        "local": "read"
+      },
+      "permission": "comments.list",
+      "entity": "notion_comment"
+    },
+    {
+      "path": [
+        "comments",
+        "create"
+      ],
+      "summary": "comment on a Notion page",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "comments.create"
+    },
+    {
+      "path": [
+        "comments",
+        "reply"
+      ],
+      "summary": "reply in a Notion discussion",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "comments.reply"
+    },
+    {
+      "path": [
+        "files",
+        "upload"
+      ],
+      "summary": "upload a file to the end of a Notion page",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "files.upload"
+    },
+    {
+      "path": [
         "api",
         "list"
       ],

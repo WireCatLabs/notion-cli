@@ -167,6 +167,33 @@ export const databaseSchema = v.strictObject({
 })
 export type Database = v.InferOutput<typeof databaseSchema>
 
+/** [Comment](https://developers.notion.com/reference/comment-object). */
+const wireComment = v.looseObject({
+  object: v.literal("comment"),
+  id: v.string(),
+  discussion_id: v.string(),
+  parent: wireParent,
+  created_time: v.string(),
+  last_edited_time: v.optional(v.string()),
+  created_by: v.looseObject({ id: v.string() }),
+  rich_text: richText,
+  display_name: v.optional(v.looseObject({ resolved_name: v.nullish(v.string()) })),
+  attachments: v.optional(v.array(v.unknown())),
+})
+
+export const commentSchema = v.strictObject({
+  id: v.string(),
+  discussion_id: v.string(),
+  parent: v.nullable(v.strictObject({ type: v.string(), id: v.nullable(v.string()) })),
+  author_id: v.string(),
+  author_name: v.nullable(v.string()),
+  text: v.string(),
+  attachments: v.number(),
+  created_time: v.string(),
+  last_edited_time: v.nullable(v.string()),
+})
+export type Comment = v.InferOutput<typeof commentSchema>
+
 /** At most this many unknown blocks are fetched again; Notion lists at most 100. */
 const MORE_BLOCKS = 100
 /** A database's data sources read for `databases show`; Notion lists at most 100. */
@@ -271,6 +298,31 @@ export const liveReads = (client: Client) => {
           data_source_id: source.id,
           title: textOf(source.title),
           last_edited_time: source.last_edited_time ?? null,
+        }
+      })
+      return { items, hasMore: page.has_more, cursor: page.has_more ? (page.next_cursor ?? undefined) : undefined }
+    },
+
+    /** One page of a page's or block's comments; Notion's API lists only the unresolved ones. */
+    comments: async ({ block, limit, cursor }: { block: string; limit: number; cursor?: string | undefined }) => {
+      const page = parsed(
+        wireSearch,
+        await mapped(() =>
+          client.comments.list({ block_id: block, page_size: limit, ...(cursor ? { start_cursor: cursor } : {}) }),
+        ),
+      )
+      const items = page.results.map((result): Comment => {
+        const comment = parsed(wireComment, result)
+        return {
+          id: comment.id,
+          discussion_id: comment.discussion_id,
+          parent: parentOf(comment.parent),
+          author_id: comment.created_by.id,
+          author_name: comment.display_name?.resolved_name ?? null,
+          text: textOf(comment.rich_text),
+          attachments: comment.attachments?.length ?? 0,
+          created_time: comment.created_time,
+          last_edited_time: comment.last_edited_time ?? null,
         }
       })
       return { items, hasMore: page.has_more, cursor: page.has_more ? (page.next_cursor ?? undefined) : undefined }

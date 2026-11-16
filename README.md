@@ -24,6 +24,9 @@ their properties, and later keeps a folder of Markdown files in step with a Noti
   <page> --file page.md` replaces a page's text, `documents delete <page>` moves it to Notion's trash after asking, and
   `documents restore <page>` brings it back. An update that would delete a child page or database needs
   `--allow-deleting-content`; `--dry-run` shows what a write would do and sends nothing.
+- `notion personal comments list <page>` shows a page's open comments (Notion's API gives no resolved ones), `comments
+  create <page> --text …` starts a discussion and `comments reply <discussion> --text …` answers in one.
+  `files upload <file> --parent <page>` adds a file to the end of a page.
 - `notion personal databases list` lists the databases the token sees; `databases show <id or link>` gives each data
   source's id and its properties.
 - `notion doctor`, `notion personal mcp serve` and the other commands every WireCat CLI shares.

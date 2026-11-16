@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**180 ✅ · 206 ⛔ · 0 ❌** — 145 commands, 241 options.
+**191 ✅ · 206 ⛔ · 0 ❌** — 149 commands, 248 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -118,6 +118,17 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `databases list` | `--limit` | ✅ |  |
 | `databases list` | `--cursor` | ✅ |  |
 | `databases show` |  | ✅ |  |
+| `comments list` |  | ✅ |  |
+| `comments list` | `--limit` | ✅ |  |
+| `comments list` | `--cursor` | ✅ |  |
+| `comments create` |  | ✅ |  |
+| `comments create` | `--text` | ✅ |  |
+| `comments create` | `--file` | ✅ |  |
+| `comments reply` |  | ✅ |  |
+| `comments reply` | `--text` | ✅ |  |
+| `comments reply` | `--file` | ✅ |  |
+| `files upload` |  | ✅ |  |
+| `files upload` | `--parent` | ✅ |  |
 | `api list` |  | ✅ |  |
 | `api show` |  | ✅ |  |
 | `api get-self` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
