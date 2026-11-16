@@ -2,6 +2,35 @@
 
 Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
 
+## 0.3.0 — 16.11.2026
+
+### Added
+
+- `documents create`, `documents update`, `documents delete` and `documents restore` write Notion pages. `create`
+  makes a page under another page from Markdown, `update` replaces a page's text, `delete` moves a page to Notion's
+  trash and asks first, and `restore` brings it back. An update that would delete a child page or database is refused
+  unless `--allow-deleting-content` is given, and then it asks as a delete does. Every write goes through the
+  profile's permissions and the write journal, answers with an `operation_id`, and is previewed with `--dry-run`.
+  A raw `api` call that deletes, trashes, erases or archives content, or removes a database property, now asks as
+  `documents delete` does, so `documents.delete` set to `deny` stops it too, also for an `agent-batch` call with a
+  delete in it. `--file` reads only a regular file, never a link, one under `/proc`, `/sys` or `/dev`, nor a
+  credential file. See
+  [Writes](docs/dev/DESIGN.md#writes).
+
+### Fixed
+
+- The [install page](docs/installation.md#sign-in) shows how to sign in with `session start`.
+- `bin/notion-live` reads the token from the keyring service that `NOTION_LIVE_KEYRING_SERVICE` names. When it is
+  unset, the service stays `notion-live`.
+- A plain `sync` removes the rows of a data source that was taken out of its database. Before, they stayed in the
+  local copy until `sync --rescan`. When Notion will not show the database (403), the rows stay.
+
+### Security
+
+- cli-core 0.680.0 and cli-base 0.106.0. cli-core now refuses files under `/proc`, `/sys` and `/dev` itself, so
+  `--file` uses its check instead of notion's own. `--file` still opens the file once, never through a link, and
+  checks the file it opened.
+
 ## 0.2.0 — 16.11.2026
 
 ### Added
