@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
@@ -397,6 +397,36 @@ describe("sync over the shared store", () => {
     expect(left[2]).toBeLessThan(left[1] as number)
     expect(notion.calls.retrievePage).toBeLessThan(60)
   }, 150_000)
+
+  it("walks a big database a page of rows per step over several runs, its walk file keeping where it stopped", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: id(10), title: "Big", parent: top, sources: [id(11)] })
+    for (let r = 0; r < 2_500; r++)
+      notion.addPage({
+        id: id(1000 + r),
+        title: `Row ${r}`,
+        parent: { type: "data_source_id", data_source_id: id(11), database_id: id(10) },
+        created: notion.now - 100 * 60 * 60_000 + r * 1000,
+      })
+    const { run, env } = cli(notion)
+    const file = join(env.WCNOTION_STATE_DIR, "profiles", "personal", "sync", "walk.json")
+    const stack = () =>
+      existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as { stack: { listing?: string }[] }).stack : undefined
+    let runs = 0
+    let deepest = 0
+    let resumed = false
+    do {
+      runs++
+      const ran = await run(["sync", "--timeout", "10s", "--limit", "10"])
+      expect(ran.code, ran.out).toBe(0)
+      deepest = Math.max(deepest, stack()?.length ?? 0)
+      resumed ||= stack()?.some((entry) => entry.listing !== undefined) ?? false
+    } while (stack() && runs < 40)
+    expect(stack()).toBeUndefined()
+    expect(runs).toBeGreaterThan(1)
+    expect(resumed).toBe(true)
+    expect(deepest).toBeLessThanOrEqual(2)
+  }, 60_000)
 
   it("stops a long Notion pass before the deadline, says to sync again, and the next syncs finish it", async () => {
     const notion = new FakeNotion()
