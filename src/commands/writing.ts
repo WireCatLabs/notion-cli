@@ -1,4 +1,4 @@
-import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from "node:fs"
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
 import { bufferedInput, commandPath, MAX_BUFFERED_INPUT, terminalAsker } from "@wirecat/cli-core/cli"
 import { guardedWrite, guardFor, keyedGuard, levelFor, newOperationId, refusedPlace } from "@wirecat/cli-core/sends"
@@ -58,6 +58,14 @@ const realOf = (path: string) => {
   }
 }
 
+const isLink = (file: string) => {
+  try {
+    return lstatSync(file).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
 const refusedFile = (file: string) =>
   new CliError(
     "validation_error",
@@ -75,6 +83,8 @@ const refusedFile = (file: string) =>
 export const openOwnFile = (file: string, env: NodeJS.ProcessEnv): { fd: number; size: number } => {
   const outside = (path: string | undefined) => path !== undefined && refusedPlace(path, IDENTITY, env)
   if (outside(file)) throw refusedFile(file)
+  // Windows has no O_NOFOLLOW, so a link is refused by its own entry before the open.
+  if (constants.O_NOFOLLOW === undefined && isLink(file)) throw refusedFile(file)
   let fd: number
   try {
     fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))

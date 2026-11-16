@@ -22,6 +22,11 @@ Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
   the field drive's `folders browse` uses, in place of `chosen`. A database lists nothing inside, as its rows are not
   folders. When Notion's search was cut at 10,000 results, the answer says so in `missing`.
 
+### Fixed
+
+- On Windows, `files upload` and `--file` refuse a link to a file too. Windows has no `O_NOFOLLOW`, so the link was
+  followed there.
+
 ## 0.3.0 — 16.11.2026
 
 ### Added
