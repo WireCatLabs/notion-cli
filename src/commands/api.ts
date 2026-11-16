@@ -7,10 +7,12 @@ import {
   checkApiParameter,
   generatedApiCommand,
   httpApiExecutor,
+  httpApiRequest,
   itemOf,
   listOf,
   NO_EFFECTS,
   outputFor,
+  parseApiJson,
   queryTerms,
   renderAnswer,
   termField,
@@ -19,7 +21,7 @@ import {
 } from "@wirecat/cli-core/cli"
 import { guardedWrite, guardFor, keyedGuard, levelFor, newOperationId } from "@wirecat/cli-core/sends"
 import { Command } from "commander"
-import { permissions } from "../config.js"
+import { DELETE_KEY, deletesByBody, permissions } from "../config.js"
 import { contextOf, notionFetchFor, tokenOf } from "../context.js"
 import { operations } from "../generated/manifest.js"
 import { excluded, NOTION_VERSION } from "../generated/metadata.js"
@@ -31,6 +33,9 @@ const CLI = IDENTITY.command
 export const NOTION_API = `https://${API_HOST}`
 
 const keyOf = (operation: ManifestOperation) => `api.${operation.command}`
+
+/** The keys each run's raw call checks besides its own, set from its body before the write is guarded. */
+const bodyKeys = new WeakMap<Command, string[]>()
 
 /** Every write's one path, as the comments sample's: the level for `api.<operation>` refuses or asks once. */
 const guardedApiWrite = async (command: Command, operation: ManifestOperation, send: () => Promise<unknown>) => {
@@ -49,7 +54,7 @@ const guardedApiWrite = async (command: Command, operation: ManifestOperation, s
       ),
     terminalAsker(command),
     levelOfKey,
-    [],
+    bodyKeys.get(command) ?? [],
   )
   const request = { chatId: null, kind: "edit" as const, key, operationId }
   guard.refuse(request)
@@ -87,7 +92,7 @@ const notionRefusal = (status: number, answer: unknown): CliError | undefined =>
   return failed instanceof CliError ? failed : undefined
 }
 
-const execute = httpApiExecutor({
+const http = httpApiExecutor({
   service: "Notion",
   baseUrl: NOTION_API,
   fetch: notionFetchFor,
@@ -96,6 +101,13 @@ const execute = httpApiExecutor({
   read: (command, _operation, send) => contextOf(command).run(() => send()),
   failure: (status, answer) => notionRefusal(status, answer),
 })
+
+/** A body that trashes or allows deleting content also checks `documents.delete`, as `documents delete` does. */
+const execute: typeof http = (command, operation, input) => {
+  const body = httpApiRequest(operation, input, NOTION_API).body
+  bodyKeys.set(command, body !== undefined && deletesByBody(operation.command, parseApiJson(body)) ? [DELETE_KEY] : [])
+  return http(command, operation, input)
+}
 
 /** The schemas are 0.5 MB of code, loaded only once an `api` command is about to check its input. */
 let schemas: typeof import("../generated/schemas.js")["schemas"] | undefined

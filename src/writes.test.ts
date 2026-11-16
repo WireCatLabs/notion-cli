@@ -223,3 +223,32 @@ it("a page not shared with the token is not_found, and the write is journaled by
   expect(journal.filter((text) => text.includes("wirecat-text-marker"))).toEqual([])
   expect(files.map((path) => readFileSync(path, "utf8")).filter((text) => text.includes(FAKE_TOKEN))).toEqual([])
 })
+
+it("raw API writes that trash or allow deleting content check documents.delete too; deny stops them", async () => {
+  const notion = fakeNotion()
+  withPermissions({ "documents.delete": "deny" })
+  const trash = ["personal", "api", "patch-page", "--page-id", PAGE_ID, "--body", '{"in_trash":true}', "--json"]
+  expect((await runCli(trash, { notion })).json()).toMatchObject({ error: { code: "permission_error" } })
+  const markdown = JSON.stringify({
+    type: "replace_content",
+    replace_content: { new_str: "Fake", allow_deleting_content: true },
+  })
+  const drop = ["personal", "api", "update-page-markdown", "--page-id", PAGE_ID, "--body", markdown, "--json"]
+  expect((await runCli(drop, { notion })).json()).toMatchObject({ error: { code: "permission_error" } })
+  expect(notion.calls).toEqual([])
+  const restore = ["personal", "api", "patch-page", "--page-id", PAGE_ID, "--body", '{"in_trash":false}', "--json"]
+  expect((await runCli(restore, { notion })).code).toBe(0)
+  expect(notion.calls).toHaveLength(1)
+})
+
+it("a credential file is never read into a page", async () => {
+  const notion = fakeNotion()
+  const key = join(process.env.HOME ?? "", ".ssh", "id_ed25519")
+  mkdirSync(join(key, ".."), { recursive: true })
+  writeFileSync(key, "wirecat fake key")
+  const refused = await runCli(["personal", "documents", "create", "--parent", PAGE_ID, "--file", key, "--json"], {
+    notion,
+  })
+  expect(refused.json()).toMatchObject({ error: { code: "validation_error", reason: "file.refused-place" } })
+  expect(notion.calls).toEqual([])
+})

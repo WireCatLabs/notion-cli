@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**165 ✅ · 219 ⛔ · 0 ❌** — 145 commands, 239 options.
+**168 ✅ · 216 ⛔ · 0 ❌** — 145 commands, 239 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -149,9 +149,9 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `api retrieve-page-markdown` | `--page-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-page-markdown` | `--include-transcript` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-page-markdown` | `--markdown-version` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-page-markdown` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-page-markdown` | `--page-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-page-markdown` | `--body` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
+| `api update-page-markdown` |  | ✅ |  |
+| `api update-page-markdown` | `--page-id` | ✅ |  |
+| `api update-page-markdown` | `--body` | ✅ |  |
 | `api update-page-markdown` | `--body-file` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-async-task` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-async-task` | `--task-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |

@@ -13,6 +13,7 @@ export const REASONS = defineReasons(
       ["notion.not-shared", "not_found", "no such page or database, or it is not shared with this token"],
       ["notion.refused", "validation_error", "Notion refused the request as it was sent"],
       ["notion.conflict", "conflict", "Notion could not save it because it changed at the same time"],
+      ["file.refused-place", "validation_error", "a credential file or a WireCat folder is never sent to Notion"],
       ["notion.text-refused", "validation_error", "Notion refused the new text of a page"],
       ["notion.rate-limited", "rate_limited", "Notion asked to slow down"],
       ["notion.unavailable", "provider_unavailable", "Notion is down or overloaded"],

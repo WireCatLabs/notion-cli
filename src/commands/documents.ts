@@ -13,7 +13,7 @@ import {
   renderAnswer,
   terminalAsker,
 } from "@wirecat/cli-core/cli"
-import { guardedWrite, guardFor, keyedGuard, levelFor, newOperationId } from "@wirecat/cli-core/sends"
+import { guardedWrite, guardFor, keyedGuard, levelFor, newOperationId, refusedPlace } from "@wirecat/cli-core/sends"
 import { Command } from "commander"
 import { DELETE_KEY, PAGE_WRITE_KEYS, permissions } from "../config.js"
 import { contextOf, notionWritesFor, tokenOf, withNotion } from "../context.js"
@@ -123,7 +123,16 @@ const markdownOf = async (command: Command, args: { text?: string; file?: string
     })
     return input.toString("utf8")
   }
-  if (args.file !== undefined) return readFileSync(args.file, "utf8")
+  if (args.file !== undefined) {
+    // An agent steered by a page's text must not publish a key or another tool's settings into Notion.
+    if (refusedPlace(args.file, IDENTITY, contextOf(command).env))
+      throw new CliError(
+        "validation_error",
+        `${args.file} is not read: credential files, browser profiles and the WireCat folders never go to Notion`,
+        { reason: "file.refused-place", sent: false },
+      )
+    return readFileSync(args.file, "utf8")
+  }
   if (required)
     throw new CliError("validation_error", "give the page's new text with --text or --file", { sent: false })
   return undefined

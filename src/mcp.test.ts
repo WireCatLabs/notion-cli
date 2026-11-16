@@ -147,3 +147,27 @@ it("an agent writes pages through the write tool; a delete at ask goes ahead the
     expect(await denied.close()).toBe(0)
   }
 })
+
+it("over MCP a page's text never comes from the server's stdin or from a credential file", async () => {
+  const notion = fakeNotion()
+  const options: RunOptions & ServiceEnvironment = { tty: false, keyring: signedIn(), fetch: notion.fetch }
+  const mcp = await mcpOverStdio((streams) => run(["personal", "mcp", "serve"], { ...options, ...streams }))
+  try {
+    const piped = await mcp.call("notion_write", {
+      command: "documents update",
+      arguments: { page: PAGE_ID, file: "-" },
+    })
+    expect(piped.isError).toBe(true)
+    expect(JSON.stringify(piped.body)).toContain("input.invalid")
+    const key = await mcp.call("notion_write", {
+      command: "documents create",
+      arguments: { parent: PAGE_ID, file: join(process.env.HOME ?? "", ".ssh", "id_ed25519") },
+    })
+    expect(key.isError).toBe(true)
+    expect(JSON.stringify(key.body)).toContain("file.refused-place")
+    expect(notion.calls).toEqual([])
+    expect((await mcp.call("notion_read", { command: "doctor" })).isError).toBeFalsy()
+  } finally {
+    expect(await mcp.close()).toBe(0)
+  }
+})
