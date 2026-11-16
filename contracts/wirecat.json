@@ -208,6 +208,54 @@
     {
       "path": [
         "documents",
+        "create"
+      ],
+      "summary": "create a Notion page under another page",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "documents.create"
+    },
+    {
+      "path": [
+        "documents",
+        "update"
+      ],
+      "summary": "replace a Notion page's text",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "documents.update"
+    },
+    {
+      "path": [
+        "documents",
+        "delete"
+      ],
+      "summary": "move a Notion page to the trash",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "documents.delete"
+    },
+    {
+      "path": [
+        "documents",
+        "restore"
+      ],
+      "summary": "bring a Notion page back from the trash",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "documents.restore"
+    },
+    {
+      "path": [
+        "documents",
         "add"
       ],
       "summary": "keep one Notion page's text in memory, read live, without syncing a folder",

@@ -1,11 +1,26 @@
-import { visibleControls } from "@wirecat/cli-base"
+import { readFileSync } from "node:fs"
+import { CliError, visibleControls } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import { answerEntity, itemOf, outputFor, REMOTE_READ, renderAnswer } from "@wirecat/cli-core/cli"
+import {
+  answerEntity,
+  bufferedInput,
+  commandPath,
+  itemOf,
+  MAX_BUFFERED_INPUT,
+  outputFor,
+  REMOTE_READ,
+  REMOTE_WRITE,
+  renderAnswer,
+  terminalAsker,
+} from "@wirecat/cli-core/cli"
+import { guardedWrite, guardFor, keyedGuard, levelFor, newOperationId } from "@wirecat/cli-core/sends"
 import { Command } from "commander"
-import { withNotion } from "../context.js"
+import { DELETE_KEY, PAGE_WRITE_KEYS, permissions } from "../config.js"
+import { contextOf, notionWritesFor, tokenOf, withNotion } from "../context.js"
 import { IDENTITY } from "../identity.js"
 import { notionId } from "../notion/ids.js"
 import { type Document, documentSchema } from "../notion/notion.js"
+import type { LiveWrites } from "../notion/writes.js"
 
 const CLI = IDENTITY.command
 
@@ -52,3 +67,164 @@ export const getCommand = () =>
       if (issues.length > 0 && output.format !== "json" && output.format !== "jsonl")
         output.renderer.warn(`the page is incomplete: ${why}`)
     })
+
+/**
+ * Every page write's one path, as the template's sample (WC-PERM-13): the level of the command's key and of each
+ * extra key refuses or asks once, the send journal records the attempt and never its content (WC-PERM-17), and the
+ * answer carries `operation_id` (WC-OUT-10). cli-core has already answered `--dry-run` and refused under
+ * `WCNOTION_READ_ONLY`. Never retried: a write that got no answer is `outcome_unknown` (WC-LIFE-9).
+ */
+const write = async <T>(command: Command, extra: readonly string[], act: (notion: LiveWrites) => Promise<T>) => {
+  const context = contextOf(command)
+  const { settings, env, renderer } = context
+  const path = commandPath(command)
+  const key = path.replaceAll(" ", ".")
+  const token = tokenOf(command)
+  const operationId = newOperationId()
+  const levelOf = (one: string) => levelFor(settings.permissions, one, permissions.defaults).level
+  const guard = keyedGuard(
+    (ask) =>
+      guardFor(
+        IDENTITY,
+        // Notion limits its own rate, so this guard keeps the levels and the journal, not a send cap.
+        { ...settings, sendsPerHour: Number.MAX_SAFE_INTEGER, permissionDefaults: permissions.defaults },
+        renderer.warn,
+        env,
+        ask,
+      ),
+    terminalAsker(command),
+    levelOf,
+    [...(PAGE_WRITE_KEYS[path] ?? []), ...extra],
+  )
+  const request = { chatId: null, kind: "edit" as const, key, operationId }
+  guard.refuse(request)
+  try {
+    const done = await guardedWrite(guard, request, () =>
+      context.run((events) => act(notionWritesFor(command, token, events))),
+    )
+    return { operationId, done }
+  } catch (error) {
+    if (error instanceof CliError && error.code === "outcome_unknown")
+      throw new CliError("outcome_unknown", error.message, { ...error.details, operation_id: operationId })
+    throw error
+  }
+}
+
+/** The page's new text: `--text`, or `--file`, where `-` is stdin. */
+const markdownOf = async (command: Command, args: { text?: string; file?: string }, required: boolean) => {
+  if (args.text !== undefined && args.file !== undefined)
+    throw new CliError("validation_error", "give the text with --text or --file, not both", { sent: false })
+  if (args.text !== undefined) return args.text
+  if (args.file === "-") {
+    const { environment } = contextOf(command)
+    const input = await bufferedInput(environment.stdin ?? process.stdin, {
+      maxBytes: MAX_BUFFERED_INPUT,
+      ...(environment.signal ? { signal: environment.signal } : {}),
+    })
+    return input.toString("utf8")
+  }
+  if (args.file !== undefined) return readFileSync(args.file, "utf8")
+  if (required)
+    throw new CliError("validation_error", "give the page's new text with --text or --file", { sent: false })
+  return undefined
+}
+
+const TEXT_OPTIONS = {
+  text: "the text, as Notion-flavoured Markdown",
+  file: "read the text from this file; - reads stdin",
+}
+
+/** `documents create`: a new page under a page the token can see. */
+export const createCommand = () =>
+  annotate(new Command("create"), {
+    effects: REMOTE_WRITE,
+    offline: false,
+    examples: [
+      `${CLI} personal documents create --parent PAGE_ID --title "Meeting notes" --text "Discussed the roadmap"`,
+      `${CLI} personal documents create --parent https://www.notion.so/Projects-0123456789abcdef0123456789abcdef --file notes.md`,
+      `${CLI} personal documents create --parent PAGE_ID --file notes.md --dry-run`,
+    ],
+  })
+    .summary("create a Notion page under another page")
+    .description(
+      "create a Notion page under another page, from Notion-flavoured Markdown. With no --title, Notion takes the " +
+        "text's first # heading as the title",
+    )
+    .requiredOption("--parent <id>", "the parent page's id or its Notion link")
+    .option("--title <title>", "the page's title")
+    .option("--text <text>", TEXT_OPTIONS.text)
+    .option("--file <file>", TEXT_OPTIONS.file)
+    .action(async function (this: Command, args: { parent: string; title?: string; text?: string; file?: string }) {
+      const parent = notionId(args.parent)
+      const markdown = await markdownOf(this, args, false)
+      const { operationId, done } = await write(this, [], (notion) =>
+        notion.create({ parent, title: args.title, ...(markdown === undefined ? {} : { markdown }) }),
+      )
+      renderAnswer(this, outputFor(this), itemOf({ operation_id: operationId, page: done }))
+    })
+
+/** `documents update`: the page's whole text replaced. */
+export const updateCommand = () =>
+  annotate(new Command("update"), {
+    effects: REMOTE_WRITE,
+    offline: false,
+    examples: [
+      `${CLI} personal documents update PAGE_ID --file notes.md`,
+      `${CLI} personal documents update PAGE_ID --text "# Plan" --dry-run`,
+      `${CLI} personal documents update PAGE_ID --file page.md --allow-deleting-content`,
+    ],
+  })
+    .summary("replace a Notion page's text")
+    .description(
+      "replace a Notion page's whole text with Notion-flavoured Markdown. A child page or database whose tag the new " +
+        "text leaves out is refused unless --allow-deleting-content is given, which asks as documents delete does",
+    )
+    .argument("<page>", "the page's id or its Notion link")
+    .option("--text <text>", TEXT_OPTIONS.text)
+    .option("--file <file>", TEXT_OPTIONS.file)
+    .option("--allow-deleting-content", "let Notion delete the child pages and databases the new text leaves out")
+    .action(async function (
+      this: Command,
+      page: string,
+      args: { text?: string; file?: string; allowDeletingContent?: boolean },
+    ) {
+      const id = notionId(page)
+      const markdown = (await markdownOf(this, args, true)) ?? ""
+      const allow = args.allowDeletingContent === true
+      const { operationId, done } = await write(this, allow ? [DELETE_KEY] : [], (notion) =>
+        notion.replace(id, markdown, allow),
+      )
+      const output = outputFor(this)
+      // Notion applied the text but left part of it out or changed it; its codes say what kind, never whose text.
+      if (done.warnings.length > 0 && output.format !== "json" && output.format !== "jsonl")
+        output.renderer.warn(`Notion changed or left out part of the text: ${done.warnings.join(", ")}`)
+      renderAnswer(this, output, itemOf({ operation_id: operationId, page: { id: done.id }, warnings: done.warnings }))
+    })
+
+const trashCommand = (name: "delete" | "restore", inTrash: boolean) =>
+  annotate(new Command(name), {
+    effects: REMOTE_WRITE,
+    offline: false,
+    examples: [`${CLI} personal documents ${name} PAGE_ID`, `${CLI} personal documents ${name} PAGE_ID --dry-run`],
+  })
+    .argument("<page>", "the page's id or its Notion link")
+    .action(async function (this: Command, page: string) {
+      const id = notionId(page)
+      const { operationId, done } = await write(this, [], (notion) => notion.trash(id, inTrash))
+      renderAnswer(this, outputFor(this), itemOf({ operation_id: operationId, page: done }))
+    })
+
+/** `documents delete`: to Notion's trash, from where `documents restore` brings it back. */
+export const deleteCommand = () =>
+  trashCommand("delete", true)
+    .summary("move a Notion page to the trash")
+    .description(
+      "move a Notion page, with the pages under it, to Notion's trash; documents restore brings it back. Notion's API " +
+        "deletes nothing for good. Asks first, as the profile's documents.delete permission says",
+    )
+
+/** `documents restore`: back from Notion's trash. */
+export const restoreCommand = () =>
+  trashCommand("restore", false)
+    .summary("bring a Notion page back from the trash")
+    .description("bring a Notion page back from Notion's trash, where documents delete put it")

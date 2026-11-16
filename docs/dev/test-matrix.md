@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**154 ✅ · 219 ⛔ · 0 ❌** — 141 commands, 232 options.
+**165 ✅ · 219 ⛔ · 0 ❌** — 145 commands, 239 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -37,6 +37,17 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `documents export` | `--output` | ✅ |  |
 | `documents context` |  | ✅ |  |
 | `documents get` |  | ✅ |  |
+| `documents create` |  | ✅ |  |
+| `documents create` | `--parent` | ✅ |  |
+| `documents create` | `--title` | ✅ |  |
+| `documents create` | `--text` | ✅ |  |
+| `documents create` | `--file` | ✅ |  |
+| `documents update` |  | ✅ |  |
+| `documents update` | `--text` | ✅ |  |
+| `documents update` | `--file` | ✅ |  |
+| `documents update` | `--allow-deleting-content` | ✅ |  |
+| `documents delete` |  | ✅ |  |
+| `documents restore` |  | ✅ |  |
 | `documents add` |  | ✅ |  |
 | `documents add` | `--title` | ✅ |  |
 | `documents add` | `--subject` | ✅ |  |

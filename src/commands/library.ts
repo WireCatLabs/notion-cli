@@ -52,7 +52,7 @@ import {
   WORKSPACE_ROOT,
 } from "../sync/source.js"
 import { VERSION } from "../version.js"
-import { getCommand } from "./documents.js"
+import { createCommand, deleteCommand, getCommand, restoreCommand, updateCommand } from "./documents.js"
 
 const CLI = IDENTITY.command
 
@@ -493,6 +493,8 @@ export const libraryCommands = (): Command[] => {
     },
   })
   documents.addCommand(getCommand())
+  documents.addCommand(createCommand()).addCommand(updateCommand()).addCommand(deleteCommand())
+  documents.addCommand(restoreCommand())
   annotate(documents.command("add"), {
     effects: FETCH,
     mcp: false,

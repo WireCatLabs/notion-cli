@@ -21,6 +21,9 @@ describe("each remote command runs inside cli-core's run", () => {
       "folders add": ["personal", "folders", "add", DATABASE_ID],
       "folders browse": ["personal", "folders", "browse"],
       sync: ["personal", "sync"],
+      "documents create": ["personal", "documents", "create", "--parent", PAGE_ID, "--text", "Fake text"],
+      "documents update": ["personal", "documents", "update", PAGE_ID, "--text", "Fake text"],
+      "documents restore": ["personal", "documents", "restore", PAGE_ID],
       "databases list": ["personal", "databases", "list"],
       "databases show": ["personal", "databases", "show", DATABASE_ID],
       "api retrieve-a-page": ["personal", "api", "retrieve-a-page", "--page-id", PAGE_ID],
@@ -37,6 +40,7 @@ describe("each remote command runs inside cli-core's run", () => {
           ]),
       ),
       "mcp serve": "listens until stopped",
+      "documents delete": "the same write path as documents restore, behind a question no run here answers",
       "memories extract": "cli-core's shared command; it asks the configured model, never Notion",
       doctor:
         "cli-core's appDoctorCommand answers --online outside a run of its own; drop this once core runs it inside",
