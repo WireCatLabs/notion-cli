@@ -93,3 +93,18 @@ export interface SyncWarning {
   message: string
   retry_after_ms?: number
 }
+
+export interface Listing {
+  files: NotionFile[]
+  /** Known items confirmed deleted, trashed or unshared by a direct read. */
+  gone: string[]
+  /** Known items that are still there, under another parent. */
+  moved: NotionFile[]
+}
+
+/** A database's data sources as a set, as Notion may list them in any order. */
+export const sourceIds = (file: NotionFile | undefined) =>
+  file?.providerMetadata.dataSources
+    ?.map((item) => item.id)
+    .sort()
+    .join()

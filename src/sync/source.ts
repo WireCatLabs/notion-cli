@@ -26,11 +26,13 @@ import {
   type SyncTask,
 } from "./cursor.js"
 import {
+  type Listing,
   type NotionFile,
   type NotionIdentity,
   type NotionKind,
   type NotionSourceOptions,
   parentId,
+  sourceIds,
   UNTITLED,
   WORKSPACE_ROOT,
 } from "./files.js"
@@ -60,14 +62,6 @@ const PAGE_SIZE = 100
 const minus = (iso: string, ms: number) => new Date(Date.parse(iso) - ms).toISOString()
 const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : Date.parse(a) >= Date.parse(b) ? a : b)
 const text = (parts: { plain_text: string }[]) => parts.map((part) => part.plain_text).join("")
-
-interface Listing {
-  files: NotionFile[]
-  /** Known items confirmed deleted, trashed or unshared by a direct read. */
-  gone: string[]
-  /** Known items that are still there, under another parent. */
-  moved: NotionFile[]
-}
 
 const OUT_OF_TIME = new Error("the run's deadline is near")
 
@@ -591,14 +585,19 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     // The engine walks every folder it is sent, all its rows, so a database it already holds is not sent again.
     const unheld = (file: NotionFile) => {
       const before = known.get(file.id)
-      const sources = (held: NotionFile | undefined) =>
-        held?.providerMetadata.dataSources?.map((item) => item.id).join()
       return (
         !before ||
         before.name !== file.name ||
         before.parents[0] !== file.parents[0] ||
-        sources(before) !== sources(file)
+        sourceIds(before) !== sourceIds(file)
       )
+    }
+    // Search still finds the rows of a data source taken out of its database; they stay out with it.
+    const unlistedRow = (page: NotionPage) => {
+      if (page.parent.type !== "data_source_id") return false
+      const { database_id, data_source_id } = page.parent
+      const sources = known.get(database_id)?.providerMetadata.dataSources
+      return sources !== undefined && !sources.some((item) => item.id === data_source_id)
     }
     // Rows of a data source the database no longer lists go with it. A database Notion will not show (403) lists
     // nothing, so its rows stay.
@@ -669,7 +668,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         // Only what this pass saw before it began counts towards the next mark; later edits must stay inside it.
         if (kind === "page") pass.next = later(pass.next, result.last_edited_time)
         if (result.object === "page") {
-          emit(await pageFile(result))
+          if (!unlistedRow(result)) emit(await pageFile(result))
+          else if (known.has(result.id)) gone(result.id)
           continue
         }
         const id = result.parent.database_id
@@ -778,6 +778,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         if (!roots.includes(id)) gone(id)
         return
       }
+      unlisted(database)
       for (const source of database.data_sources) {
         addSource(id, source.id)
         queue({ t: "rows", database: id, source: source.id, full: true })

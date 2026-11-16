@@ -913,6 +913,49 @@ describe("changes()", () => {
     expect(queried).not.toContain("s2")
   })
 
+  for (const scope of ["the workspace", "one page"] as const)
+    it(`does not bring back the rows of a removed data source at the next walk, when ${scope} is chosen`, async () => {
+      const notion = new FakeNotion()
+      notion.addPage({ id: "P", title: "P", parent: top, markdown: "p" })
+      notion.addDatabase({ id: "db", title: "DB", parent: under("P"), sources: ["s1", "s2"] })
+      for (const ds of ["s1", "s2"])
+        for (let r = 0; r < 3; r++) notion.addPage({ id: `${ds}-${r}`, title: `${ds}-${r}`, parent: row("db", ds) })
+      const run = harness(notion, { roots: scope === "one page" ? ["P"] : [WORKSPACE_ROOT] })
+      const until = async () => {
+        for (let runs = 0; runs < 10 && !(await run.sync()).complete; runs++);
+      }
+      const rowsOf = (ds: string) => [...run.saved.keys()].filter((key) => key.startsWith(`${ds}-`))
+      await until()
+      notion.advance(2 * HOUR)
+      const database = notion.databases.get("db")
+      if (database) database.sources = ["s1"]
+      await until()
+      expect(rowsOf("s2")).toHaveLength(0)
+      notion.advance(25 * HOUR)
+      await until()
+      expect(rowsOf("s2")).toHaveLength(0)
+      expect(rowsOf("s1")).toHaveLength(3)
+    })
+
+  it("does not send a database again when Notion lists its data sources in another order", async () => {
+    const notion = new FakeNotion()
+    notion.addDatabase({ id: "db", title: "DB", parent: top, sources: ["s1", "s2"] })
+    for (const ds of ["s1", "s2"]) notion.addPage({ id: `${ds}-0`, title: ds, parent: row("db", ds) })
+    const run = harness(notion)
+    await run.sync()
+    const retrieve = notion.retrieveDatabase.bind(notion)
+    notion.retrieveDatabase = async (id: string) => {
+      const found = await retrieve(id)
+      return { ...found, data_sources: [...found.data_sources].reverse() }
+    }
+    const database = notion.databases.get("db")
+    if (database) database.edited = notion.now + HOUR
+    notion.advance(HOUR)
+    const before = notion.calls.queryDataSource
+    await run.sync()
+    expect(notion.calls.queryDataSource - before).toBe(2)
+  })
+
   it("first syncs a 15,000-row database within MCP's 45 s runs, a page of rows per step, with a walk that stays small", async () => {
     const notion = new FakeNotion()
     notion.addDatabase({ id: "db", title: "Big", parent: top, sources: ["ds"] })
