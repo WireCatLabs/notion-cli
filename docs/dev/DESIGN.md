@@ -215,7 +215,7 @@ deleted.
 The strict fake in `src/testing/fake-notion.ts` is built from Notion's reference only; no answer was captured from a
 live workspace. `bin/notion-live <page>` checks the real API through `scripts/live.sh`, with a temporary profile that
 stores nothing, and records the pass in `docs/dev/live-checks.txt` for `bin/release`. It fails on the first two points
-below; the rest a person reads in its output:
+below and on the write round trip after them; the rest a person reads in its output:
 
 - `GET /v1/users/me` gives `bot.workspace_id` for both kinds of token. The account is that id and the bot's id; the
   reference lists the field but its example leaves it out, and sign-in refuses an answer without it.
@@ -233,6 +233,12 @@ below; the rest a person reads in its output:
 - On a page past about 20,000 blocks, the `<unknown url="…"/>` tag names its block id, so the fetched part lands in
   place; otherwise it is added after the page.
 - `databases list` rows carry a data source's title, and `parent.database_id`, in search results.
+
+The check writes, but only under the page it is given, the owner's test page "WireCat Test". It creates one page
+`wirecat-live-<time>` there and a page under it, reads the text back, replaces it, checks that an update dropping the
+child page is refused with `notion.text-refused`, trashes and restores the page, checking `in_trash` each time, and
+leaves it in Notion's trash. Its temporary profile allows `documents.delete`, so no question stops the run; a check
+that fails half way trashes its page on the way out.
 
 ## Open questions for the owner
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# The release's live check against the owner's real Notion, read-only (WC-TEST-18, WC-REL-17). Builds this checkout,
+# The release's live check against the owner's real Notion (WC-TEST-18, WC-REL-17). It reads, and writes only under
+# the page it is given: one page `wirecat-live-<time>` with a page under it, created, changed, trashed, restored and
+# left in Notion's trash. Give it the test page, "WireCat Test", never one that matters. Builds this checkout,
 # runs scripts/live.sh with a throwaway profile, and when it passes appends the version's line to
 # docs/dev/live-checks.txt, which bin/release checks.
 #
