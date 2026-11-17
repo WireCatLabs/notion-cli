@@ -3,6 +3,11 @@
 `notion` reads your Notion pages and databases for you and your AI agent: in the terminal, in scripts and through
 MCP. It signs in with your own Notion token, kept in your system keyring.
 
+[Docs](https://wirecat.dev/en/docs/notion) ·
+[Install](https://github.com/WireCatLabs/notion-cli/blob/main/docs/installation.md) ·
+[Usage](https://github.com/WireCatLabs/notion-cli/blob/main/docs/usage.md) ·
+[Discord](https://discord.gg/DebENqbRrJ)
+
 **Status: in development.** It signs in, reads live from Notion, and keeps a copy of your pages on your computer,
 searchable offline with the rest of WireCat, and creates, changes and deletes pages. Next it searches database rows by
 their properties, and later keeps a folder of Markdown files in step with a Notion page tree. The order of work is in [docs/dev/DESIGN.md](docs/dev/DESIGN.md).
