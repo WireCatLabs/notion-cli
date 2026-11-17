@@ -11,6 +11,7 @@ const PROVENANCE = "notion:pages.retrieve"
 export const ingestionOf = (store: MessageStore) =>
   documentIngestion<NotionFile>(store, {
     provider: PROVIDER.name,
+    command: PROVIDER.command,
     externalId: external,
     catalogInput: (file) => ({
       externalId: external(file.id),

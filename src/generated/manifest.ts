@@ -2,7 +2,7 @@
 // Source: spec/notion/openapi.json, verified by provenance.json
 // Run: pnpm generate
 
-import type { ManifestOperation } from "@wirecat/cli-base/codegen"
+import type { ApiServer, ManifestOperation, SecurityRequirement, SecurityScheme } from "@wirecat/cli-base/codegen"
 
 export const operations: readonly ManifestOperation[] = [
   {
@@ -2111,5 +2111,28 @@ export const operations: readonly ManifestOperation[] = [
       confidence: "contract",
       schema: "CancelSessionResponse",
     },
+  },
+]
+
+export const servers: readonly ApiServer[] = [
+  {
+    url: "https://api.notion.com",
+  },
+]
+
+export const securitySchemes: Readonly<Record<string, SecurityScheme>> = {
+  bearerAuth: {
+    scheme: "bearer",
+    type: "http",
+  },
+  basicAuth: {
+    scheme: "basic",
+    type: "http",
+  },
+}
+
+export const security: readonly SecurityRequirement[] = [
+  {
+    bearerAuth: [],
   },
 ]
