@@ -5,13 +5,14 @@ import { DatabaseSync } from "node:sqlite"
 import { CliError, memoryKeyring } from "@wirecat/cli-base"
 import { accountFileFor } from "@wirecat/cli-core/cli"
 import { documentCommandsContract } from "@wirecat/cli-core/documents/testing"
+import { searchNotesQuery } from "@wirecat/cli-core/services"
 import { describe, expect, it } from "vitest"
 import { NOTION_WORDS } from "./commands/library.js"
 import { IDENTITY } from "./identity.js"
 import { openStore } from "./library.js"
 import type { NotionParent } from "./notion/reads.js"
 import { createProgram } from "./program.js"
-import { passUnderWay } from "./sync/source.js"
+import { passUnderWay, WORKSPACE_ROOT } from "./sync/source.js"
 import { FAKE_TOKEN, fakeNotion } from "./testing/fake-notion.js"
 import { FakeNotion } from "./testing/fake-notion-reads.js"
 import { runCli, signedIn } from "./testing/harness.js"
@@ -85,6 +86,32 @@ describe("cli-core's documents commands contract over the strict fake", () => {
 })
 
 describe("sync over the shared store", () => {
+  it("names the profile on a stored hit and keeps the workspace root and databases out of search", async () => {
+    const { run, env } = cli()
+    expect((await run(["sync"])).code).toBe(0)
+    const store = await openStore(env, false)
+    try {
+      const paths = async (text: string, newest = false) =>
+        (await searchNotesQuery(store, { text, limit: 50, timezone: "UTC", ...(newest ? { newest } : {}) })).items.map(
+          (hit) => hit.note.path,
+        )
+      expect(await paths("tasks")).not.toContain(`${TASKS}.md`)
+      expect(await paths("workspace")).not.toContain(`${WORKSPACE_ROOT}.md`)
+      const changed = await paths("date>2000-01-01", true)
+      expect(changed).toContain(`${ROADMAP}.md`)
+      expect(changed).not.toContain(`${TASKS}.md`)
+      expect(changed).not.toContain(`${WORKSPACE_ROOT}.md`)
+      // What a search hit's source is read from: without it a hit says `notes` and the account's store id.
+      const hit = (await searchNotesQuery(store, { text: "quarterly", limit: 1, timezone: "UTC" })).items[0]
+      const account = (await store.accounts.storedAccounts()).find(({ id }) => String(id) === hit?.note.folderId)
+      expect(account?.provider).toBe("notion")
+      expect((await store.accounts.profiles()).notion).toEqual({
+        personal: { provider: "notion", account: account?.account },
+      })
+    } finally {
+      await store.close()
+    }
+  })
   it("copies pages under pages, a database in a page and its rows, and search finds them offline", async () => {
     const { run, http } = cli()
     const synced = await run(["sync"])
@@ -504,7 +531,8 @@ describe("sync over the shared store", () => {
     expect(deepest).toBeLessThanOrEqual(2)
   }, 60_000)
 
-  it("stops a long Notion pass before the deadline, says to sync again, and the next syncs finish it", async () => {
+  /** Twelve databases synced once; then an hour passes and one row changes, so the next sync has a pass to make. */
+  const longPass = async () => {
     const notion = new FakeNotion()
     for (let n = 0; n < 12; n++) {
       notion.addDatabase({ id: id(100 + n), title: `DB ${n}`, parent: top, sources: [id(200 + n)] })
@@ -520,42 +548,79 @@ describe("sync over the shared store", () => {
     for (let round = 0; round < 10 && !complete(await run(["sync", "--timeout", "10m"])); round++);
     notion.advance(60 * 60_000)
     notion.edit(id(311), { title: "Row 11 edited" })
-    const cursor = () => {
-      const state = JSON.parse(
-        readFileSync(join(env.WCNOTION_STATE_DIR, "profiles", "personal", "sync", "state.json"), "utf8"),
-      ) as { cursor: string; pending?: { cursor: string } }
-      return state.pending?.cursor ?? state.cursor
-    }
-    const before = cursor()
-    // Each answer takes 200 ms of real time, as cli-core's deadline runs on the wall clock.
+    const state = () =>
+      JSON.parse(readFileSync(join(env.WCNOTION_STATE_DIR, "profiles", "personal", "sync", "state.json"), "utf8")) as {
+        cursor: string
+        pending?: { cursor: string }
+      }
+    const cursor = () => state().pending?.cursor ?? state().cursor
+    // A slowed answer takes 200 ms of real time, as cli-core's deadline runs on the wall clock.
     const fetch = http.fetch
-    http.fetch = (async (...args: Parameters<typeof globalThis.fetch>) => {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-      return fetch(...args)
-    }) as typeof globalThis.fetch
+    const slow = (slowed: (path: string) => boolean) => {
+      http.fetch = (async (...args: Parameters<typeof globalThis.fetch>) => {
+        if (slowed(String(args[0] instanceof Request ? args[0].url : args[0])))
+          await new Promise((resolve) => setTimeout(resolve, 200))
+        return fetch(...args)
+      }) as typeof globalThis.fetch
+    }
+    const finish = async () => {
+      http.fetch = fetch
+      let found = false
+      for (let round = 0; round < 6 && !found; round++) {
+        const again = await run(["sync", "--timeout", "10m"])
+        expect(again.code, again.out).toBe(0)
+        const listed = (await run(["documents", "list"])).json() as { items: { name: string }[] }
+        found = listed.items.some((item) => item.name === "Row 11 edited")
+      }
+      expect(found).toBe(true)
+    }
+    return { run, state, cursor, slow, finish }
+  }
+
+  it("stops a long Notion pass before the deadline, says to sync again, and the next syncs finish it", async () => {
+    const { run, cursor, slow, finish } = await longPass()
+    const before = cursor()
+    // Only page reads are slow: the budget measures its slowest step, and one slow listing would leave no time for a
+    // page.
+    slow((url) => url.includes("/v1/pages/"))
     // cli-core stops 5 s before the deadline, counted from the command's start, and fits one step per 2 s in the rest.
     // 6 s left one second, which a slow Windows start spent before the first step: nothing moved, so no next step.
-    // 10 s fits two steps, still short of the whole pass.
-    const cut = await run(["sync", "--timeout", "10s"])
+    // 14 s fits four steps of this incremental sync: the listing of the changes and three page reads, still short of
+    // the whole pass.
+    const cut = await run(["sync", "--timeout", "14s"])
     expect(cut.code, cut.out).toBe(0)
     expect(cut.json()).toMatchObject({
       item: { complete: false, stopped: expect.stringMatching(/^(requests|deadline)$/) },
-      next: [{ command: "sync", args: { timeout: "10s" }, safe_to_auto_execute: true }],
+      next: [{ command: "sync", args: { timeout: "14s" }, safe_to_auto_execute: true }],
       meta: { complete: false },
     })
-    expect((cut.json() as { meta: { duration_ms: number } }).meta.duration_ms).toBeLessThan(10_000)
+    expect((cut.json() as { meta: { duration_ms: number } }).meta.duration_ms).toBeLessThan(14_000)
     expect(cursor()).not.toBe(before)
-    expect(passUnderWay(cursor())).toBe(true)
-    http.fetch = fetch
-    let found = false
-    for (let round = 0; round < 6 && !found; round++) {
-      const again = await run(["sync", "--timeout", "10m"])
-      expect(again.code, again.out).toBe(0)
-      const listed = (await run(["documents", "list"])).json() as { items: { name: string }[] }
-      found = listed.items.some((item) => item.name === "Row 11 edited")
-    }
-    expect(found).toBe(true)
+    expect((cut.json() as { item: { pending: number } }).item.pending).toBeGreaterThan(0)
+    await finish()
   }, 40_000)
+
+  it("cuts a slow listing inside Notion's own pass, says to sync again, and the next syncs finish it", async () => {
+    const { run, state, slow, finish } = await longPass()
+    const before = state().cursor
+    slow(() => true)
+    // Every answer is slow, so Notion's own listing stops at the deadline with its pass part done: the cursor has moved,
+    // no page is saved yet, and only notion knows there is more. 7 to 9 s cut inside the pass; 11 s ends it.
+    const cut = await run(["sync", "--timeout", "8s"])
+    expect(cut.code, cut.out).toBe(0)
+    // The new cursor waits on the engine's pending plan; nothing cli-core counts moved, so its own step is withheld.
+    expect(state().cursor).toBe(before)
+    expect(passUnderWay(state().pending?.cursor)).toBe(true)
+    expect(cut.json()).toMatchObject({
+      item: { complete: false, saved: 0, names_only: 0, removed: 0, unchanged: 0 },
+      next: [{ command: "sync", args: { limit: 200, timeout: "8s" }, safe_to_auto_execute: true }],
+      meta: { complete: false },
+    })
+    // The pass is not planned to its end, so status gives no total that would read as nearly done.
+    const status = (await run(["status"])).json() as { item: { progress: Record<string, unknown> } }
+    expect(status.item.progress).toMatchObject({ total: null })
+    await finish()
+  }, 60_000)
 
   it("asks Notion who the token is once per sync", async () => {
     const { run, http } = cli()

@@ -358,6 +358,7 @@ export const libraryCommands = (): Command[] => {
                 },
                 state: syncState(env(), name, live),
                 principal: live,
+                profile: name,
                 roots,
                 textLimit: TEXT_LIMIT,
                 max: limit,
@@ -381,8 +382,11 @@ export const libraryCommands = (): Command[] => {
           )
         })
         // The engine counts a round of changes as done; Notion's own pass may still have tasks for the next sync.
-        const underWay = passUnderWay(syncState(env(), name, "").read().cursor)
-        if (underWay) next = [syncAgain(limit)]
+        // A cut listing leaves its cursor on the engine's pending plan until the plan's pages are saved.
+        const held = syncState(env(), name, "").read()
+        const underWay = passUnderWay(held.pending?.cursor ?? held.cursor)
+        // As cli-core's own step: a page that keeps failing would make "sync again" an endless loop.
+        if (underWay && !result.errors.length) next = [syncAgain(limit)]
         return {
           ...result,
           ...(underWay ? { complete: false } : {}),
@@ -400,7 +404,7 @@ export const libraryCommands = (): Command[] => {
         // Until the plan is made, or while Notion's own pass goes on, nothing says how much is left.
         const unplanned =
           walkUnderWay(env(), name) ||
-          passUnderWay(held.cursor) ||
+          passUnderWay(held.pending?.cursor ?? held.cursor) ||
           (changed !== undefined && (!held.lastSync || Date.parse(changed) > Date.parse(held.lastSync)))
         return {
           profile: name,

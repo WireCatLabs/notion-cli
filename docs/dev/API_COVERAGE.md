@@ -72,6 +72,18 @@ Run: pnpm generate
 | `query-session-events` | `POST /v1/sessions/{session_id}/events/query` | `notion <profile> api query-session-events` | read | contract | generated | Query session events |
 | `cancel-session` | `POST /v1/sessions/{session_id}/cancel` | `notion <profile> api cancel-session` | write | contract | generated | Cancel a session |
 
+## Effects not taken from the HTTP method
+
+| Operation | Effect | Why |
+|---|---|---|
+| `post-database-query` | read | override: a POST that only queries a data source |
+| `post-search` | read | override: a POST that only searches |
+| `create-view-query` | read | override: a POST that runs a view's query; it changes no page |
+| `query-meeting-notes` | read | override: a POST that only lists meeting notes |
+| `query-agents` | read | override: a POST that only lists agents |
+| `query-sessions` | read | override: a POST that only lists sessions |
+| `query-session-events` | read | override: a POST that only lists a session's events |
+
 ## Not generated
 
 | Operation | Why |
