@@ -2,6 +2,29 @@
 
 Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
 
+## 0.5.0 — 17.11.2026
+
+### Fixed
+
+- **A search hit from Notion names `notion` and the profile.** `memo search` and `search all` showed a Notion page as
+  `provider: notes` with the store's account number, and the tree label showed raw ids, because notion never said
+  which account its profile is. A sync now records it through cli-core's documents engine.
+- **The workspace root and databases stay out of search.** They are catalog entries, not pages: word search, meaning
+  search and memo's digest showed them with an empty excerpt, and `documents show` could not open them.
+- **An agent's `relationships add` is saved.** It is written unconfirmed for the owner, who confirms it by adding the
+  same relationship or rejects it by removing it. It used to write nothing.
+- **A sync cut inside Notion's own pass says to sync again.** When a slow listing reached the deadline, its cursor
+  waited on the sync's pending plan, where notion did not look: the answer said `complete: false` with no step to run
+  next, and `status` gave a total as if the pass were planned. notion now reads that cursor too.
+- cli-core 0.687.0 (was 0.680.0), cli-base 0.109.0 (was 0.106.0).
+- Sync now saves a page's creator and last editor as people in the shared store, with their names and email addresses
+  from Notion, and links the page to them as `owner` and `last-editor`. An email address joins them to the person who
+  already has it, so a person's context shows the Notion pages they wrote or edited. This needs the connection's
+  capability to read user information including email addresses; without it the authors are kept by Notion id, and
+  `sync` and `doctor` say so. A page synced before this gets its authors when it next changes.
+- `identities link <page> <notion-id> person:<uid>` works: it no longer fails because the Notion user was not in the
+  store, and it moves every synced page's link from that user to the person.
+
 ## 0.4.0 — 16.11.2026
 
 ### Added
