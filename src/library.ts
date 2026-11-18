@@ -54,7 +54,7 @@ export const withStore = async <T>(
   }
 }
 
-const profileDir = (env: NodeJS.ProcessEnv, profile: string) =>
+export const profileDir = (env: NodeJS.ProcessEnv, profile: string) =>
   join(resolvePaths({ appName: IDENTITY.appName, prefix: IDENTITY.envPrefix, env }).state, "profiles", profile)
 
 const readJson = <T>(path: string): T | undefined => {
