@@ -107,6 +107,30 @@ notion session list
 
 **Example:** `notion session list`, `notion session list --json`
 
+## `notion account`
+
+this profile on this computer
+
+### `notion account remove`
+
+sign the profile out, then forget it on this computer: its settings, its saved sign-in and its files; --keep-data leaves its messages in the store, where search still finds them, --delete-data deletes them; asks first, or --yes
+
+**Changes something on this computer only.**
+
+```sh
+notion account remove [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--keep-data` | leave what the store holds of this account, still searchable. |
+| `--delete-data` | delete what the store and the tool's own files hold of this account. |
+| `--dry-run` | list what it would remove and keep, and change nothing. |
+
+**Returns:** account removal — profile, data, dry_run, account, revoked, config_file, removed, kept; every field: notion commands info account remove
+
+**Example:** `notion personal account remove --keep-data --dry-run`, `notion personal account remove --delete-data --yes`
+
 ## `notion folders`
 
 choose the Notion pages and databases sync copies; none chosen copies everything the token sees

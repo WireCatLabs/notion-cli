@@ -910,3 +910,47 @@ describe("every shared command over one synced copy", () => {
     await ok(["identities", "list", ROADMAP])
   })
 })
+
+describe("account remove", () => {
+  const documents = async (env: NodeJS.ProcessEnv) => {
+    const store = await openStore(env, false)
+    try {
+      return (await searchNotesQuery(store, { text: "date>2000-01-01", limit: 50, timezone: "UTC" })).items.length
+    } finally {
+      await store.close()
+    }
+  }
+
+  it("forgets the token and keeps the copy with --keep-data, deletes it and the profile's folder with --delete-data", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "notion-remove-"))
+    const env = { MESSAGING_STORE: join(dir, "wirecat.db"), WCNOTION_STATE_DIR: join(dir, "state") }
+    const notion = fakeNotion({ workspace: workspace() })
+    const keyring = memoryKeyring()
+    const run = (argv: string[], stdin?: string) =>
+      runCli(["personal", ...argv, "--json"], { notion, keyring, env, ...(stdin ? { stdin } : {}) })
+    const token = () => keyring.get(IDENTITY.appName, "token:personal")
+
+    expect((await run(["session", "start"], FAKE_TOKEN)).code).toBe(0)
+    expect((await run(["sync"])).code).toBe(0)
+    const synced = await documents(env)
+    expect(synced).toBeGreaterThan(0)
+
+    const dry = await run(["account", "remove", "--delete-data", "--dry-run"])
+    expect(dry.code, dry.err).toBe(0)
+    expect(token()).toBe(FAKE_TOKEN)
+    expect(await documents(env)).toBe(synced)
+
+    const kept = await run(["account", "remove", "--keep-data", "--yes"])
+    expect(kept.code, kept.err).toBe(0)
+    expect(kept.json().item).toMatchObject({ data: "kept", revoked: null })
+    expect(token()).toBeNull()
+    expect(await documents(env)).toBe(synced)
+
+    expect((await run(["session", "start"], FAKE_TOKEN)).code).toBe(0)
+    const deleted = await run(["account", "remove", "--delete-data", "--yes"])
+    expect(deleted.code, deleted.err).toBe(0)
+    expect(token()).toBeNull()
+    expect(await documents(env)).toBe(0)
+    expect(existsSync(join(dir, "state", "profiles", "personal"))).toBe(false)
+  })
+})
