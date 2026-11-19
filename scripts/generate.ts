@@ -42,6 +42,8 @@ const artifacts = generate(
   {
     banner: ["Source: spec/notion/openapi.json, verified by provenance.json", "Run: pnpm generate"],
     overrides: Object.fromEntries(Object.entries(READ_POSTS).map(([id, { reason }]) => [id, read(reason)])),
+    // `documents delete` checks `documents.delete`, so a raw call that deletes or trashes checks it too.
+    permissions: { group: "documents", deletingFlags: ["in_trash", "erase_content"] },
   },
 )
 const coverage = artifacts.find((artifact) => artifact.path === "docs/dev/API_COVERAGE.md")

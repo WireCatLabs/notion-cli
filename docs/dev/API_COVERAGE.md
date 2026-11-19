@@ -84,6 +84,20 @@ Run: pnpm generate
 | `query-sessions` | read | override: a POST that only lists sessions |
 | `query-session-events` | read | override: a POST that only lists a session's events |
 
+## Permission keys
+
+| Operation | Key | When |
+|---|---|---|
+| `patch-page` | `documents.delete` | body `in_trash` is true or body `erase_content` is true |
+| `update-a-block` | `documents.delete` | body `in_trash` is true |
+| `delete-a-block` | `documents.delete` | always |
+| `update-a-data-source` | `documents.delete` | body `in_trash` is true |
+| `update-database` | `documents.delete` | body `in_trash` is true |
+| `delete-a-comment` | `documents.delete` | always |
+| `delete-view` | `documents.delete` | always |
+| `delete-view-query` | `documents.delete` | always |
+| `delete-agent` | `documents.delete` | always |
+
 ## Not generated
 
 | Operation | Why |

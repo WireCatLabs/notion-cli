@@ -13,8 +13,6 @@
   "comments create": "write",
   "comments reply": "write",
   "files upload": "write",
-  "api list": "read",
-  "api show": "read",
   "api get-self": "read",
   "api get-user": "read",
   "api get-users": "read",

@@ -8806,82 +8806,82 @@ export type ViewFilterRequest =
 
 /** Filter for the view. Can be a property filter (filter by property value), timestamp filter (filter by created_time or last_edited_time), or compound filter (combine filters with and/or logic). Compound filters support up to 2 levels of nesting. */
 export type ViewFilterResponse =
-  | {
+  | ({
       /** The name or ID of the property to filter on. */
       property: string
-    }
-  | {
+    } & { [key: string]: unknown })
+  | ({
       /** The timestamp to filter on. */
       timestamp: "created_time" | "last_edited_time"
-    }
+    } & { [key: string]: unknown })
   | {
       /** Filters combined with OR logic. */
       or?: Array<
-        | {
+        | ({
             /** The name or ID of the property to filter on. */
             property: string
-          }
-        | {
+          } & { [key: string]: unknown })
+        | ({
             /** The timestamp to filter on. */
             timestamp: "created_time" | "last_edited_time"
-          }
+          } & { [key: string]: unknown })
         | {
             /** Filters combined with OR logic. */
             or?: Array<
-              | {
+              | ({
                   /** The name or ID of the property to filter on. */
                   property: string
-                }
-              | {
+                } & { [key: string]: unknown })
+              | ({
                   /** The timestamp to filter on. */
                   timestamp: "created_time" | "last_edited_time"
-                }
+                } & { [key: string]: unknown })
             >
             /** Filters combined with AND logic. */
             and?: Array<
-              | {
+              | ({
                   /** The name or ID of the property to filter on. */
                   property: string
-                }
-              | {
+                } & { [key: string]: unknown })
+              | ({
                   /** The timestamp to filter on. */
                   timestamp: "created_time" | "last_edited_time"
-                }
+                } & { [key: string]: unknown })
             >
           }
       >
       /** Filters combined with AND logic. */
       and?: Array<
-        | {
+        | ({
             /** The name or ID of the property to filter on. */
             property: string
-          }
-        | {
+          } & { [key: string]: unknown })
+        | ({
             /** The timestamp to filter on. */
             timestamp: "created_time" | "last_edited_time"
-          }
+          } & { [key: string]: unknown })
         | {
             /** Filters combined with OR logic. */
             or?: Array<
-              | {
+              | ({
                   /** The name or ID of the property to filter on. */
                   property: string
-                }
-              | {
+                } & { [key: string]: unknown })
+              | ({
                   /** The timestamp to filter on. */
                   timestamp: "created_time" | "last_edited_time"
-                }
+                } & { [key: string]: unknown })
             >
             /** Filters combined with AND logic. */
             and?: Array<
-              | {
+              | ({
                   /** The name or ID of the property to filter on. */
                   property: string
-                }
-              | {
+                } & { [key: string]: unknown })
+              | ({
                   /** The timestamp to filter on. */
                   timestamp: "created_time" | "last_edited_time"
-                }
+                } & { [key: string]: unknown })
             >
           }
       >
@@ -11560,7 +11560,7 @@ export type QueryAgentsResponse = {
                 }
           }
           /** Remaining per-type trigger configuration (e.g. watched channel ids, reaction config), keys in snake_case. Present only when the trigger carries such state. */
-          config?: Record<string, unknown>
+          config?: { [key: string]: unknown }
         }>
         /** The agent's inline instructions when verbose=true, or null when its instructions are stored on a page. */
         instructions?: string | null
@@ -11881,7 +11881,7 @@ export type QueryAgentsResponse = {
                 }
           }
           /** Remaining per-type trigger configuration (e.g. watched channel ids, reaction config), keys in snake_case. Present only when the trigger carries such state. */
-          config?: Record<string, unknown>
+          config?: { [key: string]: unknown }
         }>
       }
   >
@@ -12257,7 +12257,7 @@ export type GetAgentResponse = {
           }
     }
     /** Remaining per-type trigger configuration (e.g. watched channel ids, reaction config), keys in snake_case. Present only when the trigger carries such state. */
-    config?: Record<string, unknown>
+    config?: { [key: string]: unknown }
   }>
   /** Whether this agent is in the caller's personal favorites, or null when the caller has no personal favorites scope. */
   is_favorited: boolean | null
@@ -12660,7 +12660,7 @@ export type UpdateAgentResponse = {
           }
     }
     /** Remaining per-type trigger configuration (e.g. watched channel ids, reaction config), keys in snake_case. Present only when the trigger carries such state. */
-    config?: Record<string, unknown>
+    config?: { [key: string]: unknown }
   }>
   /** Whether this agent is in the caller's personal favorites, or null when the caller has no personal favorites scope. */
   is_favorited: boolean | null
@@ -13979,4 +13979,69 @@ export type CancelSessionResponse = {
     message: string
     retryable: boolean
   }
+}
+
+/** What each operation answers, by its id. */
+export interface Responses {
+  "get-self": UserObjectResponse
+  "get-user": UserObjectResponse
+  "get-users": GetUsersResponse
+  "post-page": PostPageResponse
+  "retrieve-a-page": RetrieveAPageResponse
+  "patch-page": PatchPageResponse
+  "move-page": MovePageResponse
+  "retrieve-a-page-property": RetrieveAPagePropertyResponse
+  "retrieve-page-markdown": PageMarkdownResponse
+  "update-page-markdown": PageMarkdownResponse
+  "retrieve-async-task": RetrieveAsyncTaskResponse
+  "retrieve-a-block": RetrieveABlockResponse
+  "update-a-block": UpdateABlockResponse
+  "delete-a-block": DeleteABlockResponse
+  "get-block-children": GetBlockChildrenResponse
+  "patch-block-children": PatchBlockChildrenResponse
+  "retrieve-a-data-source": RetrieveADataSourceResponse
+  "update-a-data-source": UpdateADataSourceResponse
+  "post-database-query": PageOrDataSourceListResponse
+  "create-a-database": CreateADatabaseResponse
+  "list-data-source-templates": ListDataSourceTemplatesResponse
+  "retrieve-database": RetrieveDatabaseResponse
+  "update-database": UpdateDatabaseResponse
+  "create-database": CreateDatabaseResponse
+  "post-search": PageOrDataSourceListResponse
+  "list-comments": ListCommentsResponse
+  "create-a-comment": CreateACommentResponse
+  "retrieve-comment": RetrieveCommentResponse
+  "update-a-comment": UpdateACommentResponse
+  "delete-a-comment": DeleteACommentResponse
+  "list-file-uploads": ListFileUploadsResponse
+  "create-file": FileUploadObjectResponse
+  "complete-file-upload": FileUploadObjectResponse
+  "retrieve-file-upload": FileUploadObjectResponse
+  "list-custom-emojis": ListCustomEmojisResponse
+  "list-views": ListViewsResponse
+  "create-view": CreateViewResponse
+  "retrieve-a-view": RetrieveAViewResponse
+  "update-a-view": UpdateAViewResponse
+  "delete-view": PartialDataSourceViewObjectResponse
+  "create-view-query": ViewQueryResponse
+  "get-view-query-results": GetViewQueryResultsResponse
+  "delete-view-query": DeletedViewQueryResponse
+  "create-meeting-note": CreateMeetingNoteResponse
+  "query-meeting-notes": QueryMeetingNotesResponse
+  "query-agents": QueryAgentsResponse
+  "get-agent": GetAgentResponse
+  "update-agent": UpdateAgentResponse
+  "delete-agent": DeleteAgentResponse
+  "get-agent-insights": GetAgentInsightsResponse
+  "update-agent-status": UpdateAgentStatusResponse
+  "update-agent-credit-limit": UpdateAgentCreditLimitResponse
+  "agent-batch": AgentBatchResponse
+  "list-skills-plugins": ListSkillsPluginsResponse
+  "get-plugin-directory": GetPluginDirectoryResponse
+  "get-skill-directory": GetSkillDirectoryResponse
+  "update-session": UpdateSessionResponse
+  "retrieve-session": RetrieveSessionResponse
+  "query-sessions": QuerySessionsResponse
+  "query-session-events": QuerySessionEventsResponse
+  "cancel-session": CancelSessionResponse
 }

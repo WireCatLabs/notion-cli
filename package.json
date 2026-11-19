@@ -59,8 +59,8 @@
   },
   "dependencies": {
     "@notionhq/client": "5.31.1",
-    "@wirecat/cli-base": "0.109.0",
-    "@wirecat/cli-core": "0.687.0",
+    "@wirecat/cli-base": "0.124.0",
+    "@wirecat/cli-core": "0.707.0",
     "commander": "15.0.0",
     "valibot": "1.5.0"
   },
@@ -71,7 +71,7 @@
     "@cspell/dict-ru_ru": "2.3.4",
     "@types/node": "22.20.5",
     "@vitest/coverage-v8": "5.0.5",
-    "@wirecat/cli-testing": "0.7.0",
+    "@wirecat/cli-testing": "0.7.3",
     "cspell": "10.4.0",
     "esbuild": "0.28.2",
     "lefthook": "2.2.2",
