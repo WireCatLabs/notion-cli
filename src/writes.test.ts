@@ -259,7 +259,11 @@ it("documents.delete deny stops every raw call that deletes: erase, archive, a r
   for (const [operation, flag, id, body] of [
     ["patch-page", "--page-id", PAGE_ID, '{"erase_content":true}'],
     ["patch-page", "--page-id", PAGE_ID, '{"is_archived":true}'],
+    ["patch-page", "--page-id", PAGE_ID, '{"archived":true}'],
     ["update-a-block", "--block-id", PAGE_ID, '{"in_trash":true}'],
+    ["update-a-block", "--block-id", PAGE_ID, '{"archived":true}'],
+    ["update-database", "--database-id", PAGE_ID, '{"is_archived":true}'],
+    ["update-a-data-source", "--data-source-id", source, '{"erase_content":true}'],
     ["update-a-data-source", "--data-source-id", source, '{"properties":{"Status":null}}'],
     ["delete-a-block", "--block-id", PAGE_ID, undefined],
     ["delete-a-comment", "--comment-id", PAGE_ID, undefined],

@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**195 ✅ · 206 ⛔ · 0 ❌** — 150 commands, 251 options.
+**198 ✅ · 203 ⛔ · 0 ❌** — 150 commands, 251 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -209,9 +209,9 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `api list-data-source-templates` | `--page-size` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-database` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api retrieve-database` | `--database-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-database` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-database` | `--database-id` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
-| `api update-database` | `--body` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
+| `api update-database` |  | ✅ |  |
+| `api update-database` | `--database-id` | ✅ |  |
+| `api update-database` | `--body` | ✅ |  |
 | `api update-database` | `--body-file` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api create-database` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |
 | `api create-database` | `--body` | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |

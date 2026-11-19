@@ -29,19 +29,30 @@ export const PAGE_WRITE_KEYS: Record<string, readonly string[]> = {
 const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value)
 
+/** Fields that trash, erase or archive when true; `is_archived` is undocumented, so it counts as a delete. */
+const DELETING_FIELDS = ["in_trash", "erase_content", "is_archived", "archived"]
+
+/** Top-level, as the old check read them, whether or not Notion's document still lists the field on the operation. */
+const deletingField: BodyPermission = {
+  key: DELETE_KEY,
+  when: `with ${DELETING_FIELDS.join(", ")} set`,
+  applies: (body) => isObject(body) && DELETING_FIELDS.some((field) => body[field] === true),
+}
+
 /**
- * The raw calls whose body deletes in a way no top-level flag says, so `documents.delete: deny` holds over `api` too.
- * The generator gives every destructive operation and every `in_trash` and `erase_content` flag the key
- * (scripts/generate.ts). Found by scanning Notion's OpenAPI document: `is_archived` on a page (what it does is
- * undocumented, so it counts as a delete), `allow_deleting_content` in a Markdown update, an agent batch with a delete
- * in it, and a data source property set to `null`, which removes it with its values
+ * The raw calls whose body deletes in a way the generator cannot see, so `documents.delete: deny` holds over `api`
+ * too; the generator already gives every destructive operation and every `in_trash` and `erase_content` flag in the
+ * spec the key (scripts/generate.ts). Found by scanning Notion's OpenAPI document: the deleting fields on the five
+ * operations that update content, `allow_deleting_content` in a Markdown update, an agent batch with a delete in it,
+ * and a data source property set to `null`, which removes it with its values
  * ([update a data source](https://developers.notion.com/reference/update-a-data-source)).
  */
 const BODY_PERMISSIONS: Readonly<Record<string, readonly BodyPermission[]>> = {
-  "patch-page": [
-    { key: DELETE_KEY, when: "with is_archived set", applies: (body) => isObject(body) && body.is_archived === true },
-  ],
+  "patch-page": [deletingField],
+  "update-a-block": [deletingField],
+  "update-database": [deletingField],
   "update-page-markdown": [
+    deletingField,
     {
       key: DELETE_KEY,
       when: "with allow_deleting_content set",
@@ -62,6 +73,7 @@ const BODY_PERMISSIONS: Readonly<Record<string, readonly BodyPermission[]>> = {
     },
   ],
   "update-a-data-source": [
+    deletingField,
     {
       key: DELETE_KEY,
       when: "a property is set to null",
