@@ -35,13 +35,6 @@
     "review_after": "2027-02-16"
   },
   {
-    "rule": "unknown-verb",
-    "target": "files upload",
-    "reason": "Sends a local file to Notion's file uploads and adds it to a page, as drive-cli's files upload sends one to Drive; review when the shared vocabulary names an upload verb.",
-    "owner": "@WireCatLabs",
-    "review_after": "2027-02-16"
-  },
-  {
     "rule": "list-without-query",
     "target": "comments list",
     "reason": "Notion's list comments takes only a page or block and a cursor (https://developers.notion.com/reference/list-comments); there is nothing to filter by on Notion's side.",

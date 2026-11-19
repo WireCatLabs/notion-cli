@@ -8133,44 +8133,68 @@ export const ViewFilterRequest: v.GenericSchema<unknown, T.ViewFilterRequest> = 
 ])
 
 export const ViewFilterResponse: v.GenericSchema<unknown, T.ViewFilterResponse> = v.union([
-  v.looseObject({
-    property: v.string(),
-  }),
-  v.looseObject({
-    timestamp: v.picklist(["created_time", "last_edited_time"]),
-  }),
+  v.objectWithRest(
+    {
+      property: v.string(),
+    },
+    v.unknown(),
+  ),
+  v.objectWithRest(
+    {
+      timestamp: v.picklist(["created_time", "last_edited_time"]),
+    },
+    v.unknown(),
+  ),
   v.looseObject({
     or: v.optional(
       v.array(
         v.union([
-          v.looseObject({
-            property: v.string(),
-          }),
-          v.looseObject({
-            timestamp: v.picklist(["created_time", "last_edited_time"]),
-          }),
+          v.objectWithRest(
+            {
+              property: v.string(),
+            },
+            v.unknown(),
+          ),
+          v.objectWithRest(
+            {
+              timestamp: v.picklist(["created_time", "last_edited_time"]),
+            },
+            v.unknown(),
+          ),
           v.looseObject({
             or: v.optional(
               v.array(
                 v.union([
-                  v.looseObject({
-                    property: v.string(),
-                  }),
-                  v.looseObject({
-                    timestamp: v.picklist(["created_time", "last_edited_time"]),
-                  }),
+                  v.objectWithRest(
+                    {
+                      property: v.string(),
+                    },
+                    v.unknown(),
+                  ),
+                  v.objectWithRest(
+                    {
+                      timestamp: v.picklist(["created_time", "last_edited_time"]),
+                    },
+                    v.unknown(),
+                  ),
                 ]),
               ),
             ),
             and: v.optional(
               v.array(
                 v.union([
-                  v.looseObject({
-                    property: v.string(),
-                  }),
-                  v.looseObject({
-                    timestamp: v.picklist(["created_time", "last_edited_time"]),
-                  }),
+                  v.objectWithRest(
+                    {
+                      property: v.string(),
+                    },
+                    v.unknown(),
+                  ),
+                  v.objectWithRest(
+                    {
+                      timestamp: v.picklist(["created_time", "last_edited_time"]),
+                    },
+                    v.unknown(),
+                  ),
                 ]),
               ),
             ),
@@ -8181,34 +8205,52 @@ export const ViewFilterResponse: v.GenericSchema<unknown, T.ViewFilterResponse> 
     and: v.optional(
       v.array(
         v.union([
-          v.looseObject({
-            property: v.string(),
-          }),
-          v.looseObject({
-            timestamp: v.picklist(["created_time", "last_edited_time"]),
-          }),
+          v.objectWithRest(
+            {
+              property: v.string(),
+            },
+            v.unknown(),
+          ),
+          v.objectWithRest(
+            {
+              timestamp: v.picklist(["created_time", "last_edited_time"]),
+            },
+            v.unknown(),
+          ),
           v.looseObject({
             or: v.optional(
               v.array(
                 v.union([
-                  v.looseObject({
-                    property: v.string(),
-                  }),
-                  v.looseObject({
-                    timestamp: v.picklist(["created_time", "last_edited_time"]),
-                  }),
+                  v.objectWithRest(
+                    {
+                      property: v.string(),
+                    },
+                    v.unknown(),
+                  ),
+                  v.objectWithRest(
+                    {
+                      timestamp: v.picklist(["created_time", "last_edited_time"]),
+                    },
+                    v.unknown(),
+                  ),
                 ]),
               ),
             ),
             and: v.optional(
               v.array(
                 v.union([
-                  v.looseObject({
-                    property: v.string(),
-                  }),
-                  v.looseObject({
-                    timestamp: v.picklist(["created_time", "last_edited_time"]),
-                  }),
+                  v.objectWithRest(
+                    {
+                      property: v.string(),
+                    },
+                    v.unknown(),
+                  ),
+                  v.objectWithRest(
+                    {
+                      timestamp: v.picklist(["created_time", "last_edited_time"]),
+                    },
+                    v.unknown(),
+                  ),
                 ]),
               ),
             ),
@@ -10772,7 +10814,7 @@ export const QueryAgentsResponse: v.GenericSchema<unknown, T.QueryAgentsResponse
                     ),
                   }),
                 ),
-                config: v.optional(v.looseObject({})),
+                config: v.optional(v.record(v.string(), v.unknown())),
               }),
             ),
             v.maxLength(100),
@@ -11072,7 +11114,7 @@ export const QueryAgentsResponse: v.GenericSchema<unknown, T.QueryAgentsResponse
                     ),
                   }),
                 ),
-                config: v.optional(v.looseObject({})),
+                config: v.optional(v.record(v.string(), v.unknown())),
               }),
             ),
             v.maxLength(100),
@@ -11428,7 +11470,7 @@ export const GetAgentResponse: v.GenericSchema<unknown, T.GetAgentResponse> = v.
             ),
           }),
         ),
-        config: v.optional(v.looseObject({})),
+        config: v.optional(v.record(v.string(), v.unknown())),
       }),
     ),
     v.maxLength(100),
@@ -11799,7 +11841,7 @@ export const UpdateAgentResponse: v.GenericSchema<unknown, T.UpdateAgentResponse
             ),
           }),
         ),
-        config: v.optional(v.looseObject({})),
+        config: v.optional(v.record(v.string(), v.unknown())),
       }),
     ),
     v.maxLength(100),

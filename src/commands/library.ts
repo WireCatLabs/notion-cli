@@ -33,12 +33,15 @@ import {
   MAX_ENTRIES,
   PROVIDER,
   principalOf,
+  reachedOf,
   readSnapshot,
   rootsOf,
   saveFolders,
   saveUserAccess,
   syncState,
   TEXT_LIMIT,
+  unauthoredOf,
+  userAccessOf,
   walkUnderWay,
   withProfileLock,
   withStore,
@@ -211,7 +214,13 @@ export const libraryCommands = (): Command[] => {
     notionSource(reads, {
       roots: rootsOf(env(), profile()),
       userAccess: (access) => saveUserAccess(env(), profile(), access),
-      ...(held ? { known: () => knownOf(syncState(env(), profile(), "").read()) } : {}),
+      ...(held
+        ? {
+            known: () => knownOf(syncState(env(), profile(), "").read()),
+            reached: () => reachedOf(env(), profile(), syncState(env(), profile(), "").read()),
+            unauthored: () => unauthoredOf(syncState(env(), profile(), "").read(), userAccessOf(env(), profile())),
+          }
+        : {}),
       warn: (warning) => warnings.push(warning),
       ...(deadline ? { deadline } : {}),
     })

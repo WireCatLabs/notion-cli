@@ -25768,7 +25768,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
         },
         "required": [
           "property"
-        ]
+        ],
+        "additionalProperties": {
+          "type": "unknown"
+        }
       },
       {
         "description": "A filter condition on a timestamp (created_time or last_edited_time). The timestamp field specifies which timestamp, and a matching field contains the date filter condition.",
@@ -25785,7 +25788,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
         },
         "required": [
           "timestamp"
-        ]
+        ],
+        "additionalProperties": {
+          "type": "unknown"
+        }
       },
       {
         "description": "A compound filter that combines multiple filters with AND or OR logic. Supports up to 2 levels of nesting.",
@@ -25809,7 +25815,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                   },
                   "required": [
                     "property"
-                  ]
+                  ],
+                  "additionalProperties": {
+                    "type": "unknown"
+                  }
                 },
                 {
                   "description": "A filter condition on a timestamp (created_time or last_edited_time). The timestamp field specifies which timestamp, and a matching field contains the date filter condition.",
@@ -25826,7 +25835,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                   },
                   "required": [
                     "timestamp"
-                  ]
+                  ],
+                  "additionalProperties": {
+                    "type": "unknown"
+                  }
                 },
                 {
                   "description": "A compound filter at the deepest nesting level. Can only contain property or timestamp filters (no further nesting).",
@@ -25850,7 +25862,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                             },
                             "required": [
                               "property"
-                            ]
+                            ],
+                            "additionalProperties": {
+                              "type": "unknown"
+                            }
                           },
                           {
                             "description": "A filter condition on a timestamp (created_time or last_edited_time). The timestamp field specifies which timestamp, and a matching field contains the date filter condition.",
@@ -25867,7 +25882,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                             },
                             "required": [
                               "timestamp"
-                            ]
+                            ],
+                            "additionalProperties": {
+                              "type": "unknown"
+                            }
                           }
                         ]
                       }
@@ -25890,7 +25908,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                             },
                             "required": [
                               "property"
-                            ]
+                            ],
+                            "additionalProperties": {
+                              "type": "unknown"
+                            }
                           },
                           {
                             "description": "A filter condition on a timestamp (created_time or last_edited_time). The timestamp field specifies which timestamp, and a matching field contains the date filter condition.",
@@ -25907,7 +25928,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                             },
                             "required": [
                               "timestamp"
-                            ]
+                            ],
+                            "additionalProperties": {
+                              "type": "unknown"
+                            }
                           }
                         ]
                       }
@@ -25936,7 +25960,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                   },
                   "required": [
                     "property"
-                  ]
+                  ],
+                  "additionalProperties": {
+                    "type": "unknown"
+                  }
                 },
                 {
                   "description": "A filter condition on a timestamp (created_time or last_edited_time). The timestamp field specifies which timestamp, and a matching field contains the date filter condition.",
@@ -25953,7 +25980,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                   },
                   "required": [
                     "timestamp"
-                  ]
+                  ],
+                  "additionalProperties": {
+                    "type": "unknown"
+                  }
                 },
                 {
                   "description": "A compound filter at the deepest nesting level. Can only contain property or timestamp filters (no further nesting).",
@@ -25977,7 +26007,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                             },
                             "required": [
                               "property"
-                            ]
+                            ],
+                            "additionalProperties": {
+                              "type": "unknown"
+                            }
                           },
                           {
                             "description": "A filter condition on a timestamp (created_time or last_edited_time). The timestamp field specifies which timestamp, and a matching field contains the date filter condition.",
@@ -25994,7 +26027,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                             },
                             "required": [
                               "timestamp"
-                            ]
+                            ],
+                            "additionalProperties": {
+                              "type": "unknown"
+                            }
                           }
                         ]
                       }
@@ -26017,7 +26053,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                             },
                             "required": [
                               "property"
-                            ]
+                            ],
+                            "additionalProperties": {
+                              "type": "unknown"
+                            }
                           },
                           {
                             "description": "A filter condition on a timestamp (created_time or last_edited_time). The timestamp field specifies which timestamp, and a matching field contains the date filter condition.",
@@ -26034,7 +26073,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                             },
                             "required": [
                               "timestamp"
-                            ]
+                            ],
+                            "additionalProperties": {
+                              "type": "unknown"
+                            }
                           }
                         ]
                       }
@@ -37028,7 +37070,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                         "description": "Remaining per-type trigger configuration (e.g. watched channel ids, reaction config), keys in snake_case. Present only when the trigger carries such state.",
                         "type": "object",
                         "properties": {},
-                        "required": []
+                        "required": [],
+                        "additionalProperties": {
+                          "type": "unknown"
+                        }
                       }
                     },
                     "required": [
@@ -38114,7 +38159,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
                         "description": "Remaining per-type trigger configuration (e.g. watched channel ids, reaction config), keys in snake_case. Present only when the trigger carries such state.",
                         "type": "object",
                         "properties": {},
-                        "required": []
+                        "required": [],
+                        "additionalProperties": {
+                          "type": "unknown"
+                        }
                       }
                     },
                     "required": [
@@ -39418,7 +39466,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
               "description": "Remaining per-type trigger configuration (e.g. watched channel ids, reaction config), keys in snake_case. Present only when the trigger carries such state.",
               "type": "object",
               "properties": {},
-              "required": []
+              "required": [],
+              "additionalProperties": {
+                "type": "unknown"
+              }
             }
           },
           "required": [
@@ -40794,7 +40845,10 @@ export const definitions: Readonly<Record<string, SchemaNode>> = {
               "description": "Remaining per-type trigger configuration (e.g. watched channel ids, reaction config), keys in snake_case. Present only when the trigger carries such state.",
               "type": "object",
               "properties": {},
-              "required": []
+              "required": [],
+              "additionalProperties": {
+                "type": "unknown"
+              }
             }
           },
           "required": [

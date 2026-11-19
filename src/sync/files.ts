@@ -47,6 +47,8 @@ export interface NotionMetadata {
   /** Set by `content()` only. */
   frontMatter?: Record<string, FrontMatterValue>
   people?: NotionIdentity[]
+  /** What the read could learn of its authors; a page read before 0.6.0 has none and is read again. */
+  authors?: UserAccess
   missingBlocks?: number
 }
 
@@ -85,6 +87,16 @@ export interface NotionSourceOptions {
    * once: a source serves one sync run.
    */
   known?: () => Iterable<NotionFile>
+  /**
+   * What the sync has met but does not hold yet: the folders and files of a walk an earlier run stopped, and the pending
+   * plan. Only their kind and that the token reached them count, so a later run does not ask Notion again. Read once.
+   */
+  reached?: () => Iterable<NotionFile>
+  /**
+   * Pages the sync holds whose authors it could not save: read before notion saved them, or before the connection
+   * could read email addresses. Each `changes()` sends a batch of them to be read again. Read once.
+   */
+  unauthored?: () => Iterable<NotionFile>
   /** How far back each pass reads before the mark; at least two minutes. */
   overlapMs?: number
   walkEveryMs?: number

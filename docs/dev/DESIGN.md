@@ -133,8 +133,9 @@ Notion's own CLI and MCP server show what users trip on. This tool takes three o
      [retrieve a user](https://developers.notion.com/reference/get-user), asked once per user and run. An email
      address joins the identity to the person who has it, as drive-cli does. That needs the connection's capability
      to read user information including email addresses; without it the sync keeps the id, and says so in its issues
-     and in `doctor`. A page read before this keeps no identities until it changes, or until `identities link` names
-     one.
+     and in `doctor`. Each page keeps what its read could learn of users (`authors`). A plain sync reads again, 50
+     a run, the pages read before notion saved authors (0.5.0 and older) and those read with less than the connection
+     gives now, as the last sync found it; no other page is read again for this.
    - File links that Notion signs carry a secret and expire after an hour. They are removed from the text before it
      is stored.
 2. **How it syncs.** On demand (`sync`), on a schedule (`jobs`), and kept running by `mirrors watch`. Notion has no

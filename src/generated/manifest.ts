@@ -173,6 +173,12 @@ export const operations: readonly ManifestOperation[] = [
     effect: "write",
     summary: "Update page",
     tags: ["Pages"],
+    permissions: [
+      {
+        key: "documents.delete",
+        body: ["in_trash", "erase_content"],
+      },
+    ],
     parameters: [
       {
         name: "page_id",
@@ -442,6 +448,12 @@ export const operations: readonly ManifestOperation[] = [
     effect: "write",
     summary: "Update a block",
     tags: ["Blocks"],
+    permissions: [
+      {
+        key: "documents.delete",
+        body: ["in_trash"],
+      },
+    ],
     parameters: [
       {
         name: "block_id",
@@ -474,6 +486,11 @@ export const operations: readonly ManifestOperation[] = [
     effect: "destructive",
     summary: "Delete a block",
     tags: ["Blocks"],
+    permissions: [
+      {
+        key: "documents.delete",
+      },
+    ],
     parameters: [
       {
         name: "block_id",
@@ -604,6 +621,12 @@ export const operations: readonly ManifestOperation[] = [
     effect: "write",
     summary: "Update a data source",
     tags: ["Data sources"],
+    permissions: [
+      {
+        key: "documents.delete",
+        body: ["in_trash"],
+      },
+    ],
     parameters: [
       {
         name: "data_source_id",
@@ -790,6 +813,12 @@ export const operations: readonly ManifestOperation[] = [
     effect: "write",
     summary: "Update a database",
     tags: ["Databases"],
+    permissions: [
+      {
+        key: "documents.delete",
+        body: ["in_trash"],
+      },
+    ],
     parameters: [
       {
         name: "database_id",
@@ -1013,6 +1042,11 @@ export const operations: readonly ManifestOperation[] = [
     effect: "destructive",
     summary: "Delete a comment",
     tags: ["Comments"],
+    permissions: [
+      {
+        key: "documents.delete",
+      },
+    ],
     parameters: [
       {
         name: "comment_id",
@@ -1361,6 +1395,11 @@ export const operations: readonly ManifestOperation[] = [
     effect: "destructive",
     summary: "Delete a view",
     tags: ["Views"],
+    permissions: [
+      {
+        key: "documents.delete",
+      },
+    ],
     parameters: [
       {
         name: "view_id",
@@ -1480,6 +1519,11 @@ export const operations: readonly ManifestOperation[] = [
     effect: "destructive",
     summary: "Delete a view query",
     tags: ["Views"],
+    permissions: [
+      {
+        key: "documents.delete",
+      },
+    ],
     parameters: [
       {
         name: "view_id",
@@ -1676,6 +1720,11 @@ export const operations: readonly ManifestOperation[] = [
     effect: "destructive",
     summary: "Delete agent",
     tags: ["Agents"],
+    permissions: [
+      {
+        key: "documents.delete",
+      },
+    ],
     parameters: [
       {
         name: "agent_id",
