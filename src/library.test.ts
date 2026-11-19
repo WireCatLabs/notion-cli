@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
@@ -790,6 +790,46 @@ describe("the knowledge layer and the catalog over the local copy", () => {
       const linked = await run(["identities", "link", ROADMAP, EDITOR, `person:${uid}`])
       expect(linked.code, linked.out).toBe(0)
       expect(await pagesOf(env, uid)).toEqual([expect.objectContaining({ role: "last-editor" })])
+    })
+
+    it("a page synced before authors were saved gets them from a plain sync, read again once", async () => {
+      const { run, env, notion } = authored()
+      const uid = await personWithEmail(env, "ada@example.invalid")
+      // Settled: a page edited in the last minutes is read on every sync anyway.
+      notion.advance(60 * 60_000)
+      await run(["sync"])
+      // As 0.5.0 left it: no `authors` in the sync's state, and no link from the page to its people.
+      const file = join(env.WCNOTION_STATE_DIR, "profiles", "personal", "sync", "state.json")
+      const state = JSON.parse(readFileSync(file, "utf8")) as {
+        documents: Record<string, { reference: string; metadata: { providerMetadata: { authors?: string } } }>
+      }
+      for (const doc of Object.values(state.documents)) delete doc.metadata.providerMetadata.authors
+      writeFileSync(file, JSON.stringify(state))
+      const held = Object.keys(state.documents).length
+      await withPeople(env, (store) =>
+        store.notes.replaceFileLinks(String(state.documents[ROADMAP]?.reference).slice("document:".length), []),
+      )
+      expect(await pagesOf(env, uid)).toEqual([])
+      const before = notion.calls.pageMarkdown
+      expect((await run(["sync"])).code).toBe(0)
+      expect(notion.calls.pageMarkdown - before).toBe(held)
+      expect(await pagesOf(env, uid)).toEqual([expect.objectContaining({ role: "owner" })])
+      const after = notion.calls.pageMarkdown
+      await run(["sync"])
+      expect(notion.calls.pageMarkdown).toBe(after)
+    })
+
+    it("once the connection may read email addresses, pages read without them get their people", async () => {
+      const { run, env, notion } = authored("names")
+      const uid = await personWithEmail(env, "ada@example.invalid")
+      await run(["sync"])
+      expect(await pagesOf(env, uid)).toEqual([])
+      notion.userAccess = "emails"
+      notion.advance(60 * 60_000)
+      notion.edit(LONELY, { title: "Lonely, edited" })
+      await run(["sync"])
+      await run(["sync"])
+      expect(await pagesOf(env, uid)).toEqual([expect.objectContaining({ role: "owner" })])
     })
 
     it("keeps authors by id when the connection reads no user information, and doctor says so", async () => {

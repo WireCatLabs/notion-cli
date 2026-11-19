@@ -38,7 +38,7 @@ import {
 } from "./files.js"
 import { frontMatter, frontMatterLines, titleOf } from "./front-matter.js"
 import { pageText } from "./markdown.js"
-import { pagePeople } from "./users.js"
+import { authorRereads, pagePeople } from "./users.js"
 
 export {
   isNotionDocument,
@@ -581,6 +581,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return { next: cursor.mark, startedAt: now(), walk, tasks }
   }
 
+  const { rereads, marking } = authorRereads(options.unauthored)
+
   const changes = async (token: string) => {
     const cursor = decodeCursor(token)
     fresh()
@@ -591,6 +593,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     const since = cursor.mark ? minus(cursor.mark, overlapMs) : null
     const items = new Map<string, SourceChange<NotionFile>>()
     const emit = (file: NotionFile) => items.set(file.id, { id: file.id, removed: false, file })
+    for (const file of rereads()) emit(file)
     const gone = (id: string) => items.set(id, { id, removed: true })
     // The engine walks every folder it is sent, all its rows, so a database it already holds is not sent again.
     const unheld = (file: NotionFile) => {
@@ -911,7 +914,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return { items: [...items.values()], cursor: encodeCursor(cursor) }
   }
 
-  const people = pagePeople(reads, warn, options.userAccess)
+  const authors = pagePeople(reads, warn, options.userAccess)
 
   const content = async (id: string, maxChars?: number): Promise<SourceContent<NotionFile>> => {
     containers = new Map()
@@ -939,7 +942,8 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       providerMetadata: {
         ...file.providerMetadata,
         frontMatter: fields,
-        people: await people(page),
+        people: await authors.people(page),
+        authors: authors.access(),
         ...(body.missing ? { missingBlocks: body.missing } : {}),
       },
     }
@@ -956,7 +960,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return `${self.bot.workspace_id}:${self.id}`
   }
 
-  return {
+  return marking({
     // One sync run asks once: the CLI checks the account before it takes the lock, and the engine asks again.
     identity() {
       account ??= identity()
@@ -1000,5 +1004,5 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     content,
     // A page has no file of its own; its Markdown is the nearest thing to one.
     bytes: async (id) => new TextEncoder().encode((await content(id)).markdown),
-  }
+  })
 }

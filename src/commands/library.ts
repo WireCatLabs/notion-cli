@@ -40,6 +40,8 @@ import {
   saveUserAccess,
   syncState,
   TEXT_LIMIT,
+  unauthoredOf,
+  userAccessOf,
   walkUnderWay,
   withProfileLock,
   withStore,
@@ -216,6 +218,7 @@ export const libraryCommands = (): Command[] => {
         ? {
             known: () => knownOf(syncState(env(), profile(), "").read()),
             reached: () => reachedOf(env(), profile(), syncState(env(), profile(), "").read()),
+            unauthored: () => unauthoredOf(syncState(env(), profile(), "").read(), userAccessOf(env(), profile())),
           }
         : {}),
       warn: (warning) => warnings.push(warning),
