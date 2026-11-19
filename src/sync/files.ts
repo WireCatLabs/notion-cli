@@ -85,6 +85,11 @@ export interface NotionSourceOptions {
    * once: a source serves one sync run.
    */
   known?: () => Iterable<NotionFile>
+  /**
+   * What the sync has met but does not hold yet: the folders and files of a walk an earlier run stopped, and the pending
+   * plan. Only their kind and that the token reached them count, so a later run does not ask Notion again. Read once.
+   */
+  reached?: () => Iterable<NotionFile>
   /** How far back each pass reads before the mark; at least two minutes. */
   overlapMs?: number
   walkEveryMs?: number

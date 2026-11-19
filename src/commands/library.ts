@@ -33,6 +33,7 @@ import {
   MAX_ENTRIES,
   PROVIDER,
   principalOf,
+  reachedOf,
   readSnapshot,
   rootsOf,
   saveFolders,
@@ -211,7 +212,12 @@ export const libraryCommands = (): Command[] => {
     notionSource(reads, {
       roots: rootsOf(env(), profile()),
       userAccess: (access) => saveUserAccess(env(), profile(), access),
-      ...(held ? { known: () => knownOf(syncState(env(), profile(), "").read()) } : {}),
+      ...(held
+        ? {
+            known: () => knownOf(syncState(env(), profile(), "").read()),
+            reached: () => reachedOf(env(), profile(), syncState(env(), profile(), "").read()),
+          }
+        : {}),
       warn: (warning) => warnings.push(warning),
       ...(deadline ? { deadline } : {}),
     })

@@ -417,6 +417,8 @@ describe("sync over the shared store", () => {
     }
     expect(saved).toBe(61)
     expect(waits).toBeGreaterThan(0)
+    // Each page is read once for its text: the walk knows its kind from the listing, and its parent from the walk.
+    expect(notion.calls.retrievePage).toBeLessThanOrEqual(62)
   })
 
   it("keeps syncing when Notion refuses one block of a page's Markdown (403), with the rest of the text", async () => {

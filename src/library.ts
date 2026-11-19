@@ -147,6 +147,17 @@ export const knownOf = (state: SourceState<NotionFile>): NotionFile[] => [
   ...Object.values(state.folders).filter((folder) => !state.documents[folder.id]),
 ]
 
+/** What the sync met but does not hold yet: a walk an earlier run stopped, and the plan still pending. */
+export const reachedOf = (env: NodeJS.ProcessEnv, profile: string, state: SourceState<NotionFile>): NotionFile[] => {
+  const walk = readJson<SourceWalk<NotionFile>>(join(profileDir(env, profile), "sync", "walk.json"))
+  return [
+    ...Object.values(walk?.folders ?? {}),
+    ...(walk?.files ?? []),
+    ...Object.values(state.pending?.folders ?? {}),
+    ...(state.pending?.jobs ?? []).flatMap((job) => (job.file ? [job.file] : [])),
+  ]
+}
+
 /**
  * The lock a sync and every write to the profile's local copy take, so a tag added during a sync is not lost. A
  * second holder is refused at once: waiting would hold an agent's tool call for the length of a sync.

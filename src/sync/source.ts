@@ -118,14 +118,27 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
   let known = new Map<string, NotionFile>()
   // Containers resolved within one call; a page's parent is re-read on the next one, as it may have moved.
   let containers = new Map<string, string>()
-  let accessible = new Set<string>()
+  // What this run has seen: a page or database the token reached, and the kind of each. Kept across calls, as the
+  // engine asks a folder's kind and a page's parent once per child otherwise; a page's kind never changes.
+  const accessible = new Set<string>()
+  const kinds = new Map<string, NotionKind>()
   let newestSeen = Number.NEGATIVE_INFINITY
   const fresh = () => {
-    held ??= new Map([...(options.known?.() ?? [])].map((file) => [file.id, file]))
+    if (!held) {
+      held = new Map([...(options.known?.() ?? [])].map((file) => [file.id, file]))
+      for (const id of held.keys()) accessible.add(id)
+      for (const file of options.reached?.() ?? []) seen(file)
+    }
     known = held
     containers = new Map()
-    accessible = new Set(known.keys())
   }
+  const seen = (file: NotionFile) => {
+    accessible.add(file.id)
+    kinds.set(file.id, file.providerMetadata.kind)
+    return file
+  }
+  const kindOf = async (id: string) =>
+    known.get(id)?.providerMetadata.kind ?? kinds.get(id) ?? (await retrieve(id)).providerMetadata.kind
   /** Notion's time: its Date header, or failing that the newest edit it has shown, which is never later than it. */
   const notionNow = () => Math.max(notion.serverTime?.() ?? Number.NEGATIVE_INFINITY, newestSeen)
 
@@ -141,6 +154,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
       if (parent.type === "block_id") container = await containerOf((await reads.retrieveBlock(id)).parent)
       else {
         if (!accessible.has(id)) await reads.retrievePage(id)
+        accessible.add(id)
         container = id
       }
     } catch (error) {
@@ -159,7 +173,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
   const pageFile = async (page: NotionPage): Promise<NotionFile> => {
     accessible.add(page.id)
     const row = page.parent.type === "data_source_id" || page.parent.type === "database_id"
-    return {
+    return seen({
       id: page.id,
       name: titleOf(page.properties).trim() || UNTITLED,
       mime: "application/vnd.notion.page",
@@ -176,16 +190,15 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         ...(page.created_by ? { createdBy: page.created_by.id } : {}),
         ...(page.last_edited_by ? { lastEditedBy: page.last_edited_by.id } : {}),
       },
-    }
+    })
   }
 
   /**
    * A page as its parent's listing gives it, with no read of its own. A page under a page has only its title for
    * properties, and the block names it, its times and its authors (https://developers.notion.com/reference/block).
    */
-  const childPageFile = (block: NotionBlock, container: string): NotionFile => {
-    accessible.add(block.id)
-    return {
+  const childPageFile = (block: NotionBlock, container: string): NotionFile =>
+    seen({
       id: block.id,
       name: block.child_page?.title.trim() || UNTITLED,
       mime: "application/vnd.notion.page",
@@ -204,12 +217,11 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         ...(block.created_by ? { createdBy: block.created_by.id } : {}),
         ...(block.last_edited_by ? { lastEditedBy: block.last_edited_by.id } : {}),
       },
-    }
-  }
+    })
 
   const databaseFile = async (database: NotionDatabase): Promise<NotionFile> => {
     accessible.add(database.id)
-    return {
+    return seen({
       id: database.id,
       name: text(database.title).trim() || UNTITLED,
       mime: "application/vnd.notion.database",
@@ -225,7 +237,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
         parent: { type: database.parent.type, id: parentId(database.parent) },
         dataSources: database.data_sources,
       },
-    }
+    })
   }
 
   const retrieve = async (id: string, kind?: NotionKind): Promise<NotionFile> => {
@@ -454,7 +466,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     if (id === WORKSPACE_ROOT) return { files: (await listChildren(id)).files }
     let at: ListPosition
     if (token === undefined) {
-      const kind = known.get(id)?.providerMetadata.kind ?? (await retrieve(id)).providerMetadata.kind
+      const kind = await kindOf(id)
       if (kind === "row") return { files: [] }
       if (kind === "database") {
         const database = await readDatabase(id)
@@ -814,7 +826,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     const walk = async (task: Extract<SyncTask, { t: "walk" }>) => {
       if (task.id === WORKSPACE_ROOT) return walkWorkspace()
       if (!task.kind) {
-        task.kind = known.get(task.id)?.providerMetadata.kind ?? (await retrieve(task.id)).providerMetadata.kind
+        task.kind = await kindOf(task.id)
         kept++
       }
       if (task.kind === "database") return walkDatabase(task.id)
