@@ -12,6 +12,8 @@
     "gcal-cli",
     "zoom-cli",
     "cli-memo",
-    "bitrix24-cli"
+    "bitrix24-cli",
+    "attio",
+    "hubspot"
   ]
 }

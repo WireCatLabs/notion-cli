@@ -2,6 +2,43 @@
 
 Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
 
+## 0.6.0 — 19.11.2026
+
+### Added
+
+- **`notion <profile> account remove` signs a profile out and forgets it on this computer.** It forgets the Notion
+  token, the profile's settings, its chosen pages and its sync checkpoint. `--keep-data` leaves the copied pages in the
+  store, where search still finds them; `--delete-data` deletes them. It asks first, or takes `--yes`; `--dry-run` lists
+  what it would remove. Why: WireCat Desktop removes an account with this command, and notion could only sign out with
+  `session end`. The token itself stays valid at Notion: revoke it on Notion's integrations page.
+
+### Changed — may break callers
+
+- **The MCP Registry entry asks which profiles to serve.** It started `mcp serve --profiles all`, so a client that
+  installed the server from the registry reached every account on the computer without the owner choosing. Now
+  `--profiles` is a required argument with the example `personal`: the client asks for one profile, a
+  comma-separated list or `all`. Why: a CLI never picks an account for the owner
+  ([WC-MCP-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-9--a-server-serves-the-profiles-it-is-told-with-one-connection-for-each)). Watch for: a client set up from the old entry keeps `--profiles all` until it is set up again; a
+  server added by hand or with `mcp config` does not change.
+
+### Fixed
+
+- **WireCat Desktop can remove a notion account.** The manifest Desktop reads (`contracts/wirecat.json`) now names
+  `account remove` and `session end`.
+- **Pages synced before 0.5.0 get their authors and last editors as people without a rescan.** A plain `sync` now
+  reads such pages again, 50 a run, and links them to the people who wrote and last edited them. It also does this
+  for pages read before the connection could read email addresses, once a sync has seen that it can. It reads no
+  other page again. Before, a page got its people only once someone edited it.
+- **A first sync reads each Notion page once instead of three times.** The walk asked Notion for each page's kind,
+  and every page read asked again for its parent page. notion now keeps what one run has already seen, also from the
+  walk and the plan an earlier run saved. A page with 60 pages under it took 182 page requests and now takes 61, which
+  counts under Notion's limit of about three requests a second.
+- **`api` is cli-core's shared group, as in attio, linear and hubspot.** The commands, their names and their keys stay
+  the same: each write asks or refuses by `api.<operation>`, and a call that deletes, by its method or its body, also
+  by `documents.delete`. Which calls delete now comes from the generated manifest, plus four body rules notion keeps
+  itself. A fix to the group in cli-core now reaches notion with a version bump.
+- cli-core 0.707.0 (was 0.687.0), cli-base 0.124.0 (was 0.109.0).
+
 ## 0.5.0 — 17.11.2026
 
 ### Fixed
