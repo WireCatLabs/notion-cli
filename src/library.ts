@@ -147,21 +147,6 @@ export const knownOf = (state: SourceState<NotionFile>): NotionFile[] => [
   ...Object.values(state.folders).filter((folder) => !state.documents[folder.id]),
 ]
 
-const ACCESS_RANK: Record<UserAccess, number> = { none: 0, names: 1, emails: 2 }
-
-/**
- * Pages whose text the sync holds but whose authors it could not save as people: read before notion saved authors
- * (0.5.0 and older keep no `authors`), or with less user information than the connection gives now.
- */
-export const unauthoredOf = (state: SourceState<NotionFile>, access: UserAccess | undefined): NotionFile[] =>
-  Object.values(state.documents)
-    .filter(({ metadata, notRead }) => {
-      const { kind, authors } = metadata.providerMetadata
-      if (notRead || (kind !== "page" && kind !== "row")) return false
-      return authors === undefined || (access !== undefined && ACCESS_RANK[authors] < ACCESS_RANK[access])
-    })
-    .map((doc) => doc.metadata)
-
 /** What the sync met but does not hold yet: a walk an earlier run stopped, and the plan still pending. */
 export const reachedOf = (env: NodeJS.ProcessEnv, profile: string, state: SourceState<NotionFile>): NotionFile[] => {
   const walk = readJson<SourceWalk<NotionFile>>(join(profileDir(env, profile), "sync", "walk.json"))

@@ -22,7 +22,8 @@ import { addDocumentCommands, type DocumentWords } from "@wirecat/cli-core/docum
 import { modelGateway, modelTarget } from "@wirecat/cli-core/models"
 import { Command } from "commander"
 import * as v from "valibot"
-import { contextOf, notionReadsFor, tokenOf } from "../context.js"
+import { contextOf, notionCallFor, tokenOf } from "../context.js"
+
 import { IDENTITY } from "../identity.js"
 import { ingestionOf, knowledgeOf } from "../knowledge.js"
 import {
@@ -40,24 +41,25 @@ import {
   saveUserAccess,
   syncState,
   TEXT_LIMIT,
-  unauthoredOf,
   userAccessOf,
   walkUnderWay,
   withProfileLock,
   withStore,
 } from "../library.js"
 import { notionId } from "../notion/ids.js"
+import { notionSourceFromConfig } from "../sync/from-config.js"
 import {
   isNotionDocument,
   isNotionFolder,
   type NotionFile,
-  notionSource,
   passUnderWay,
   type SyncWarning,
   WORKSPACE_ROOT,
 } from "../sync/source.js"
 import { VERSION } from "../version.js"
 import { createCommand, deleteCommand, getCommand, restoreCommand, updateCommand } from "./documents.js"
+
+type NotionCall = ReturnType<typeof notionCallFor>
 
 const CLI = IDENTITY.command
 
@@ -210,15 +212,16 @@ export const libraryCommands = (): Command[] => {
     return actor === "owner" ? ("owner" as const) : { bot: actor, reason: `asked by ${actor} through ${CLI}` }
   }
 
-  const sourceFor = (reads: Parameters<typeof notionSource>[0], held = false, deadline?: Deadline) =>
-    notionSource(reads, {
+  const sourceFor = (notion: NotionCall, held = false, deadline?: Deadline) =>
+    notionSourceFromConfig(notion.call, {
+      serverTime: notion.serverTime,
       roots: rootsOf(env(), profile()),
       userAccess: (access) => saveUserAccess(env(), profile(), access),
+      access: () => userAccessOf(env(), profile()),
       ...(held
         ? {
             known: () => knownOf(syncState(env(), profile(), "").read()),
             reached: () => reachedOf(env(), profile(), syncState(env(), profile(), "").read()),
-            unauthored: () => unauthoredOf(syncState(env(), profile(), "").read(), userAccessOf(env(), profile())),
           }
         : {}),
       warn: (warning) => warnings.push(warning),
@@ -226,9 +229,9 @@ export const libraryCommands = (): Command[] => {
     })
 
   /** One Notion run: the token read first, every request inside cli-core's run (WC-LIFE-15). */
-  const withNotionReads = <T>(body: (reads: Parameters<typeof notionSource>[0]) => Promise<T>) => {
+  const withNotionReads = <T>(body: (notion: NotionCall) => Promise<T>) => {
     const token = tokenOf(command())
-    return context().run((events) => body(notionReadsFor(command(), token, events)))
+    return context().run((events) => body(notionCallFor(command(), token, events)))
   }
 
   const documents = addDocumentCommands<unknown>(holder, {

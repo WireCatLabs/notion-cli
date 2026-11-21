@@ -38,7 +38,7 @@ import {
 } from "./files.js"
 import { frontMatter, frontMatterLines, titleOf } from "./front-matter.js"
 import { pageText } from "./markdown.js"
-import { authorRereads, pagePeople } from "./users.js"
+import { pagePeople } from "./users.js"
 
 export {
   isNotionDocument,
@@ -70,7 +70,11 @@ const OUT_OF_TIME = new Error("the run's deadline is near")
 /** Whether a Notion pass is still under way: the next `changes()` goes on with its tasks. */
 export const passUnderWay = (token: string | undefined) => token !== undefined && decodeCursor(token).pass !== undefined
 
-export const notionSource = (notion: NotionReads, options: NotionSourceOptions = {}): NotionSource => {
+/** Everything but the account, which the source manifest names (src/sync/from-config.ts). */
+export const notionSource = (
+  notion: NotionReads,
+  options: NotionSourceOptions = {},
+): Omit<NotionSource, "identity"> => {
   const overlapMs = options.overlapMs ?? DEFAULTS.overlapMs
   if (overlapMs < MIN_OVERLAP_MS) throw new CliError("validation_error", "the sync overlap must be two minutes or more")
   const walkEveryMs = options.walkEveryMs ?? DEFAULTS.walkEveryMs
@@ -581,8 +585,6 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return { next: cursor.mark, startedAt: now(), walk, tasks }
   }
 
-  const { rereads, marking } = authorRereads(options.unauthored)
-
   const changes = async (token: string) => {
     const cursor = decodeCursor(token)
     fresh()
@@ -593,7 +595,6 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     const since = cursor.mark ? minus(cursor.mark, overlapMs) : null
     const items = new Map<string, SourceChange<NotionFile>>()
     const emit = (file: NotionFile) => items.set(file.id, { id: file.id, removed: false, file })
-    for (const file of rereads()) emit(file)
     const gone = (id: string) => items.set(id, { id, removed: true })
     // The engine walks every folder it is sent, all its rows, so a database it already holds is not sent again.
     const unheld = (file: NotionFile) => {
@@ -950,22 +951,7 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     return { metadata, markdown: body.markdown, text: withoutSignedLinks(searchable).text, tabs: [] }
   }
 
-  let account: Promise<string> | undefined
-  const identity = async () => {
-    const self = await reads.self()
-    if (!self.bot?.workspace_id)
-      throw new CliError("invalid_response", "Notion did not name the token's workspace", {
-        reason: "notion.no-workspace",
-      })
-    return `${self.bot.workspace_id}:${self.id}`
-  }
-
-  return marking({
-    // One sync run asks once: the CLI checks the account before it takes the lock, and the engine asks again.
-    identity() {
-      account ??= identity()
-      return account
-    },
+  return {
     async metadata(id) {
       fresh()
       return retrieve(id, known.get(id)?.providerMetadata.kind)
@@ -1004,5 +990,5 @@ export const notionSource = (notion: NotionReads, options: NotionSourceOptions =
     content,
     // A page has no file of its own; its Markdown is the nearest thing to one.
     bytes: async (id) => new TextEncoder().encode((await content(id)).markdown),
-  })
+  }
 }

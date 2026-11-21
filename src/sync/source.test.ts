@@ -10,18 +10,23 @@ import {
 } from "@wirecat/cli-core/documents"
 import { documentSourceContract } from "@wirecat/cli-core/documents/testing"
 import { beforeEach, describe, expect, it } from "vitest"
-import type { NotionParent } from "../notion/reads.js"
-import { FakeNotion } from "../testing/fake-notion-reads.js"
+import type { NotionParent, NotionReads } from "../notion/reads.js"
+import { FakeNotion, fakeNotionCall } from "../testing/fake-notion-reads.js"
 import { decodeCursor, encodeCursor } from "./cursor.js"
+import { notionSourceFromConfig } from "./from-config.js"
 import {
   isNotionDocument,
   isNotionFolder,
   type NotionFile,
-  notionSource,
+  type NotionSourceOptions,
   passUnderWay,
   type SyncWarning,
   WORKSPACE_ROOT,
 } from "./source.js"
+
+/** The source as the CLI builds it: every read through the calls wirecat.config.ts names. */
+const configSource = (notion: NotionReads, options: NotionSourceOptions = {}) =>
+  notionSourceFromConfig(fakeNotionCall(notion), { ...options, serverTime: () => notion.serverTime?.() })
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -89,7 +94,7 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
   const reads = { known: 0 }
   // One source serves one sync run, as the CLI builds it.
   const sourceOf = () =>
-    notionSource(notion, {
+    configSource(notion, {
       roots,
       known: () => {
         reads.known++
@@ -552,7 +557,7 @@ describe("the Notion source under cli-core's sync engine", () => {
 
   it("names an untitled page so every entry has a name", async () => {
     notion.addPage({ id: "blank", title: "", parent: top })
-    const source = notionSource(notion, { now: () => notion.now })
+    const source = configSource(notion, { now: () => notion.now })
     expect((await source.metadata("blank")).name).toBe("Untitled")
   })
 
@@ -621,7 +626,7 @@ describe("changes()", () => {
     do {
       clock = 0
       runs++
-      const source = notionSource(timed, {
+      const source = configSource(timed, {
         now: () => notion.now,
         known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
         deadline: { endsAt: ms, ms },
@@ -718,7 +723,7 @@ describe("changes()", () => {
         tasks: [{ t: "search", kind: "page", start: "c3RhbGU" }],
       },
     })
-    const source = notionSource(notion, {
+    const source = configSource(notion, {
       now: () => notion.now,
       known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
       warn: (warning) => run.warnings.push(warning),
@@ -734,7 +739,7 @@ describe("changes()", () => {
     const run = harness(notion)
     await run.sync()
     notion.advance(HOUR)
-    const source = notionSource(notion, {
+    const source = configSource(notion, {
       now: () => notion.now,
       known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
       deadline: { endsAt: 4_000, ms: 4_000 },
@@ -757,7 +762,7 @@ describe("changes()", () => {
       ...cursor,
       pass: { next: cursor.mark, startedAt: notion.now, walk: true, tasks: [{ t: "walk", id: WORKSPACE_ROOT }] },
     })
-    const source = notionSource(notion, {
+    const source = configSource(notion, {
       now: () => notion.now,
       known: () => Object.values(run.state().documents).map((doc) => doc.metadata),
     })
@@ -794,7 +799,7 @@ describe("changes()", () => {
     notion.addPage({ id: "other", title: "Other", parent: row("db", "ds2") })
     notion.addPage({ id: "hub", title: "Hub", parent: top })
     for (let c = 0; c < 150; c++) notion.addPage({ id: `c${c}`, title: `C${c}`, parent: under("hub") })
-    const source = notionSource(notion, { now: () => notion.now })
+    const source = configSource(notion, { now: () => notion.now })
     for (const folder of ["db", "hub"]) {
       const ids: string[] = []
       let cursor: string | undefined
@@ -814,7 +819,7 @@ describe("changes()", () => {
     const notion = new FakeNotion()
     notion.addPage({ id: "hub", title: "Hub", parent: top })
     for (let c = 0; c < 150; c++) notion.addPage({ id: `c${c}`, title: `C${c}`, parent: under("hub") })
-    const source = notionSource(notion, { now: () => notion.now })
+    const source = configSource(notion, { now: () => notion.now })
     const refused = () => new CliError("validation_error", "start_cursor is not valid", { status: 400 })
     notion.failNext("blockChildren", refused())
     // On the first page there is no saved position: the 400 is the answer, and nothing counts as gone.
@@ -1002,7 +1007,7 @@ describe("changes()", () => {
     const notion = new FakeNotion()
     notion.addDatabase({ id: "dense", title: "Dense", parent: top, sources: ["dense-ds"] })
     for (let i = 0; i < 10_001; i++) notion.addPage({ id: `d-${i}`, title: "d", parent: row("dense", "dense-ds") })
-    const source = notionSource(notion, { now: () => notion.now })
+    const source = configSource(notion, { now: () => notion.now })
     await expect(source.children("dense")).rejects.toMatchObject({
       code: "validation_error",
       details: { reason: "notion.window-too-dense", database: "dense" },
@@ -1013,7 +1018,7 @@ describe("changes()", () => {
     const notion = workspace()
     notion.blocks.set("col", under("a"))
     notion.addPage({ id: "in-col", title: "In a column", parent: { type: "block_id", block_id: "col" } })
-    const source = notionSource(notion, { now: () => notion.now })
+    const source = configSource(notion, { now: () => notion.now })
     expect((await source.metadata("in-col")).parents).toEqual(["a"])
     expect((await source.children("a")).map((file) => file.id).sort()).toEqual(["a1", "in-col"])
   })
@@ -1022,7 +1027,7 @@ describe("changes()", () => {
     const notion = workspace()
     notion.addDatabase({ id: "view", title: "Linked view", parent: under("a"), sources: ["view-ds"], unreadable: true })
     const warnings: SyncWarning[] = []
-    const source = notionSource(notion, { now: () => notion.now, warn: (warning) => warnings.push(warning) })
+    const source = configSource(notion, { now: () => notion.now, warn: (warning) => warnings.push(warning) })
     expect((await source.children("a")).map((file) => file.id)).toEqual(["a1"])
     expect(warnings).toContainEqual(expect.objectContaining({ id: "view", code: "not_found" }))
   })
@@ -1031,12 +1036,12 @@ describe("changes()", () => {
     const notion = new FakeNotion()
     notion.addPage({ id: "hidden", title: "Hidden", parent: top, shared: false })
     notion.addPage({ id: "shared", title: "Shared", parent: under("hidden") })
-    const source = notionSource(notion, { now: () => notion.now })
+    const source = configSource(notion, { now: () => notion.now })
     expect((await source.children(WORKSPACE_ROOT)).map((file) => file.id)).toEqual(["shared"])
   })
 
   it("refuses an overlap under two minutes", () => {
-    expect(() => notionSource(new FakeNotion(), { overlapMs: MINUTE })).toThrow(/two minutes/)
+    expect(() => configSource(new FakeNotion(), { overlapMs: MINUTE })).toThrow(/two minutes/)
   })
 })
 
@@ -1051,7 +1056,7 @@ describe("content()", () => {
         'start\n<unknown url="https://www.notion.so/p#aaaa-1111" alt="x"/>\n<unknown url="https://www.notion.so/p#bbbb2222" alt="y"/>',
       unknown: { "aaaa-1111": "filled in", bbbb2222: null },
     })
-    const content = await notionSource(notion, { now: () => notion.now }).content("p")
+    const content = await configSource(notion, { now: () => notion.now }).content("p")
     expect(content.markdown).toContain("filled in")
     expect(content.markdown).toContain("bbbb2222")
     expect(content.metadata.providerMetadata.missingBlocks).toBe(1)
@@ -1061,7 +1066,7 @@ describe("content()", () => {
     const notion = new FakeNotion()
     notion.addPage({ id: "long", title: "L", parent: top, markdown: "x".repeat(500) })
     notion.addPage({ id: "gone", title: "G", parent: top, trashed: true })
-    const source = notionSource(notion, { now: () => notion.now })
+    const source = configSource(notion, { now: () => notion.now })
     await expect(source.content("long", 100)).rejects.toMatchObject({ details: { text_limit: 100 } })
     await expect(source.content("gone")).rejects.toMatchObject({ code: "not_found" })
     expect(new TextDecoder().decode(await source.bytes("long"))).toBe("x".repeat(500))
@@ -1076,7 +1081,7 @@ describe.each([
     const notion = workspace()
     notion.addPage({ id: "a2", title: "", parent: under("a1"), markdown: "deep" })
     return {
-      source: notionSource(notion, { now: () => notion.now }),
+      source: configSource(notion, { now: () => notion.now }),
       root,
       isFolder: isNotionFolder,
       isDocument: isNotionDocument,

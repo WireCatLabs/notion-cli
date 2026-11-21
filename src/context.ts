@@ -7,16 +7,17 @@ import {
   type GlobalFlags,
   ProfileTokenStore,
   refuseOffline,
+  serviceApiCall,
 } from "@wirecat/cli-core/cli"
 import { Pacer, pacePathFor } from "@wirecat/cli-core/sends"
 import type { Command } from "commander"
-import { configuration } from "./config.js"
+import { API, configuration } from "./config.js"
+import { HEADERS } from "./generated/wirecat-config.js"
 import { IDENTITY } from "./identity.js"
 import { notionClient, notionFetch, PACE, QUERY_PACE } from "./notion/client.js"
-import { NOTION } from "./notion/errors.js"
+import { NOTION, notionRefusal } from "./notion/errors.js"
 import { type LiveReads, liveReads } from "./notion/notion.js"
-import { notionClock, notionPort } from "./notion/port.js"
-import type { NotionReads } from "./notion/reads.js"
+import { notionClock } from "./notion/port.js"
 import { type LiveWrites, liveWrites } from "./notion/writes.js"
 
 /** What a test hands `run()` beside cli-core's own: the fake Notion in place of the network (WC-ARCH-10). */
@@ -76,10 +77,22 @@ const transportOf = (command: Command, events: EventSink | undefined, onAnswer?:
 export const notionFor = (command: Command, token: string, events: EventSink): LiveReads =>
   liveReads(notionClient({ token, ...transportOf(command, events) }))
 
-/** The sync's read port: Notion's clock comes from the Date header of every answer, never from this computer's. */
-export const notionReadsFor = (command: Command, token: string, events: EventSink): NotionReads => {
+/**
+ * The sync's requests: the calls wirecat.config.ts names, sent by cli-core's `api` request path over the same
+ * transport, with the config's headers and Notion's refusals. Notion's clock comes from the Date header of every
+ * answer, never from this computer's.
+ */
+export const notionCallFor = (command: Command, token: string, events: EventSink) => {
   const clock = notionClock()
-  return notionPort(notionClient({ token, ...transportOf(command, events, clock.observe) }), clock)
+  const call = serviceApiCall({
+    manifest: API.manifest,
+    service: NOTION,
+    fetch: notionFetch(transportOf(command, events, clock.observe)),
+    token: () => token,
+    headers: () => ({ ...HEADERS }),
+    failure: (status, answer) => notionRefusal(status, answer),
+  })
+  return { call, serverTime: clock.time }
 }
 
 /** The same transport for the generated `api` commands, each attempt recorded in the run, as the SDK's are. */

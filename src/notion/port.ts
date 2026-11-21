@@ -85,3 +85,28 @@ export const notionPort = (client: Client, clock?: ReturnType<typeof notionClock
     return { markdown: answer.markdown, truncated: answer.truncated, unknown_block_ids: answer.unknown_block_ids }
   },
 })
+
+/** A call the source manifest names in wirecat.config.ts `source.reads`, filled with an id or a cursor. */
+export type NamedRead = (name: string, slots?: { id?: string; cursor?: string }, body?: unknown) => Promise<unknown>
+
+/**
+ * The same port over the calls wirecat.config.ts names, sent by cli-core's `api` request path: the sync's every
+ * request is one the config lists. The fixed values the SDK added (page size, Markdown version) are in those calls.
+ */
+export const manifestPort = (read: NamedRead, serverTime?: () => number | undefined): NotionReads => ({
+  ...(serverTime ? { serverTime } : {}),
+  self: async () => kind<NotionSelf>("user", await read("self")),
+  retrieveUser: async (id) => kind<NotionUserDetail>("user", await read("user", { id })),
+  search: async (request) =>
+    list<NotionPage | NotionDataSource>(["page", "data_source"], await read("search", {}, request)),
+  queryDataSource: async (id, request) => list<NotionPage>("page", await read("query", { id }, request)),
+  retrievePage: async (id) => kind<NotionPage>("page", await read("page", { id })),
+  retrieveDatabase: async (id) => kind<NotionDatabase>("database", await read("database", { id })),
+  retrieveBlock: async (id) => kind<NotionBlock>("block", await read("block", { id })),
+  blockChildren: async (id, startCursor) =>
+    list<NotionBlock>("block", await read("blocks", { id, ...(startCursor ? { cursor: startCursor } : {}) })),
+  pageMarkdown: async (id) => {
+    const answer = kind<NotionPageMarkdown & { object: string }>("page_markdown", await read("markdown", { id }))
+    return { markdown: answer.markdown, truncated: answer.truncated, unknown_block_ids: answer.unknown_block_ids }
+  },
+})

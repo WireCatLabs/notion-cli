@@ -2,6 +2,17 @@
 
 Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
 
+## Unreleased
+
+### Added
+
+- **`wirecat.config.ts` describes the sync's source.** The config names the account, every Notion call the sync
+  sends, the API version and both paces. cli-core reads the calls through the same request path as `notion api`.
+  Before, these were code over Notion's SDK. A page synced before authors were saved is now read again by cli-core's
+  engine, not by a marked version. Nothing changes for a user: the same pages are read, with the same limits. Why:
+  attio and linear already build their sources from a config, and a new documents CLI can now do the same
+  ([docs/dev/SYNC.md](docs/dev/SYNC.md#where-the-requests-come-from)).
+
 ## 0.6.0 — 19.11.2026
 
 ### Added

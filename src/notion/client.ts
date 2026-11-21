@@ -2,12 +2,13 @@ import { Client } from "@notionhq/client"
 import { CliError, type SleepLike } from "@wirecat/cli-base"
 import { type FetchLike, hostFetch, type PacerLike, retrying, statusToCode } from "@wirecat/cli-base/http"
 import { type EventSink, providerRequest } from "@wirecat/cli-core/cli"
+import { HEADERS, PACES } from "../generated/wirecat-config.js"
 import { BLOCKED, blocked, NOTION } from "./errors.js"
 import { READ_POST_PATHS } from "./read-posts.js"
 
 export const API_HOST = "api.notion.com"
-/** The API version every request names ([versioning](https://developers.notion.com/reference/versioning)). */
-export const NOTION_VERSION = "2026-03-11"
+/** The API version every request names, from wirecat.config.ts `api.headers`. */
+export const NOTION_VERSION = String(HEADERS["notion-version"])
 
 /** Notion ends a request after 60 s ([status codes](https://developers.notion.com/reference/status-codes), 503). */
 const EXCHANGE_MS = 70_000
@@ -17,12 +18,10 @@ const LONGEST_WAIT_MS = 60_000
 /** Notion's guide retries 429 and 529 with `Retry-After`, then backs off ([request limits](https://developers.notion.com/reference/request-limits)). */
 const RETRY = { retries: 3, baseDelayMs: 500, maxDelayMs: 10_000, maxRetryAfterMs: LONGEST_WAIT_MS }
 
-/**
- * 180 a minute per connection, the lower plan's limit; data source queries have a limit of their own, "about 3
- * requests per second per connection" ([request limits](https://developers.notion.com/reference/request-limits)).
- */
-export const PACE = { perMinute: 170, burst: 10 }
-export const QUERY_PACE = { perMinute: 170, burst: 3 }
+/** wirecat.config.ts `api.pace`: the connection's, and the data source queries' own. */
+const { operations, ...general } = PACES
+export const PACE = general
+export const QUERY_PACE = operations?.["post-database-query"] ?? general
 
 const ID = /[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/giu
 const QUERY = /^\/v1\/data_sources\/[^/]+\/query$/u
