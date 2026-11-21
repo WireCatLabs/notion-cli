@@ -18,7 +18,7 @@ export interface BrowseLevel {
   cut: boolean
 }
 
-export type NotionSource = DocumentSource<NotionFile> & {
+export type NotionSource = DocumentSource<NotionFile> & Required<Pick<DocumentSource<NotionFile>, "startToken" | "changes">> & {
   browse(parent: string, limit: number, cursor?: string): Promise<BrowseLevel>
 }
 
