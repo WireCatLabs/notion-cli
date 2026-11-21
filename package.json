@@ -60,7 +60,7 @@
   "dependencies": {
     "@notionhq/client": "5.31.1",
     "@wirecat/cli-base": "0.125.0",
-    "@wirecat/cli-core": "file:/var/tmp/claude/claude-1000/-home-leemour-Projects-AI-cli-template/de832675-583b-4b84-91de-a51670ff9fca/scratchpad/pack/wirecat-cli-core-0.714.0.tgz",
+    "@wirecat/cli-core": "0.718.0",
     "commander": "15.0.0",
     "valibot": "1.5.0"
   },

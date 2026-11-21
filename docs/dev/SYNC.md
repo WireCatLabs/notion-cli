@@ -71,7 +71,8 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
 
 The sync's source starts from `wirecat.config.ts`, as attio's and linear's do. Its `source` names the account (the
 token's workspace and bot, from `GET /v1/users/me`) and every call the sync sends, each one an operation of the
-generated API: search, a data source query, a page, a database, a block, a block's children and a page's Markdown.
+generated API: search, a data source query, a page, a database, a block, a block's children, a page's Markdown and
+a user (for a page's authors).
 cli-core's `documentSourceFromManifest` sends them through the `api` group's request path, with the config's
 `api.headers` (the API version) and Notion's refusals (`notionRefusal`), over the same paced transport. The config's
 `api.pace` gives both paces: the connection's and the data source queries' own. `pnpm generate` writes the config
@@ -82,7 +83,9 @@ and the deadline. The config's `reread: { missing: "authors" }` makes cli-core's
 its metadata lacks authors. `src/sync/from-config.ts` narrows it to pages and rows, and adds pages read with less
 user information than the connection gives now. The engine reads at most 50 such pages a sync.
 
-The commands (`pages show`, `databases list` and the rest) still read through Notion's SDK.
+The commands (`pages show`, `databases list` and the rest) still read through Notion's SDK. A sync's run record lists
+each request twice, as `notion api`'s does: each attempt from notion's transport, and the request from cli-core's
+path.
 
 ## Two traps and how they are handled
 

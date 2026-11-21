@@ -1099,3 +1099,21 @@ describe.each([
   }))
     it(c.name, c.run)
 })
+
+describe("which saved pages the source asks to read again", () => {
+  const saved = (kind: string, authors?: string) =>
+    ({
+      metadata: { id: "p", providerMetadata: { kind, ...(authors ? { authors } : {}) } },
+      hash: "h",
+      reference: "r",
+      tabs: 0,
+    }) as never
+  it("reads a page or a row again without authors, or with less than the connection gives now; never a database", () => {
+    const source = configSource(workspace(), { access: () => "emails" })
+    expect(source.reread?.(saved("page"))).toBe(true)
+    expect(source.reread?.(saved("row", "names"))).toBe(true)
+    expect(source.reread?.(saved("page", "emails"))).toBe(false)
+    expect(source.reread?.(saved("database"))).toBe(false)
+    expect(configSource(workspace()).reread?.(saved("row", "names"))).toBe(false)
+  })
+})

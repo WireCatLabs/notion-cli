@@ -20,7 +20,6 @@ export const REASONS = defineReasons(
       ["notion.invalid-response", "invalid_response", "Notion's answer does not have the documented shape"],
       ["notion.id-invalid", "validation_error", "that is not a Notion id or link"],
       ["notion.truncated", "provider_error", "Notion gave only part of the page"],
-      ["notion.no-workspace", "invalid_response", "Notion did not name the token's workspace"],
       ["notion.failed", "provider_error", "a Notion read failed"],
       ["notion.search-incomplete", "provider_error", "Notion cut the search for edits short"],
       ["notion.window-too-dense", "validation_error", "more than 10,000 rows of one database share one minute"],
