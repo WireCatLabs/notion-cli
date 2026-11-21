@@ -18,9 +18,6 @@ importers:
       '@wirecat/cli-base':
         specifier: 0.106.0
         version: 0.106.0(commander@15.0.0)(esbuild@0.28.2)(typescript@7.0.2)(vitest@5.0.5)
-      '@wirecat/cli-core':
-        specifier: 0.680.0
-        version: 0.680.0(@wirecat/cli-base@0.106.0(commander@15.0.0)(esbuild@0.28.2)(typescript@7.0.2)(vitest@5.0.5))(commander@15.0.0)(typescript@7.0.2)(zod@4.6.7)
       commander:
         specifier: 15.0.0
         version: 15.0.0
@@ -46,6 +43,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 5.0.5
         version: 5.0.5(vitest@5.0.5)
+      '@wirecat/cli-core':
+        specifier: file:/var/tmp/claude/claude-1000/-home-leemour-Projects-AI-cli-template/de832675-583b-4b84-91de-a51670ff9fca/scratchpad/faultpack/wirecat-cli-core-0.684.0.tgz
+        version: file:../../../../../var/tmp/claude/claude-1000/-home-leemour-Projects-AI-cli-template/de832675-583b-4b84-91de-a51670ff9fca/scratchpad/faultpack/wirecat-cli-core-0.684.0.tgz(@wirecat/cli-base@0.106.0(commander@15.0.0)(esbuild@0.28.2)(typescript@7.0.2)(vitest@5.0.5))(commander@15.0.0)(typescript@7.0.2)(zod@4.6.7)
       '@wirecat/cli-testing':
         specifier: 0.7.0
         version: 0.7.0
@@ -1208,8 +1208,9 @@ packages:
   '@wirecat/cli-core-sqlite@1.1.0':
     resolution: {integrity: sha512-GpGlh/dAIX/nblBYCdT6DfWSLFxav9mxxeELQAfEuw+QZdT9unKxbi5xa02s/s4JS1P7n0PQx2sCABj4FlMRNw==}
 
-  '@wirecat/cli-core@0.680.0':
-    resolution: {integrity: sha512-7fqwB5NW7hxG2Zjo2fJzcFfSu5aEltEMVI2YPnfgVUVzQkzLDmPNw2rVx/mpEacg91s7ygJ5/3nP83A4d3LvAw==}
+  '@wirecat/cli-core@file:../../../../../var/tmp/claude/claude-1000/-home-leemour-Projects-AI-cli-template/de832675-583b-4b84-91de-a51670ff9fca/scratchpad/faultpack/wirecat-cli-core-0.684.0.tgz':
+    resolution: {integrity: sha512-jMSgLcs1gAS20qswRfsbsRwEQzDWBp0W4+BO/bdEYMbNfTmloD88LjfqUh3WeKrzDyHGWqOB1SUr+rqApngKiA==, tarball: file:../../../../../var/tmp/claude/claude-1000/-home-leemour-Projects-AI-cli-template/de832675-583b-4b84-91de-a51670ff9fca/scratchpad/faultpack/wirecat-cli-core-0.684.0.tgz}
+    version: 0.684.0
     engines: {node: ^22.16.0 || >=24}
     hasBin: true
     peerDependencies:
@@ -3254,7 +3255,7 @@ snapshots:
 
   '@wirecat/cli-core-sqlite@1.1.0': {}
 
-  '@wirecat/cli-core@0.680.0(@wirecat/cli-base@0.106.0(commander@15.0.0)(esbuild@0.28.2)(typescript@7.0.2)(vitest@5.0.5))(commander@15.0.0)(typescript@7.0.2)(zod@4.6.7)':
+  '@wirecat/cli-core@file:../../../../../var/tmp/claude/claude-1000/-home-leemour-Projects-AI-cli-template/de832675-583b-4b84-91de-a51670ff9fca/scratchpad/faultpack/wirecat-cli-core-0.684.0.tgz(@wirecat/cli-base@0.106.0(commander@15.0.0)(esbuild@0.28.2)(typescript@7.0.2)(vitest@5.0.5))(commander@15.0.0)(typescript@7.0.2)(zod@4.6.7)':
     dependencies:
       '@anthropic-ai/sdk': 1.3.0(zod@4.6.7)
       '@bomb.sh/tab': 0.0.22(commander@15.0.0)

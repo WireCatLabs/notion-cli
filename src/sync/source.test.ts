@@ -1094,3 +1094,105 @@ describe.each([
   }))
     it(c.name, c.run)
 })
+
+/** Local proof only: the fault cases of cli-core's contract over the strict fake. */
+describe.each([
+  ["the whole workspace", WORKSPACE_ROOT, "b"],
+  ["a page chosen as a folder", "a", "a1"],
+])("cli-core's fault cases over the strict fake, from %s", (_, root, child) => {
+  for (const c of documentSourceContract(() => {
+    const notion = workspace()
+    notion.addPage({ id: "a2", title: "", parent: under("a1"), markdown: "deep" })
+    const denied = new Map<string, 403 | 404>()
+    const reads = new Proxy(notion, {
+      get(target, name, receiver) {
+        const value = Reflect.get(target, name, receiver)
+        if (typeof value !== "function") return value
+        return (...args: unknown[]) => {
+          const status = typeof args[0] === "string" ? denied.get(args[0]) : undefined
+          if (status === 403) throw new CliError("permission_error", "restricted", { status: 403 })
+          if (status === 404) throw new CliError("not_found", `Could not find ${args[0]}`, { status: 404 })
+          return value.apply(target, args)
+        }
+      },
+    })
+    let state: SourceState<NotionFile> = { version: 1, principal: PRINCIPAL, scope: "", folders: {}, documents: {}, skipped: [] }
+    let walk: SourceWalk<NotionFile> | undefined
+    const saved = new Set<string>()
+    return {
+      source: notionSource(reads, { now: () => notion.now }),
+      root,
+      isFolder: isNotionFolder,
+      isDocument: isNotionDocument,
+      change: async () => {
+        notion.advance(HOUR)
+        notion.edit("a2", { markdown: "deep v2" })
+      },
+      faults: {
+        deny: (status) => {
+          denied.set(child, status)
+          return child
+        },
+        skewed: (ms) => notionSource(reads, { now: () => notion.now + ms }),
+        sameToken: () => notionSource(reads, { now: () => notion.now }),
+        sync: async (run) => {
+          const source = notionSource(reads, {
+            roots: [root],
+            known: () => [...Object.values(state.documents).map((doc) => doc.metadata), ...Object.values(state.folders)],
+            now: () => notion.now,
+            ...(run.now ? { clock: run.now } : {}),
+            ...(run.deadline ? { deadline: run.deadline } : {}),
+          })
+          const result = await syncDocuments<NotionFile>({
+            source: run.wrap(source),
+            index: {
+              save: async (_p, content) => {
+                saved.add(content.metadata.id)
+                return `document:${content.metadata.id}`
+              },
+              remove: async (_p, id) => {
+                saved.delete(id)
+              },
+              openPictures: async () => {
+                throw new CliError("not_found", "no picture model")
+              },
+            },
+            state: {
+              read: () => structuredClone(state),
+              save: (next) => {
+                state = structuredClone(next)
+              },
+              readWalk: (scope) => (walk?.scope === scope ? structuredClone(walk) : undefined),
+              saveWalk: (next) => {
+                walk = structuredClone(next)
+              },
+              removeWalk: () => {
+                walk = undefined
+              },
+              saveSnapshot: () => undefined,
+              removeSnapshot: () => undefined,
+            },
+            principal: PRINCIPAL,
+            roots: [root],
+            textLimit: 1_000_000,
+            max: 100_000,
+            maxEntries: 100_000,
+            isFolder: isNotionFolder,
+            isDocument: isNotionDocument,
+            skipReason: () => undefined,
+            retryable: () => false,
+            errorOf: (error) => (isCliError(error) ? error : new CliError("provider_error", String(error))),
+            assertHeld: () => undefined,
+            storeVersion: "test",
+            now: () => notion.now,
+            ...(run.budget ? { budget: run.budget } : {}),
+            ...(run.deadline ? { deadline: run.deadline } : {}),
+            ...(run.signal ? { signal: run.signal } : {}),
+          })
+          return { result, saved: [...saved] }
+        },
+      },
+    }
+  }).filter(({ name }) => name.startsWith("faults:")))
+    it(c.name, c.run)
+})
