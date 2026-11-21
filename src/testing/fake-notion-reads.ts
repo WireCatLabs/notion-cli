@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ServiceApiCall } from "@wirecat/cli-core/cli"
 import type {
   NotionBlock,
   NotionDatabase,
@@ -436,3 +437,39 @@ export class FakeNotion implements NotionReads {
     throw notFound(`block ${id}`)
   }
 }
+
+/**
+ * The fake as cli-core's request path sees Notion: each operation of the generated manifest by its id, answering the
+ * JSON Notion sends, so a test of the source runs through the calls wirecat.config.ts names.
+ */
+export const fakeNotionCall =
+  (notion: NotionReads): ServiceApiCall =>
+  async (operation, input) => {
+    const body = JSON.parse(input.body ?? "{}")
+    const { path, query } = input
+    const listed = async (answer: Promise<object>) => ({ object: "list", ...(await answer) })
+    switch (operation) {
+      case "get-self":
+        return notion.self()
+      case "get-user":
+        return notion.retrieveUser(String(path.user_id))
+      case "post-search":
+        return listed(notion.search(body))
+      case "post-database-query":
+        return listed(notion.queryDataSource(String(path.data_source_id), body))
+      case "retrieve-a-page":
+        return notion.retrievePage(String(path.page_id))
+      case "retrieve-database":
+        return notion.retrieveDatabase(String(path.database_id))
+      case "retrieve-a-block":
+        return notion.retrieveBlock(String(path.block_id))
+      case "get-block-children":
+        if (query.page_size !== "100") throw invalid("the sync lists 100 blocks a page")
+        return listed(notion.blockChildren(String(path.block_id), query.start_cursor as string | undefined))
+      case "retrieve-page-markdown":
+        if (query.markdown_version !== "v2") throw invalid("the sync reads Markdown v2")
+        return { object: "page_markdown", ...(await notion.pageMarkdown(String(path.page_id))) }
+      default:
+        throw new Error(`the fake does not answer ${operation}`)
+    }
+  }

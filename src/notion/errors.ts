@@ -1,4 +1,4 @@
-import { APIResponseError, isHTTPResponseError, RequestTimeoutError } from "@notionhq/client"
+import { type APIErrorCode, APIResponseError, isHTTPResponseError, RequestTimeoutError } from "@notionhq/client"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { providerWaitMs, statusToCode } from "@wirecat/cli-base/http"
 import { defineReasons } from "@wirecat/cli-base/standards"
@@ -20,7 +20,6 @@ export const REASONS = defineReasons(
       ["notion.invalid-response", "invalid_response", "Notion's answer does not have the documented shape"],
       ["notion.id-invalid", "validation_error", "that is not a Notion id or link"],
       ["notion.truncated", "provider_error", "Notion gave only part of the page"],
-      ["notion.no-workspace", "invalid_response", "Notion did not name the token's workspace"],
       ["notion.failed", "provider_error", "a Notion read failed"],
       ["notion.search-incomplete", "provider_error", "Notion cut the search for edits short"],
       ["notion.window-too-dense", "validation_error", "more than 10,000 rows of one database share one minute"],
@@ -158,3 +157,27 @@ export const isItemError = (error: unknown) =>
 /** Notion's own 400, such as a list position it no longer takes; not this code's refusals, which carry no status. */
 export const isRefused = (error: unknown) =>
   isCliError(error) && error.code === "validation_error" && error.details.status === 400
+
+/**
+ * Notion's refusal by its documented code, as the SDK commands map it. A 429 or 529 keeps the shared refusal, which
+ * reads the wait from the answer's headers; a blocked connection is already refused by the client.
+ */
+export const notionRefusal = (status: number, answer: unknown): CliError | undefined => {
+  if (status === 429 || status === 529) return undefined
+  const body = (answer ?? {}) as { code?: unknown; additional_data?: unknown; request_id?: unknown }
+  const failed = failureOf(
+    new APIResponseError({
+      code: (typeof body.code === "string" ? body.code : "unknown") as APIErrorCode,
+      status,
+      message: "",
+      headers: new Headers(),
+      rawBodyText: "",
+      additional_data:
+        body.additional_data && typeof body.additional_data === "object"
+          ? (body.additional_data as Record<string, string | string[]>)
+          : undefined,
+      request_id: typeof body.request_id === "string" ? body.request_id : undefined,
+    }),
+  )
+  return failed instanceof CliError ? failed : undefined
+}

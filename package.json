@@ -26,8 +26,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc --build --force && cli-dev bundle --bin dist/bin/notion.js",
-    "typecheck": "tsc --build --force --emitDeclarationOnly && tsc -p tsconfig.test.json && tsc -p tsconfig.scripts.json",
+    "build": "node --experimental-strip-types scripts/from-config.ts --if-missing && tsc --build --force && cli-dev bundle --bin dist/bin/notion.js",
+    "typecheck": "node --experimental-strip-types scripts/from-config.ts --if-missing && tsc --build --force --emitDeclarationOnly && tsc -p tsconfig.test.json && tsc -p tsconfig.scripts.json",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "test": "vitest run",
@@ -35,8 +35,8 @@
     "test:slow": "vitest run --reporter=json --outputFile=coverage/tests.json >/dev/null; cli-dev slow-tests",
     "test:matrix": "vitest run >/dev/null && pnpm build >/dev/null && pnpm test:matrix:check",
     "test:matrix:check": "cli-dev test-matrix --program scripts/command-program.ts --untested scripts/test-matrix-untested.ts --name notion --check && git diff --exit-code -- docs/dev/test-matrix.md",
-    "generate": "node --experimental-strip-types scripts/generate.ts && pnpm build && node --experimental-strip-types scripts/commands.ts && cli-dev manifest --program dist/program.js --identity dist/wcat.js",
-    "generate:check": "node --experimental-strip-types scripts/generate.ts --check && pnpm build && node --experimental-strip-types scripts/commands.ts --check && cli-dev manifest --program dist/program.js --identity dist/wcat.js --check",
+    "generate": "node --experimental-strip-types scripts/from-config.ts && node --experimental-strip-types scripts/generate.ts && pnpm build && node --experimental-strip-types scripts/commands.ts && cli-dev manifest --program dist/program.js --identity dist/wcat.js",
+    "generate:check": "node --experimental-strip-types scripts/from-config.ts --check && node --experimental-strip-types scripts/generate.ts --check && pnpm build && node --experimental-strip-types scripts/commands.ts --check && cli-dev manifest --program dist/program.js --identity dist/wcat.js --check",
     "spec:sync": "node --experimental-strip-types scripts/sync-spec.ts",
     "smoke": "node --experimental-strip-types scripts/smoke.ts",
     "smoke:bun": "bun scripts/smoke.ts && bun scripts/sandboxed.ts bun scripts/smoke-bundle.ts",
@@ -59,8 +59,8 @@
   },
   "dependencies": {
     "@notionhq/client": "5.31.1",
-    "@wirecat/cli-base": "0.124.0",
-    "@wirecat/cli-core": "0.707.0",
+    "@wirecat/cli-base": "0.125.0",
+    "@wirecat/cli-core": "0.718.0",
     "commander": "15.0.0",
     "valibot": "1.5.0"
   },

@@ -93,10 +93,10 @@ export interface NotionSourceOptions {
    */
   reached?: () => Iterable<NotionFile>
   /**
-   * Pages the sync holds whose authors it could not save: read before notion saved them, or before the connection
-   * could read email addresses. Each `changes()` sends a batch of them to be read again. Read once.
+   * What the connection may read of users now, as the last run learned it: a page read with less is read again for
+   * its authors (src/sync/from-config.ts).
    */
-  unauthored?: () => Iterable<NotionFile>
+  access?: () => UserAccess | undefined
   /** How far back each pass reads before the mark; at least two minutes. */
   overlapMs?: number
   walkEveryMs?: number
