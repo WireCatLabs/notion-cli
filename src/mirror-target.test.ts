@@ -10,7 +10,7 @@ import {
   syncFileMirror,
 } from "@wirecat/cli-core/documents"
 import { describe, expect, it } from "vitest"
-import { type MirrorPages, nameOf, notionMirrorTarget } from "./notion/mirror-target.js"
+import { type MirrorPages, mirrorPages, nameOf, notionMirrorTarget } from "./notion/mirror-target.js"
 
 const ROOT = "aaaaaaaa-0000-4000-8000-000000000001"
 
@@ -206,5 +206,144 @@ describe("nameOf", () => {
   it("makes a page title one file name", () => {
     expect(nameOf("Q1 / Q2 plan")).toBe("Q1 - Q2 plan")
     expect(nameOf("  ")).toBe("Untitled")
+  })
+})
+
+describe("mirrorPages", () => {
+  const block = (id: string, type: string, extra: Record<string, unknown> = {}) => ({
+    object: "block",
+    id,
+    type,
+    has_children: false,
+    parent: { type: "page_id", page_id: ROOT },
+    created_time: "2026-11-23T00:00:00.000Z",
+    last_edited_time: "2026-11-23T01:00:00.000Z",
+    ...extra,
+  })
+  const calls: unknown[][] = []
+  const reads = {
+    me: async () => ({
+      workspace: { id: "space", name: null },
+      user: { id: "me", name: null, type: "bot", owner: null },
+    }),
+    port: {
+      retrievePage: async (id: string) => ({ id, in_trash: id === "gone" }),
+      blockChildren: async (_id: string, cursor?: string) =>
+        cursor
+          ? {
+              results: [block("p2", "child_page", { child_page: { title: "Two" } })],
+              has_more: false,
+              next_cursor: null,
+            }
+          : {
+              results: [
+                block("p1", "child_page", { child_page: { title: "One" } }),
+                block("x", "paragraph"),
+                block("t", "child_page", { child_page: { title: "Trashed" }, in_trash: true }),
+              ],
+              has_more: true,
+              next_cursor: "c2",
+            },
+    },
+    document: async (id: string) =>
+      id === "long"
+        ? { document: { markdown: "part" }, issues: [{ code: "provider_error", reason: "notion.truncated" }] }
+        : { document: { markdown: `text of ${id}` }, issues: [] },
+  }
+  const writes = {
+    create: async (input: unknown) => {
+      calls.push(["create", input])
+      return { id: "new" }
+    },
+    replace: async (...args: unknown[]) => {
+      calls.push(["replace", ...args])
+    },
+    trash: async (...args: unknown[]) => {
+      calls.push(["trash", ...args])
+    },
+  }
+  const pages = mirrorPages(reads as never, writes as never)
+
+  it("reads Notion through the shared reads and writes, child pages only, whole pages only", async () => {
+    expect(await pages.identity()).toBe("space:me")
+    expect(await pages.inTrash("gone")).toBe(true)
+    expect(await pages.children(ROOT)).toEqual([
+      { id: "p1", title: "One", editedAt: "2026-11-23T01:00:00.000Z" },
+      { id: "p2", title: "Two", editedAt: "2026-11-23T01:00:00.000Z" },
+    ])
+    expect(await pages.markdown("p1")).toBe("text of p1")
+    await expect(pages.markdown("long")).rejects.toMatchObject({ details: { reason: "notion.page-not-whole" } })
+  })
+
+  it("creates, replaces without deleting child pages, and trashes", async () => {
+    expect(await pages.create(ROOT, "Plan", "text")).toBe("new")
+    expect(await pages.create(ROOT, "Folder")).toBe("new")
+    await pages.replace("p1", "new text")
+    await pages.trash("p1")
+    expect(calls).toEqual([
+      ["create", { parent: ROOT, title: "Plan", markdown: "text" }],
+      ["create", { parent: ROOT, title: "Folder" }],
+      ["replace", "p1", "new text", false],
+      ["trash", "p1", true],
+    ])
+  })
+})
+
+describe("notionMirrorTarget, refusals", () => {
+  it("cannot tell a deletion without the page id, and says a 404 may be an unshare", async () => {
+    const { api, add, hide } = fakePages()
+    const target = notionMirrorTarget(api)
+    await expect(target.exists(`${ROOT}/a.md`)).rejects.toMatchObject({ details: { reason: "notion.mirror-no-id" } })
+    const id = add(ROOT, "a", "")
+    hide(id)
+    await expect(target.exists(`${ROOT}/a.md`, undefined, id)).rejects.toMatchObject({
+      code: "not_found",
+      details: { reason: "notion.not-shared" },
+    })
+  })
+
+  it("refuses to write over a page that changed or is gone, and to create one that is there", async () => {
+    const { api, add } = fakePages()
+    const target = notionMirrorTarget(api)
+    const from = join(temp("notion-mirror-from-"), "a.md")
+    writeFileSync(from, "mine")
+    add(ROOT, "a", "theirs")
+    await expect(target.upload(`${ROOT}/a.md`, from, { sha256: "0".repeat(64) })).rejects.toMatchObject({
+      code: "conflict",
+    })
+    await expect(target.upload(`${ROOT}/a.md`, from, { absent: true })).rejects.toMatchObject({ code: "conflict" })
+    await expect(target.upload(`${ROOT}/b.md`, from, { sha256: "0".repeat(64) })).rejects.toMatchObject({
+      code: "conflict",
+    })
+    await expect(target.upload(`${ROOT}/gone/b.md`, from, { absent: true })).rejects.toMatchObject({
+      code: "conflict",
+    })
+    await expect(target.trash(`${ROOT}/b.md`, { sha256: "0".repeat(64) })).rejects.toMatchObject({ code: "conflict" })
+    await expect(target.trash(`${ROOT}/a.md`, { sha256: "0".repeat(64) })).rejects.toMatchObject({ code: "conflict" })
+    await expect(target.download(`${ROOT}/b.md`, join(dirname(from), "b"))).rejects.toMatchObject({ code: "conflict" })
+  })
+
+  it("finds or creates the pages of a folder, and lists a trashed root as gone", async () => {
+    const notion = fakePages()
+    const target = notionMirrorTarget(notion.api)
+    const plan = notion.add(ROOT, "Plan", "")
+    await target.ensureFolder(`${ROOT}/Plan/Week`)
+    expect(notion.writes).toEqual(["create Week"])
+    expect(notion.idOf("Week")).toBeDefined()
+    expect(plan).toBe(notion.idOf("Plan"))
+    const trashed = fakePages()
+    trashed.api.inTrash = async () => true
+    expect(await notionMirrorTarget(trashed.api).list(ROOT)).toBeUndefined()
+  })
+
+  it("leaves a page it cannot read whole out of a listing, which is then incomplete", async () => {
+    const notion = fakePages()
+    notion.add(ROOT, "Long", "x")
+    const markdown = notion.api.markdown
+    notion.api.markdown = async (id) => {
+      if (id !== ROOT) throw new CliError("provider_error", "cut", { reason: "notion.page-not-whole" })
+      return markdown(id)
+    }
+    expect(await notionMirrorTarget(notion.api).list(ROOT)).toMatchObject({ files: [], complete: false })
   })
 })
