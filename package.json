@@ -59,8 +59,8 @@
   },
   "dependencies": {
     "@notionhq/client": "5.31.1",
-    "@wirecat/cli-base": "0.128.0",
-    "@wirecat/cli-core": "0.720.0",
+    "@wirecat/cli-base": "0.129.0",
+    "@wirecat/cli-core": "0.724.0",
     "commander": "15.0.0",
     "valibot": "1.5.0"
   },

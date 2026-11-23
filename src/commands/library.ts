@@ -18,7 +18,7 @@ import {
   writesOwnerFiles,
 } from "@wirecat/cli-core/cli"
 import { catalogFiles, syncDocuments } from "@wirecat/cli-core/documents"
-import { addDocumentCommands, type DocumentWords } from "@wirecat/cli-core/documents/cli"
+import { addDocumentCommands, type DocumentWords, keepVersionsForDays } from "@wirecat/cli-core/documents/cli"
 import { modelGateway, modelTarget } from "@wirecat/cli-core/models"
 import { Command } from "commander"
 import * as v from "valibot"
@@ -58,6 +58,7 @@ import {
 } from "../sync/source.js"
 import { VERSION } from "../version.js"
 import {
+  checkCommand,
   createCommand,
   deleteCommand,
   getCommand,
@@ -390,6 +391,7 @@ export const libraryCommands = (): Command[] => {
                 errorOf,
                 assertHeld,
                 storeVersion: VERSION,
+                keepVersionsForDays: keepVersionsForDays(context().settings),
                 ...(context().environment.signal ? { signal: context().environment.signal } : {}),
                 ...(rescan ? { rescan } : {}),
                 ...(budget ? { budget } : {}),
@@ -446,6 +448,13 @@ export const libraryCommands = (): Command[] => {
           remote_checked: false,
         }
       },
+    },
+    history: {
+      run: (fn) => {
+        const principal = principalOf(env(), profile())
+        return withStore(env(), false, (store) => fn(ingestionOf(store).history, principal))
+      },
+      id: (input) => idOf(input),
     },
     documents: {
       list: (query, page) => {
@@ -565,7 +574,7 @@ export const libraryCommands = (): Command[] => {
       decider,
     },
   })
-  documents.addCommand(getCommand())
+  documents.addCommand(getCommand()).addCommand(checkCommand())
   documents.addCommand(createCommand()).addCommand(updateCommand()).addCommand(deleteCommand())
   documents.addCommand(restoreCommand()).addCommand(moveCommand()).addCommand(renameCommand())
   annotate(documents.command("add"), {

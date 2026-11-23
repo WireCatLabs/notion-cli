@@ -88,10 +88,14 @@ it("documents update sets an icon and a cover alone, or before the text, and tak
     notion,
   })
   expect(both.code).toBe(0)
-  expect(notion.calls.slice(1).map(({ method, path, body }) => [method, path, body?.icon])).toEqual([
-    ["PATCH", `/v1/pages/${PAGE_ID}`, null],
-    ["PATCH", `/v1/pages/${PAGE_ID}/markdown`, undefined],
+  // The values go first; the text is read before it is replaced, so its earlier version is kept.
+  const writes = notion.calls.slice(1).filter(({ method }) => method === "PATCH")
+  expect(writes.map(({ path, body }) => [path, body?.icon])).toEqual([
+    [`/v1/pages/${PAGE_ID}`, null],
+    [`/v1/pages/${PAGE_ID}/markdown`, undefined],
   ])
+  expect(notion.calls[1]?.method).toBe("PATCH")
+  const sent = notion.calls.length
   for (const wrong of [
     ["--emoji", "not an emoji"],
     ["--emoji", "https://example.com/a.png"],
@@ -101,7 +105,7 @@ it("documents update sets an icon and a cover alone, or before the text, and tak
     const refused = await runCli(["personal", "documents", "update", PAGE_ID, ...wrong, "--json"], { notion })
     expect(refused.json()).toMatchObject({ error: { code: "validation_error" } })
   }
-  expect(notion.calls).toHaveLength(3)
+  expect(notion.calls).toHaveLength(sent)
 })
 
 it("move, rename and an icon check the API operations they send, and stop at a deny before any request", async () => {

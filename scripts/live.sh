@@ -6,8 +6,9 @@
 # The page must hold an uploaded file whose name has parentheses, such as `Screenshot (2).png`: the check fails
 # unless Notion's signed file links were seen and cut. It must also hold at least one page under it: the sync files a
 # child page from its child_page block, and the check compares that block with the page (docs/dev/SYNC.md).
-# It writes only under that page: it creates one page `wirecat-live-<time>` there with a page under it, changes,
-# trashes and restores it, comments on it, replies, uploads a small text file to it, and leaves it in Notion's trash.
+# It writes only under that page: it creates one page `wirecat-live-<time>` there with a page under it, changes it,
+# edits part of its text at the fingerprint read and is refused at a stale one, trashes and restores it, comments on
+# it, replies, uploads a small text file to it, and leaves it in Notion's trash.
 # No other page is changed (docs/dev/DESIGN.md, Writes). The token needs the read and insert comments capabilities, and
 # user information including email addresses.
 set -euo pipefail
@@ -116,6 +117,12 @@ made=$(field created item.page.id)
 [ "$(field created item.page.title)" = "wirecat-live-$stamp" ] || { echo "the new page has another title" >&2; exit 1; }
 "${cli[@]}" live documents get "$made" --json >"$work/first.json"
 holds first "first-$stamp"
+# A two-way mirror needs to know whether Notion gives back the bytes it was sent (cli-core #3232): a warning only.
+node -e '
+  const page = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).item
+  if (page.markdown !== process.argv[2])
+    console.error(`warning: Notion gave back other text than it was sent: ${JSON.stringify(page.markdown)}`)' \
+  "$work/first.json" "Written by the WireCat live check, first-$stamp"
 "${cli[@]}" live documents update "$made" --text "Changed by the WireCat live check, second-$stamp" \
   --json >"$work/updated.json"
 "${cli[@]}" live documents get "$made" --json >"$work/second.json"
@@ -129,6 +136,26 @@ fi
 [ "$(field dropped error.reason)" = "notion.text-refused" ] || { echo "the refusal is not notion.text-refused" >&2; exit 1; }
 "${cli[@]}" live documents get "$made" --json >"$work/kept.json"
 holds kept "second-$stamp"
+# A targeted edit at the fingerprint read, then the same fingerprint again, now stale: refused with nothing written.
+read_at=$(field kept item.sha256)
+"${cli[@]}" live documents check "$made" --expected-fingerprint "$read_at" --json >"$work/unchanged.json"
+[ "$(field unchanged item.changed)" = "false" ] || { echo "documents check says a page just read changed" >&2; exit 1; }
+"${cli[@]}" live documents update "$made" --payload "[{\"old\":\"second-$stamp\",\"new\":\"edited-$stamp\"}]" \
+  --expected-fingerprint "$read_at" --json >"$work/edited-text.json"
+[ "$(field edited-text item.replaced.sha256)" = "$read_at" ] || { echo "the edit did not keep the text it replaced" >&2; exit 1; }
+"${cli[@]}" live documents get "$made" --json >"$work/after-edit.json"
+holds after-edit "edited-$stamp"
+holds after-edit "wirecat-live-child-$stamp"
+[ "$(field edited-text item.sha256)" = "$(field after-edit item.sha256)" ] ||
+  echo "warning: the edit's answer gave another sha256 than documents get reads" >&2
+if "${cli[@]}" live documents update "$made" --payload "[{\"old\":\"edited-$stamp\",\"new\":\"stale-$stamp\"}]" \
+  --expected-fingerprint "$read_at" --json >/dev/null 2>"$work/stale.json"; then
+  echo "an edit at a stale fingerprint was not refused" >&2
+  exit 1
+fi
+[ "$(field stale error.reason)" = "mirror.remote-changed" ] || { echo "the stale edit's refusal is not mirror.remote-changed" >&2; exit 1; }
+"${cli[@]}" live documents get "$made" --json >"$work/kept-edit.json"
+holds kept-edit "edited-$stamp"
 "${cli[@]}" live comments create "$made" --text "WireCat live check comment, $stamp" --json >"$work/commented.json"
 discussion=$(field commented item.comment.discussion_id)
 "${cli[@]}" live comments reply "$discussion" --text "WireCat live check reply, $stamp" --json >/dev/null
@@ -172,6 +199,7 @@ made=""
 
 "${cli[@]}" live session end --json >/dev/null
 echo "live check passed: describe format 2, sign-in, users/me, the bot's name from users/{id}, databases list and show, documents get," \
-  "a child_page block against its page, doctor, a page created, read, updated, refused, commented on, replied to," \
+  "a child_page block against its page, doctor, a page created, read, updated, refused, edited in place at its" \
+  "fingerprint and refused at a stale one, commented on, replied to," \
   "a comment edited and deleted, the page renamed, given an icon, moved and moved back," \
   "given a file, trashed and restored under the test page and left in the trash, sign-out"

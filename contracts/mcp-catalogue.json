@@ -3,6 +3,7 @@
   "session list": "read",
   "folders browse": "read",
   "documents get": "read",
+  "documents check": "read",
   "documents create": "write",
   "documents update": "write",
   "documents delete": "write",

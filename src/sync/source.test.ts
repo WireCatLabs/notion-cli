@@ -62,6 +62,7 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
   let walk: SourceWalk<NotionFile> | undefined
   const snapshots = new Map<string, SourceContent<NotionFile>>()
   const saved = new Map<string, SourceContent<NotionFile>>()
+  const removals = new Map<string, string | undefined>()
   const port: SourceStatePort<NotionFile> = {
     read: () => structuredClone(state),
     save: (next) => {
@@ -82,8 +83,9 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
       saved.set(content.metadata.id, structuredClone(content))
       return `document:${content.metadata.id}`
     },
-    remove: async (_principal, id) => {
+    remove: async (_principal, id, reason) => {
       saved.delete(id)
+      removals.set(id, reason)
     },
     openPictures: async () => {
       throw new CliError("not_found", "no picture model")
@@ -136,6 +138,7 @@ const harness = (notion: FakeNotion, settings: Settings = {}) => {
     sourceOf,
     sync,
     saved,
+    removals,
     snapshots,
     warnings,
     reads,
@@ -267,16 +270,18 @@ describe("the Notion source under cli-core's sync engine", () => {
     const result = await run.sync()
     expect(result.removed).toBe(1)
     expect(run.saved.has("b")).toBe(false)
+    expect(run.removals.get("b")).toBe("deleted")
     expect(notion.log).toContainEqual({ method: "retrievePage", id: "b" })
   })
 
-  it("removes a page unshared from the token at the next walk", async () => {
+  it("marks a page unshared from the token no longer visible at the next walk, not deleted", async () => {
     const run = harness(notion)
     await run.sync()
     notion.page("a").shared = false
     notion.advance(25 * HOUR)
     await run.sync()
     expect(run.saved.has("a")).toBe(false)
+    expect(run.removals.get("a")).toBe("unavailable")
   })
 
   it("keeps a top-level page that search leaves out of a walk", async () => {

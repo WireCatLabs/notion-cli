@@ -4,8 +4,9 @@ import { bufferedInput, commandPath, MAX_BUFFERED_INPUT, terminalAsker } from "@
 import { guardedWrite, guardFor, keyedGuard, levelFor, newOperationId, refusedPlace } from "@wirecat/cli-core/sends"
 import type { Command } from "commander"
 import { PAGE_WRITE_KEYS, permissions } from "../config.js"
-import { contextOf, notionWritesFor, tokenOf } from "../context.js"
+import { contextOf, notionFor, notionWritesFor, tokenOf } from "../context.js"
 import { IDENTITY } from "../identity.js"
+import type { LiveReads } from "../notion/notion.js"
 import type { LiveWrites } from "../notion/writes.js"
 
 /**
@@ -14,7 +15,11 @@ import type { LiveWrites } from "../notion/writes.js"
  * answer carries `operation_id` (WC-OUT-10). cli-core has already answered `--dry-run` and refused under
  * `WCNOTION_READ_ONLY`. Never retried: a write that got no answer is `outcome_unknown` (WC-LIFE-9).
  */
-export const write = async <T>(command: Command, extra: readonly string[], act: (notion: LiveWrites) => Promise<T>) => {
+export const write = async <T>(
+  command: Command,
+  extra: readonly string[],
+  act: (notion: LiveWrites, reads: LiveReads) => Promise<T>,
+) => {
   const context = contextOf(command)
   const { settings, env, renderer } = context
   const path = commandPath(command)
@@ -40,7 +45,7 @@ export const write = async <T>(command: Command, extra: readonly string[], act: 
   guard.refuse(request)
   try {
     const done = await guardedWrite(guard, request, () =>
-      context.run((events) => act(notionWritesFor(command, token, events))),
+      context.run((events) => act(notionWritesFor(command, token, events), notionFor(command, token, events))),
     )
     return { operationId, done }
   } catch (error) {

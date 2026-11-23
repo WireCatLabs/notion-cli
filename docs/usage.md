@@ -33,6 +33,32 @@ Each `--field` is checked against the property's type before anything is sent. A
 relations) takes values split by commas, a date takes `2026-12-01` or a range `2026-12-01/2026-12-05`, and an empty
 value clears it. `--from-template default`, or a template's name from `databases show`, fills the row from a template.
 
+## Changing part of a page
+
+Read the page, then send only the parts to change, with the fingerprint the read gave:
+
+```sh
+notion personal documents get PAGE_ID --json
+notion personal documents update PAGE_ID --payload '[{"old": "Due Friday", "new": "Due Monday"}]' \
+  --expected-fingerprint SHA256
+```
+
+The page is read again just before the write. When it changed since your read, nothing is written and the error
+says to read it again. Notion has no conditional write, so an edit someone makes in the second between that check and
+the write is not caught. The text the write replaced is kept in your local versions, and the answer says where.
+
+## Earlier versions and the change log
+
+```sh
+notion personal documents history PAGE_ID
+notion personal documents history PAGE_ID --revision 2
+notion personal changes --since 7d --event deleted,unavailable
+```
+
+Each sync keeps a page's text before it changes or leaves the copy, for `keep_versions_for_days` (365 by default).
+A page in Notion's trash is `deleted`. A page Notion answers 404 for is `unavailable`: deleted for good, or no longer
+shared with the token. It keeps its text and comes back when Notion shows it again.
+
 ## Agents
 
 `notion skill install` puts the tool's skill where Claude Code, Codex, Gemini CLI and OpenClaw look for it.

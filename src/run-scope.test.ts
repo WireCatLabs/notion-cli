@@ -24,6 +24,7 @@ describe("each remote command runs inside cli-core's run", () => {
       "session start": ["personal", "session", "start"],
       "session status": ["personal", "session", "status", "--check"],
       "documents get": ["personal", "documents", "get", PAGE_ID],
+      "documents check": ["personal", "documents", "check", PAGE_ID, "--expected-fingerprint", "0".repeat(64)],
       "documents add": ["personal", "documents", "add", PAGE_ID],
       "folders add": ["personal", "folders", "add", DATABASE_ID],
       "folders browse": ["personal", "folders", "browse"],

@@ -47,6 +47,7 @@ it("documents get reads a page by its link as Markdown v2, and prints the Markdo
     markdown: "# Test page\n\nFake text written by Test Person.",
     truncated: false,
     missing_block_ids: [],
+    sha256: expect.stringMatching(/^[0-9a-f]{64}$/u),
     signed_links_removed: 0,
   })
   expect(notion.calls.map((call) => call.url)).toEqual([

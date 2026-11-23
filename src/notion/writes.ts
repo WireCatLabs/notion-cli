@@ -24,7 +24,29 @@ const wirePage = v.looseObject({
 const wireUpdated = v.looseObject({
   object: v.literal("page_markdown"),
   id: v.string(),
+  markdown: v.optional(v.string()),
+  truncated: v.optional(v.boolean()),
+  unknown_block_ids: v.optional(v.array(v.string())),
   warnings: v.optional(v.array(v.looseObject({ code: v.string(), message: v.string() }))),
+})
+
+/** One part of a targeted edit: `old` as the page has it now, `all` for every place it occurs. */
+export interface TextEdit {
+  old: string
+  new: string
+  all?: boolean
+}
+
+/**
+ * The page after a text write, as Notion answers it. `markdown` is left out when the answer is cut, so nothing reads a
+ * part of the page as the whole of it.
+ */
+const updatedOf = (answer: v.InferOutput<typeof wireUpdated>) => ({
+  id: answer.id,
+  warnings: (answer.warnings ?? []).map(({ code }) => code),
+  ...(answer.markdown !== undefined && answer.truncated === false && (answer.unknown_block_ids ?? []).length === 0
+    ? { markdown: answer.markdown }
+    : {}),
 })
 
 const parsed = <T>(schema: v.GenericSchema<unknown, T>, value: unknown): T => {
@@ -295,7 +317,38 @@ export const liveWrites = (client: Client) => {
               }),
             ),
           )
-          return { id: answer.id, warnings: (answer.warnings ?? []).map(({ code }) => code) }
+          return updatedOf(answer)
+        } catch (error) {
+          throw allowDeleting ? error : withContentHint(error)
+        }
+      }),
+
+    /**
+     * Parts of the text replaced where they are, by `update_content`. Notion applies the parts that match and only
+     * warns about the rest (`no_match`), so the caller checks every part against the text first.
+     */
+    edit: (id: string, edits: readonly TextEdit[], allowDeleting: boolean) =>
+      writing(async () => {
+        try {
+          const answer = parsed(
+            wireUpdated,
+            await mapped(() =>
+              client.pages.updateMarkdown({
+                page_id: id,
+                markdown_version: "v2",
+                type: "update_content",
+                update_content: {
+                  content_updates: edits.map((edit) => ({
+                    old_str: edit.old,
+                    new_str: edit.new,
+                    ...(edit.all ? { replace_all_matches: true } : {}),
+                  })),
+                  ...(allowDeleting ? { allow_deleting_content: true } : {}),
+                },
+              }),
+            ),
+          )
+          return updatedOf(answer)
         } catch (error) {
           throw allowDeleting ? error : withContentHint(error)
         }

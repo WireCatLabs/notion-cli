@@ -194,8 +194,23 @@ guard and send journal, with the command's own permission key, and answers with 
   [update page Markdown](https://developers.notion.com/reference/update-page-markdown). Notion refuses a text that
   leaves out a child page's or database's tag unless `allow_deleting_content` is set, which `--allow-deleting-content`
   sends. Notion's refusal is a plain `validation_error`, also given to a text over 5,000 blocks, so it is mapped
-  to `notion.text-refused` with both causes named; Notion's own message is not repeated, as it quotes titles. Notion's `warnings` for a part it changed or left out are reported by their code only. A
-  partial edit (`update_content`) waits for mirrors, step 6.
+  to `notion.text-refused` with both causes named; Notion's own message is not repeated, as it quotes titles. Notion's `warnings` for a part it changed or left out are reported by their code only.
+- **A targeted edit and a guarded write** (IDEA-2864 of the Notion roadmap in cli-private). `documents get` answers
+  `sha256`, the sha256 of the text it shows, signed links already cut; a page Notion does not give whole answers
+  `null`, since a write at it would stand for a part of the page. `documents check <page> --expected-fingerprint`
+  says whether the page still has it. `documents update --payload '[{"old": …, "new": …}]'` sends `update_content`,
+  and needs `--expected-fingerprint`; a whole `--text` or `--file` takes it too. The write goes through cli-core's
+  `guardedFileWrite` over a one-page target (`src/notion/page-target.ts`): the page's text is read into the profile's
+  version store (`versions/` in its state folder), hashed and compared, read again just before the write and
+  compared again. Notion has no conditional write, so an edit landing after that last read is not caught; the help
+  says "checked just before the write", never more. Each part's `old` must be on the page once (or `"all": true`),
+  checked on that last read with nothing sent otherwise, because Notion applies the parts that match and only warns
+  about the rest. A `no_match` warning still counts as a part not made: the answer is incomplete and exits non-zero.
+  Every text write keeps the text it replaces, a whole replace without a fingerprint too (read just before), and
+  answers `replaced.sha256` and `kept_at`. A page too long to read whole is replaced as before, with the warning
+  `earlier_text_not_kept`. `--payload` and `--expected-fingerprint` are cli-base's words: `edit` means a sent
+  message there, and `--if-sha256` is the old name of `--expected-fingerprint`. `files update`, the shared builder,
+  is not used: Notion's `files` are uploads, and a page is not one.
 - **delete** and **restore** set `in_trash` with [update a page](https://developers.notion.com/reference/trash-page).
   The API has no permanent delete, so `delete` is always undone by `restore`.
 - **Permissions**, as gcal-cli and drive-cli: create, update and restore are `allow`; `documents.delete` is `ask`. An
@@ -333,7 +348,8 @@ below and on the write round trip after them; the rest a person reads in its out
 
 The check writes, but only under the page it is given, the owner's test page "WireCat Test". It creates one page
 `wirecat-live-<time>` there and a page under it, reads the text back, replaces it, checks that an update dropping the
-child page is refused with `notion.text-refused`, trashes and restores the page, checking `in_trash` each time, and
+child page is refused with `notion.text-refused`, edits part of the text with `--payload` at the fingerprint
+`documents get` gave and checks that the same fingerprint, now stale, is refused with `mirror.remote-changed`, trashes and restores the page, checking `in_trash` each time, and
 leaves it in Notion's trash. Its temporary profile allows `documents.delete`, so no question stops the run; a check
 that fails half way trashes its page on the way out.
 

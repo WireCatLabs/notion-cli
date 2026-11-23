@@ -132,8 +132,10 @@ export interface SyncWarning {
 
 export interface Listing {
   files: NotionFile[]
-  /** Known items confirmed deleted, trashed or unshared by a direct read. */
+  /** Known items a direct read answered 404 for: deleted for good or no longer shared, Notion does not say which. */
   gone: string[]
+  /** Known items a direct read found in Notion's trash: the one signal of a real deletion. */
+  trashed: string[]
   /** Known items that are still there, under another parent. */
   moved: NotionFile[]
 }
