@@ -179,6 +179,15 @@ fi
 [ "$(field stale error.reason)" = "mirror.remote-changed" ] || { echo "the stale edit's refusal is not mirror.remote-changed" >&2; exit 1; }
 "${cli[@]}" live documents get "$made" --json >"$work/kept-edit.json"
 holds kept-edit "edited-$stamp"
+# A mirror sends Notion's own Markdown back after each sync, child page tag included: it must read back the same, or
+# each sync changes the page a little more (cli-core #3232). A warning only.
+node -e '
+  const page = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).item
+  require("fs").writeFileSync(process.argv[2], page.markdown)' "$work/kept-edit.json" "$work/round-trip.md"
+"${cli[@]}" live documents update "$made" --file "$work/round-trip.md" --json >/dev/null
+"${cli[@]}" live documents get "$made" --json >"$work/round-trip.json"
+[ "$(field kept-edit item.sha256)" = "$(field round-trip item.sha256)" ] ||
+  echo "warning: Notion's own Markdown sent back read back as other text, so a mirror would change the page at each sync" >&2
 "${cli[@]}" live comments create "$made" --text "WireCat live check comment, $stamp" --json >"$work/commented.json"
 discussion=$(field commented item.comment.discussion_id)
 "${cli[@]}" live comments reply "$discussion" --text "WireCat live check reply, $stamp" --json >/dev/null
