@@ -7,7 +7,7 @@ import { permissions } from "./config.js"
 import type { ServiceEnvironment } from "./context.js"
 import { IDENTITY } from "./identity.js"
 import { createProgram, run } from "./program.js"
-import { fakeNotion, PAGE_ID } from "./testing/fake-notion.js"
+import { DATABASE_ID, fakeNotion, PAGE_ID } from "./testing/fake-notion.js"
 import { runCli, signedIn } from "./testing/harness.js"
 
 it("mcp serve offers search, read and write, and runs a command through the CLI", async () => {
@@ -167,6 +167,32 @@ it("over MCP a page's text never comes from the server's stdin or from a credent
     expect(JSON.stringify(key.body)).toContain("file.refused-place")
     expect(notion.calls).toEqual([])
     expect((await mcp.call("notion_read", { command: "doctor" })).isError).toBeFalsy()
+  } finally {
+    expect(await mcp.close()).toBe(0)
+  }
+})
+
+it("an agent sets several values of a row and filters by several conditions in one call", async () => {
+  const notion = fakeNotion()
+  const options: RunOptions & ServiceEnvironment = { tty: false, keyring: signedIn(), fetch: notion.fetch }
+  const mcp = await mcpOverStdio((streams) => run(["personal", "mcp", "serve"], { ...options, ...streams }))
+  try {
+    const updated = await mcp.call("notion_write", {
+      command: "documents update",
+      arguments: { page: PAGE_ID, field: ["Status=Done", "Estimate=3"] },
+    })
+    expect(updated.isError).toBeFalsy()
+    expect(notion.calls.at(-1)?.body).toMatchObject({
+      properties: { Status: { status: { name: "Done" } }, Estimate: { number: 3 } },
+    })
+    const listed = await mcp.call("notion_read", {
+      command: "rows list",
+      arguments: { database: DATABASE_ID, filter: ["Status=Done", "Estimate>=3"] },
+    })
+    expect(listed.isError).toBeFalsy()
+    expect(notion.calls.at(-1)?.body).toMatchObject({
+      filter: { and: [{ property: "Status" }, { property: "Estimate" }] },
+    })
   } finally {
     expect(await mcp.close()).toBe(0)
   }

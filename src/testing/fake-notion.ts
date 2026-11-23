@@ -79,7 +79,16 @@ export interface FakeNotionOptions {
   workspace?: FakeWorkspace
   /** Discussions already on PAGE_ID, one comment each, to reply in. */
   discussions?: string[]
+  /** The discussions' comments were posted by another person, not this connection. */
+  othersComments?: boolean
+  /** A write's answer as only `object` and `id`, as Notion may give a move or a comment change. */
+  partialAnswers?: boolean
+  /** Templates of the first data source, as `GET /v1/data_sources/{id}/templates` lists them. */
+  templates?: { id: string; name: string; is_default: boolean }[]
 }
+
+export const PERSON_ID = "99999999-0000-4000-8000-000000000099"
+export const OTHER_PERSON_ID = "98989898-0000-4000-8000-000000000098"
 
 const text = (content: string) => [
   {
@@ -143,6 +152,12 @@ const dataSource = (id: string, title: string) => ({
       type: "multi_select",
       multi_select: { options: [{ id: "3", name: "Test tag", color: "blue" }] },
     },
+    Due: { id: "d%3Au", name: "Due", type: "date", date: {} },
+    Owner: { id: "o%3Aw", name: "Owner", type: "people", people: {} },
+    Done: { id: "d%3Ao", name: "Done", type: "checkbox", checkbox: {} },
+    Estimate: { id: "e%3As", name: "Estimate", type: "number", number: { format: "number" } },
+    Notes: { id: "n%3Ao", name: "Notes", type: "rich_text", rich_text: {} },
+    Score: { id: "s%3Ac", name: "Score", type: "formula", formula: { expression: "1" } },
   },
 })
 
@@ -262,7 +277,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
             owner:
               options.owner === "workspace"
                 ? { type: "workspace", workspace: true }
-                : { type: "user", user: { object: "user", id: "99999999-0000-4000-8000-000000000099" } },
+                : { type: "user", user: { object: "user", id: PERSON_ID } },
             workspace_name: "Test Workspace",
             ...(options.noWorkspaceId ? {} : { workspace_id: WORKSPACE_ID }),
             workspace_limits: { max_file_upload_size_in_bytes: 5242880 },
@@ -429,6 +444,19 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
         if (body.in_trash !== undefined && typeof body.in_trash !== "boolean")
           return notionError(400, "validation_error")
         if (typeof body.in_trash === "boolean") held.in_trash = body.in_trash
+        for (const field of ["icon", "cover"] as const) {
+          const picture = body[field] as { type?: unknown; emoji?: unknown; external?: { url?: unknown } } | undefined
+          if (picture === undefined || picture === null) continue
+          const fine =
+            (picture.type === "external" && typeof picture.external?.url === "string") ||
+            (field === "icon" && picture.type === "emoji" && typeof picture.emoji === "string")
+          if (!fine) return notionError(400, "validation_error")
+        }
+        const properties = (body.properties ?? {}) as Record<string, { title?: { text?: { content?: string } }[] }>
+        const known = ["title", ...Object.keys(dataSource(SOURCE_ID, "").properties)]
+        if (Object.keys(properties).some((name) => !known.includes(name))) return notionError(400, "validation_error")
+        const title = (properties.Name ?? properties.title)?.title?.[0]?.text?.content
+        if (title !== undefined) held.title = title
         return { status: 200, body: page(id) }
       },
     },
@@ -453,15 +481,32 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
         "notifications",
       ],
       answer: (_, { body = {} }) => {
-        const parent = body.parent as { page_id?: unknown } | undefined
-        if (typeof parent?.page_id !== "string" || !new RegExp(`^${UUID}$`, "u").test(parent.page_id))
+        const parent = body.parent as { page_id?: unknown; data_source_id?: unknown; type?: unknown } | undefined
+        const inSource = typeof parent?.data_source_id === "string"
+        if (inSource) {
+          if (parent?.type !== "data_source_id" || parent.page_id !== undefined)
+            return notionError(400, "validation_error")
+          if (!sources.includes(String(parent.data_source_id))) return notionError(404, "object_not_found")
+          // https://developers.notion.com/reference/post-page: a row's properties are its data source's.
+          const known = Object.keys(dataSource(SOURCE_ID, "").properties)
+          if (Object.keys(body.properties ?? {}).some((name) => !known.includes(name)))
+            return notionError(400, "validation_error")
+        } else {
+          if (typeof parent?.page_id !== "string" || !new RegExp(`^${UUID}$`, "u").test(parent.page_id))
+            return notionError(400, "validation_error")
+          if (!pages[parent.page_id] || pages[parent.page_id]?.in_trash) return notionError(404, "object_not_found")
+          if (body.template !== undefined) return notionError(400, "validation_error")
+        }
+        const template = body.template as { type?: unknown; template_id?: unknown } | undefined
+        if (template && !["none", "default", "template_id"].includes(String(template.type)))
           return notionError(400, "validation_error")
-        if (!pages[parent.page_id] || pages[parent.page_id]?.in_trash) return notionError(404, "object_not_found")
+        if (template?.type === "template_id" && typeof template.template_id !== "string")
+          return notionError(400, "validation_error")
         if (body.markdown_version !== undefined && (body.markdown === undefined || body.markdown_version !== "v2"))
           return notionError(400, "validation_error")
         const markdown = typeof body.markdown === "string" ? body.markdown : ""
-        const named = (body.properties as { title?: { title?: { text?: { content?: string } }[] } } | undefined)?.title
-          ?.title?.[0]?.text?.content
+        const properties = (body.properties ?? {}) as Record<string, { title?: { text?: { content?: string } }[] }>
+        const named = (properties.title ?? properties.Name)?.title?.[0]?.text?.content
         const heading = /^# (.+)$/mu.exec(markdown)?.[1]
         created += 1
         const id = `f0f0f0f0-0000-4000-8000-${String(created).padStart(12, "0")}`
@@ -520,6 +565,64 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
           : notionError(404, "object_not_found"),
     },
     {
+      // https://developers.notion.com/reference/move-page: under a page or into a data source, never a database.
+      method: "POST",
+      path: new RegExp(`^/v1/pages/(${UUID})/move$`, "u"),
+      query: [],
+      body: ["parent"],
+      answer: (id, { body = {} }) => {
+        if (!(id in pages)) return notionError(404, "object_not_found")
+        const parent = body.parent as { type?: unknown; page_id?: unknown; data_source_id?: unknown } | undefined
+        const under =
+          parent?.type === "page_id"
+            ? typeof parent.page_id === "string" && parent.page_id in pages
+            : parent?.type === "data_source_id" && sources.includes(String(parent.data_source_id))
+        if (!parent || (parent.type !== "page_id" && parent.type !== "data_source_id"))
+          return notionError(400, "validation_error")
+        if (!under) return notionError(404, "object_not_found")
+        return { status: 200, body: options.partialAnswers ? { object: "page", id } : page(id) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/list-data-source-templates
+      method: "GET",
+      path: new RegExp(`^/v1/data_sources/(${UUID})/templates$`, "u"),
+      query: ["name", "start_cursor", "page_size"],
+      answer: (id, { query }) => {
+        if (!sources.includes(id)) return notionError(404, "object_not_found")
+        const all = (options.templates ?? []).filter(
+          (one) => query.name === undefined || one.name.toLowerCase().includes(query.name.toLowerCase()),
+        )
+        return { status: 200, body: { templates: all, has_more: false, next_cursor: null } }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/get-users
+      method: "GET",
+      path: /^\/v1\/users$/u,
+      query: ["start_cursor", "page_size"],
+      answer: () => ({
+        status: 200,
+        body: {
+          object: "list",
+          results: [
+            {
+              object: "user",
+              id: PERSON_ID,
+              type: "person",
+              name: "Test Person",
+              person: { email: "test.person@example.invalid" },
+            },
+            { object: "user", id: BOT_ID, type: "bot", name: "Test Connection", bot: {} },
+          ],
+          next_cursor: null,
+          has_more: false,
+          type: "user",
+          user: {},
+        },
+      }),
+    },
+    {
       // https://developers.notion.com/reference/retrieve-a-block
       method: "GET",
       path: new RegExp(`^/v1/blocks/(${UUID})$`, "u"),
@@ -544,13 +647,14 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
   )
 
   const MIB = 1024 * 1024
-  const comments: { id: string; discussion_id: string; page: string; markdown: string }[] = (
+  const comments: { id: string; discussion_id: string; page: string; markdown: string; author: string }[] = (
     options.discussions ?? []
   ).map((discussion, index) => ({
     id: `c0c0c0c0-0000-4000-8000-${String(900 + index).padStart(12, "0")}`,
     discussion_id: discussion,
     page: PAGE_ID,
     markdown: "Fake earlier comment",
+    author: options.othersComments ? OTHER_PERSON_ID : (options.botId ?? BOT_ID),
   }))
   const commentJson = (comment: (typeof comments)[number]) => ({
     object: "comment",
@@ -559,7 +663,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
     discussion_id: comment.discussion_id,
     created_time: "2026-01-02T03:04:00.000Z",
     last_edited_time: "2026-01-02T03:04:00.000Z",
-    created_by: { object: "user", id: BOT_ID },
+    created_by: { object: "user", id: comment.author },
     // Notion gives formatting as annotations, so plain_text holds the words without Markdown marks.
     rich_text: text(comment.markdown.replaceAll(/\*\*|__|~~|`/gu, "")),
     display_name: { type: "integration", resolved_name: "Test bot" },
@@ -637,9 +741,47 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
           discussion_id: thread?.discussion_id ?? `d0d0d0d0-0000-4000-8000-${n}`,
           page,
           markdown: body.markdown as string,
+          author: options.botId ?? BOT_ID,
         }
         comments.push(comment)
         return { status: 200, body: commentJson(comment) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/retrieve-comment
+      method: "GET",
+      path: new RegExp(`^/v1/comments/(${UUID})$`, "u"),
+      query: [],
+      answer: (id) => {
+        const comment = comments.find((one) => one.id === id)
+        return comment ? { status: 200, body: commentJson(comment) } : notionError(404, "object_not_found")
+      },
+    },
+    {
+      // https://developers.notion.com/reference/update-a-comment: only a comment this connection posted, else 404.
+      method: "PATCH",
+      path: new RegExp(`^/v1/comments/(${UUID})$`, "u"),
+      query: [],
+      body: ["rich_text", "markdown", "markdown_version"],
+      answer: (id, { body = {} }) => {
+        const comment = comments.find((one) => one.id === id && one.author === (options.botId ?? BOT_ID))
+        if (!comment) return notionError(404, "object_not_found")
+        if ((body.rich_text === undefined) === (typeof body.markdown !== "string"))
+          return notionError(400, "validation_error")
+        comment.markdown = body.markdown as string
+        return { status: 200, body: options.partialAnswers ? { object: "comment", id } : commentJson(comment) }
+      },
+    },
+    {
+      // https://developers.notion.com/reference/delete-a-comment: only a comment this connection posted, else 404.
+      method: "DELETE",
+      path: new RegExp(`^/v1/comments/(${UUID})$`, "u"),
+      query: [],
+      answer: (id) => {
+        const at = comments.findIndex((one) => one.id === id && one.author === (options.botId ?? BOT_ID))
+        const [gone] = at < 0 ? [] : comments.splice(at, 1)
+        if (!gone) return notionError(404, "object_not_found")
+        return { status: 200, body: options.partialAnswers ? { object: "comment", id } : commentJson(gone) }
       },
     },
     {

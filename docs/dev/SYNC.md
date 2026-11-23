@@ -17,6 +17,7 @@ pages, keeps the checkpoint and resumes a cut batch. The reads it needs from Not
   children of a row are not listed. A row's properties become its front matter, and also lines of its searchable
   text, `Status: Done`.
 - A page whose parent the token cannot see is filed at the top of the workspace.
+- A page's or a row's open comments go into its searchable text, see [Comments](#comments).
 
 **The cost of pages as folders.** The engine lists the children of every folder it is sent. So a page is sent
 again only when Notion changed it, and a full walk asks for each page's children once. Listing a page's children
@@ -123,6 +124,28 @@ What the sync does not promise:
   that the sync never held is found once it is edited.
 - A block the token may not see stays out of the text. Notion lists those blocks with the cut ones and does not
   say which is which, so each is asked for once and counted when Notion refuses it.
+
+## Comments
+
+When the sync reads a page's or a row's text, it also lists the page's comments
+([list comments](https://developers.notion.com/reference/list-comments)), up to 1,000 in pages of 100. Each comment
+becomes one line under `Comments:` at the end of the searchable text, `Author, 2026-11-23: text`. The Markdown, which a
+mirror would write back, never holds them. A page with no comments gets no section, so its text and hash stay the same.
+The read is named in wirecat.config.ts (`source.reads.comments`).
+
+- **Only unresolved comments.** Notion lists no resolved comment, so a comment that is resolved or deleted leaves the
+  text the next time the page is read. That is a change of the page's text, never a deletion of the page.
+- **When they are read.** Comments are read with the page's text, so only for a page the sync sends again. It is not
+  verified whether a new comment changes the page's `last_edited_time`. If it does not, a page picks up a new comment
+  only when the page itself is edited, or is read again for another reason.
+- **Pages synced before 0.8.0** carry no `comments` mark, and cli-core's engine reads them once more, as it does for a
+  page without authors.
+- **Capability.** Reading comments is off by default in a connection's capabilities
+  ([capabilities](https://developers.notion.com/reference/capabilities)). The first 403 gives one warning,
+  `notion.comments-unread`, and no more comments are asked for in that run. A page read then is marked `refused` and is
+  not read again for comments alone. It gets its comments the next time it changes in Notion, and the warning says
+  so. Reading those pages again once the capability is on would need the comment access kept per profile, as the
+  user information access is. That is not done yet.
 
 ## Warnings in the answer
 

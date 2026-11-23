@@ -1073,6 +1073,51 @@ describe("content()", () => {
   })
 })
 
+describe("a page's comments in the local copy", () => {
+  const person = { id: "u1", name: "Test Person" }
+
+  it("puts a page's open comments into its searchable text, never into its Markdown", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: "p", title: "P", parent: top, markdown: "fake body" })
+    notion.addComment("p", person, "Fake question about the plan")
+    const content = await configSource(notion, { now: () => notion.now }).content("p")
+    expect(content.text).toContain("Comments:\nTest Person, 2026-11-14: Fake question about the plan")
+    expect(content.markdown).not.toContain("Fake question")
+    expect(content.metadata.providerMetadata.comments).toBe("read")
+  })
+
+  it("adds nothing to a page without comments, so its text and hash stay as they were", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: "p", title: "P", parent: top, markdown: "fake body" })
+    const content = await configSource(notion, { now: () => notion.now }).content("p")
+    expect(content.text).toBe("P\n\nfake body")
+  })
+
+  it("reads every page of a long discussion", async () => {
+    const notion = new FakeNotion()
+    notion.addPage({ id: "p", title: "P", parent: top })
+    for (let n = 0; n < 150; n++) notion.addComment("p", person, `Fake comment ${n}`)
+    const content = await configSource(notion, { now: () => notion.now }).content("p")
+    expect(content.text).toContain("Fake comment 149")
+    expect(notion.calls.comments).toBe(2)
+  })
+
+  it("warns once when the connection may not read comments, and asks no more in that run", async () => {
+    const notion = new FakeNotion()
+    notion.commentAccess = false
+    notion.addPage({ id: "p", title: "P", parent: top })
+    notion.addPage({ id: "q", title: "Q", parent: top })
+    const warnings: SyncWarning[] = []
+    const source = configSource(notion, { now: () => notion.now, warn: (warning) => warnings.push(warning) })
+    const first = await source.content("p")
+    const second = await source.content("q")
+    expect(first.metadata.providerMetadata.comments).toBe("refused")
+    expect(second.metadata.providerMetadata.comments).toBe("refused")
+    expect(notion.calls.comments).toBe(1)
+    expect(warnings.map((one) => one.reason)).toEqual(["notion.comments-unread"])
+  })
+})
+
 describe.each([
   ["the whole workspace", WORKSPACE_ROOT],
   ["a page chosen as a folder", "a"],
@@ -1101,9 +1146,12 @@ describe.each([
 })
 
 describe("which saved pages the source asks to read again", () => {
-  const saved = (kind: string, authors?: string) =>
+  const saved = (kind: string, authors?: string, comments: string | null = "read") =>
     ({
-      metadata: { id: "p", providerMetadata: { kind, ...(authors ? { authors } : {}) } },
+      metadata: {
+        id: "p",
+        providerMetadata: { kind, ...(authors ? { authors } : {}), ...(comments ? { comments } : {}) },
+      },
       hash: "h",
       reference: "r",
       tabs: 0,
@@ -1115,5 +1163,12 @@ describe("which saved pages the source asks to read again", () => {
     expect(source.reread?.(saved("page", "emails"))).toBe(false)
     expect(source.reread?.(saved("database"))).toBe(false)
     expect(configSource(workspace()).reread?.(saved("row", "names"))).toBe(false)
+  })
+
+  it("reads a page or a row again once when it was read before the sync kept comments", () => {
+    const source = configSource(workspace(), { access: () => "emails" })
+    expect(source.reread?.(saved("page", "emails", null))).toBe(true)
+    expect(source.reread?.(saved("row", "emails", "refused"))).toBe(false)
+    expect(source.reread?.(saved("database", undefined, null))).toBe(false)
   })
 })

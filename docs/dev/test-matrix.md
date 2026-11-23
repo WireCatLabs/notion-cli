@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**198 ✅ · 203 ⛔ · 0 ❌** — 150 commands, 251 options.
+**216 ✅ · 203 ⛔ · 0 ❌** — 155 commands, 264 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -45,15 +45,25 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `documents get` |  | ✅ |  |
 | `documents create` |  | ✅ |  |
 | `documents create` | `--parent` | ✅ |  |
+| `documents create` | `--into` | ✅ |  |
 | `documents create` | `--title` | ✅ |  |
+| `documents create` | `--field` | ✅ |  |
+| `documents create` | `--from-template` | ✅ |  |
 | `documents create` | `--text` | ✅ |  |
 | `documents create` | `--file` | ✅ |  |
 | `documents update` |  | ✅ |  |
 | `documents update` | `--text` | ✅ |  |
 | `documents update` | `--file` | ✅ |  |
+| `documents update` | `--field` | ✅ |  |
+| `documents update` | `--emoji` | ✅ |  |
+| `documents update` | `--cover` | ✅ |  |
 | `documents update` | `--allow-deleting-content` | ✅ |  |
 | `documents delete` |  | ✅ |  |
 | `documents restore` |  | ✅ |  |
+| `documents move` |  | ✅ |  |
+| `documents move` | `--parent` | ✅ |  |
+| `documents move` | `--into` | ✅ |  |
+| `documents rename` |  | ✅ |  |
 | `documents add` |  | ✅ |  |
 | `documents add` | `--title` | ✅ |  |
 | `documents add` | `--subject` | ✅ |  |
@@ -122,6 +132,10 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `databases list` | `--limit` | ✅ |  |
 | `databases list` | `--cursor` | ✅ |  |
 | `databases show` |  | ✅ |  |
+| `rows list` |  | ✅ |  |
+| `rows list` | `--filter` | ✅ |  |
+| `rows list` | `--limit` | ✅ |  |
+| `rows list` | `--cursor` | ✅ |  |
 | `comments list` |  | ✅ |  |
 | `comments list` | `--limit` | ✅ |  |
 | `comments list` | `--cursor` | ✅ |  |
@@ -131,6 +145,10 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `comments reply` |  | ✅ |  |
 | `comments reply` | `--text` | ✅ |  |
 | `comments reply` | `--file` | ✅ |  |
+| `comments edit` |  | ✅ |  |
+| `comments edit` | `--text` | ✅ |  |
+| `comments edit` | `--file` | ✅ |  |
+| `comments delete` |  | ✅ |  |
 | `files upload` |  | ✅ |  |
 | `files upload` | `--parent` | ✅ |  |
 | `api list` |  | ✅ |  |

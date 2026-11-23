@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { ServiceApiCall } from "@wirecat/cli-core/cli"
 import type {
   NotionBlock,
+  NotionComment,
   NotionDatabase,
   NotionDataSource,
   NotionList,
@@ -81,6 +82,10 @@ export class FakeNotion implements NotionReads {
   readonly databases = new Map<string, FakeDatabase>()
   readonly users = new Map<string, FakeUser>()
   userAccess: FakeUserAccess = "emails"
+  /** Whether the connection may read comments; without it Notion answers 403. */
+  commentAccess = true
+  /** Unresolved comments by the page they are on, oldest first. */
+  readonly commentsOn = new Map<string, { id: string; author: FakeUser; text: string; created: number }[]>()
   /** Plain blocks (columns, toggles) that hold child pages, by id, with their parent. */
   readonly blocks = new Map<string, NotionParent>()
   /** Pages search leaves out, as Notion's own docs say it may. */
@@ -99,6 +104,7 @@ export class FakeNotion implements NotionReads {
     retrieveBlock: 0,
     blockChildren: 0,
     pageMarkdown: 0,
+    comments: 0,
   }
   readonly log: { method: Method; id?: string }[] = []
   private readonly failures: { method: Method; error: Error; id?: string }[] = []
@@ -436,6 +442,36 @@ export class FakeNotion implements NotionReads {
     }
     throw notFound(`block ${id}`)
   }
+
+  addComment(page: string, author: FakeUser, text: string) {
+    const all = this.commentsOn.get(page) ?? []
+    all.push({
+      id: `c0c0c0c0-0000-4000-8000-${String(all.length + 1).padStart(12, "0")}`,
+      author,
+      text,
+      created: this.now,
+    })
+    this.commentsOn.set(page, all)
+  }
+
+  async comments(id: string, startCursor?: string): Promise<NotionList<NotionComment>> {
+    this.enter("comments", id)
+    if (!this.commentAccess)
+      throw new CliError("permission_error", "Insufficient permissions for this endpoint", { status: 403 })
+    if (!this.readable(this.pages.get(id))) throw notFound(`block ${id}`)
+    const all = (this.commentsOn.get(id) ?? []).map(
+      (comment): NotionComment => ({
+        object: "comment",
+        id: comment.id,
+        discussion_id: comment.id.replace("c0c0c0c0", "d0d0d0d0"),
+        created_time: iso(comment.created),
+        created_by: { object: "user", id: comment.author.id },
+        rich_text: [{ plain_text: comment.text }],
+        display_name: { resolved_name: comment.author.name },
+      }),
+    )
+    return this.paginate(`comments:${id}`, all, { ...(startCursor ? { start_cursor: startCursor } : {}) })
+  }
 }
 
 /**
@@ -466,6 +502,9 @@ export const fakeNotionCall =
       case "get-block-children":
         if (query.page_size !== "100") throw invalid("the sync lists 100 blocks a page")
         return listed(notion.blockChildren(String(path.block_id), query.start_cursor as string | undefined))
+      case "list-comments":
+        if (query.page_size !== "100") throw invalid("the sync lists 100 comments a page")
+        return listed(notion.comments(String(query.block_id), query.start_cursor as string | undefined))
       case "retrieve-page-markdown":
         if (query.markdown_version !== "v2") throw invalid("the sync reads Markdown v2")
         return { object: "page_markdown", ...(await notion.pageMarkdown(String(path.page_id))) }

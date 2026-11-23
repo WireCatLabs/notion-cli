@@ -21,8 +21,13 @@ export const PAGE_WRITE_KEYS: Record<string, readonly string[]> = {
   "documents update": ["api.update-page-markdown"],
   "documents delete": ["api.patch-page"],
   "documents restore": ["api.patch-page"],
+  "documents move": ["api.move-page"],
+  "documents rename": ["api.patch-page"],
   "comments create": ["api.create-a-comment"],
   "comments reply": ["comments.create", "api.create-a-comment"],
+  "comments edit": ["api.update-a-comment"],
+  // Notion keeps no deleted comment, so it asks as a page to the trash does, and as the raw call does.
+  "comments delete": ["api.delete-a-comment", DELETE_KEY],
   "files upload": ["api.create-file", "api.complete-file-upload", "api.patch-block-children"],
 }
 
@@ -99,7 +104,11 @@ export const permissions = commandPermissions({
     if (path[0] === "api") return api.alsoChecks(path)
     const keys = PAGE_WRITE_KEYS[path.join(" ")] ?? []
     if (path.join(" ") === "documents update")
-      return [...keys, { key: DELETE_KEY, when: "with --allow-deleting-content" }]
+      return [
+        ...keys,
+        { key: DELETE_KEY, when: "with --allow-deleting-content" },
+        { key: "api.patch-page", when: "with --field, --emoji or --cover" },
+      ]
     return keys
   },
   // As gcal-cli and drive-cli: a page is created and changed freely, a page to the trash asks first, and so does a

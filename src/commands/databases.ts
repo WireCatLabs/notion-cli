@@ -92,8 +92,9 @@ const showCommand = () =>
   )
     .summary("show one database live: its data sources, their ids and properties")
     .description(
-      "show one database live from Notion: its title, where it sits, and each of its data sources with its id and " +
-        "its properties, with the options of each select and status; a query of the database names a data source id",
+      "show one database live from Notion: its title, where it sits, and each of its data sources with its id, its " +
+        "properties with the options of each select and status, and its templates, which documents create --template " +
+        "takes. A query of the database names a data source id",
     )
     .argument("<database>", "the database's id or its Notion link")
     .action(async function (this: Command, database: string) {

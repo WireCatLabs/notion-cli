@@ -18,6 +18,21 @@ command without one stops with exit code 2 and lists the profiles on this comput
 Every command except `mcp serve` on stdin and stdout takes `--json`, and prints one JSON value on stdout. Errors are JSON on stderr, with a code to branch
 on. The [command reference](commands.md) lists the codes.
 
+## Database rows
+
+A database's rows are pages with typed values. Read the property names, options and templates first, then write:
+
+```sh
+notion personal databases show DATABASE_ID
+notion personal documents create --into DATABASE_ID --title "Write the plan" --field Status=Open --field Owner=me
+notion personal documents update ROW_ID --field Status=Done
+notion personal rows list DATABASE_ID --filter Status=Open --filter "Due<2026-12-01"
+```
+
+Each `--field` is checked against the property's type before anything is sent. A list (multi-select, people,
+relations) takes values split by commas, a date takes `2026-12-01` or a range `2026-12-01/2026-12-05`, and an empty
+value clears it. `--from-template default`, or a template's name from `databases show`, fills the row from a template.
+
 ## Agents
 
 `notion skill install` puts the tool's skill where Claude Code, Codex, Gemini CLI and OpenClaw look for it.

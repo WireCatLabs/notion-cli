@@ -93,12 +93,14 @@ reason here.
 | `sync`, `status` | copy the chosen pages into the store; report coverage | same |
 | `documents list\|show\|export\|context\|add` | read the local copy; `add` one page by its link | same |
 | `documents get` | read one page live, as Markdown | same |
-| `documents create\|update\|delete\|restore` | write a page; `delete` moves it to Notion's trash | `create\|update`; Notion has a trash to restore from |
-| `databases list\|show` | a database, its data sources (their ids) and its properties, live | Notion only, as `sheets` is Drive only |
+| `documents create\|update\|delete\|restore` | write a page or a database row; `delete` moves it to Notion's trash | `create\|update`; Notion has a trash to restore from |
+| `documents move\|rename` | file a page under another page or into a database, and give it a new title | `files move`, `documents rename` |
+| `databases list\|show` | a database, its data sources (their ids), its properties and its templates, live | Notion only, as `sheets` is Drive only |
+| `rows list` | a database's rows with their values, live, filtered by `--filter` | Notion only, as `sheets` is Drive only |
 | `search` | the local copy, Lucene syntax; database rows are searched here, not by a separate query | same |
 | `catalog`, `tags`, `relationships`, `notes`, `memories`, `facts`, `identities` | the knowledge layer over documents | same |
 | `mirrors add\|list\|remove\|status\|sync\|watch` | a local Markdown folder in step with a page tree | same |
-| `comments list\|create\|reply` | page comments, live; `list` shows unresolved ones only | same group name |
+| `comments list\|create\|reply\|edit\|delete` | page comments, live. `list` shows unresolved ones only, and `edit` and `delete` act on the connection's own only | same group name |
 | `files upload` | a local file added to the end of a page | Notion only |
 | `api list\|show`, one command per operation | the raw API, from Notion's OpenAPI document | same |
 | `doctor`, `config`, `mcp`, `skill`, `runs`, `upgrade`, `commands` | from cli-core | same |
@@ -214,6 +216,60 @@ guard and send journal, with the command's own permission key, and answers with 
   cannot be read is `outcome_unknown`: the page may have changed, so it is read before the write is repeated.
 - The local copy is not changed by a write; the next `sync` brings it in step.
 
+## Rows
+
+Rows were added in 0.8.0 (plan IDEA-2863 in cli-private). The plan named `rows create|update|query`. The shared
+vocabulary has no `rows` resource and no `query` verb, and a row is a page, so a row is written as a document:
+`documents create --into <database>` and `documents update <row> --field`. Only the live list is its own group,
+`rows list`, as no shared command lists a table's rows live. `--field <key=value>` is the vocabulary's flag for a
+named value on a write. The lint overrides name the three words the vocabulary lacks (`rows`, `--from-template`,
+`--cover`) and the list without a query.
+
+- **Typed values come from the schema.** Each `--field Name=Value` is checked against the data source's properties
+  ([retrieve a data source](https://developers.notion.com/reference/retrieve-a-data-source)) and sent in the shape
+  [page property values](https://developers.notion.com/reference/page-property-values) gives for its type. The body is
+  keyed by property name, as the docs' examples are. A status must be one of its options, since a page write adds
+  none. Formula, rollup, the created and edited fields, unique ids and buttons are refused, as Notion sets them. A
+  files property is refused too: `files upload` adds a file. cli-core's CRM typed values were checked first. They
+  read Attio's typed entries and write nothing, so they do not fit a write. cli-core's meetings `--setting` parser
+  is not exported and takes snake_case names only, so `--field` has a small parser of its own.
+- **Lists** (multi-select, people, relations) take values split by commas, which Notion's option names cannot hold. A
+  list replaces the whole list, as Notion does. More than 100 people or relations in one write is refused, not split
+  into several requests ([request limits](https://developers.notion.com/reference/request-limits)).
+- **People** are an email address, a user id or `me`. An email is looked up in
+  [list all users](https://developers.notion.com/reference/get-users), which needs the email capability. `me` is the
+  person who owns the token (`bot.owner.user` in [get self](https://developers.notion.com/reference/get-self)). A
+  connection the workspace owns has none, so `me` is refused there. In a `--filter`, `me` is sent as Notion's own
+  `me`.
+- **A database with several data sources** is refused with their ids, and one of those ids is given in place of the
+  database. None is picked. A database id that Notion does not know as a database is taken as a data source id.
+- **Templates**: `--from-template default`, `none`, an id, or a name looked up with
+  [list data source templates](https://developers.notion.com/reference/list-data-source-templates). `databases show`
+  lists them for each data source. Notion applies a template after it answers
+  ([create a page](https://developers.notion.com/reference/post-page)), so the answer says `template_pending: true`.
+  A template and `--text` together are refused, as Notion fills a row from one.
+- **Filters**: `--filter Name<op>Value` with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` and `!~`, mapped per type to
+  [filter data source entries](https://developers.notion.com/reference/filter-data-source-entries). An empty value
+  with `=` or `!=` asks whether it is empty. Several are joined with `and`. The docs list no conditions for url,
+  email and phone properties. They get the text conditions, not checked live.
+- **Permissions**: a row is created by `documents create`, which checks `api.post-page`. `documents update --field`
+  also checks `api.patch-page`. The reads before a write (schema, users, templates) fail with their own code. Only
+  the write itself can be `outcome_unknown`.
+
+## Moving and renaming
+
+`documents move`, `documents rename` and `documents update --emoji|--cover` were added in 0.8.0 (IDEA-2865).
+
+- **move** sends [move page](https://developers.notion.com/reference/move-page). The plan named one `--parent` for a
+  page or a database. A Notion link does not say which it is, so a page is `--parent <id>` and a database, or one
+  of its data sources, is `--into <id>`. Notion moves no database and nothing to the top of the workspace. Its answer
+  may be only `object` and `id`, so that is all the answer relies on. It checks `api.move-page`.
+- **rename** reads the page, finds its title property by type, and sets it. A row's title property has a name of its
+  own, so it is not guessed. It checks `api.patch-page`.
+- **icon and cover**: `--emoji` takes one emoji for the icon, `--cover` an https link for the cover, and `none` takes
+  either away. An icon from a link or a file, and a cover from a file, wait for IDEA-2869 (files into a page). With
+  text too, the values, icon and cover are set first in one request, then the text in a second.
+
 ## Comments and files
 
 `comments list|create|reply` and `files upload` are friendly commands over the same calls `api` makes, with the
@@ -221,6 +277,14 @@ writes' guard, send journal, `operation_id`, `--dry-run` and `WCNOTION_READ_ONLY
 
 - **comments list** sends [list comments](https://developers.notion.com/reference/list-comments), which gives only
   unresolved comments; its help says so. `--limit` and `--cursor` page it.
+- **comments edit** and **comments delete** send [update a comment](https://developers.notion.com/reference/update-a-comment)
+  and [delete a comment](https://developers.notion.com/reference/delete-a-comment). Notion lets a connection change
+  only the comments it created and answers 404 for any other. So the comment is read first and its author compared
+  with the token's bot from [get self](https://developers.notion.com/reference/get-self). Someone else's comment is
+  refused before any write with `notion.not-own-comment`. The text read first is the answer's `previous_text`: Notion
+  keeps no deleted comment, and this is its last copy. `comments delete` checks `documents.delete` and
+  `api.delete-a-comment`, so it asks first, as the raw call does. Notion's answer to both may be only `object` and
+  `id`. There is no resolve: the docs describe no way to resolve a comment.
 - **comments create** comments on a page and **comments reply** answers in a discussion by its `discussion_id`, both
   with `markdown` in [create a comment](https://developers.notion.com/reference/create-a-comment), which keeps inline
   Markdown only. The text is a `secretInput`: no run record keeps it, whatever `record_input` says. Both check

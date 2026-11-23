@@ -3,6 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import { mapped, NOTION } from "./errors.js"
 import type {
   NotionBlock,
+  NotionComment,
   NotionDatabase,
   NotionDataSource,
   NotionList,
@@ -84,6 +85,13 @@ export const notionPort = (client: Client, clock?: ReturnType<typeof notionClock
     )
     return { markdown: answer.markdown, truncated: answer.truncated, unknown_block_ids: answer.unknown_block_ids }
   },
+  comments: async (id, startCursor) =>
+    list<NotionComment>(
+      "comment",
+      await mapped(() =>
+        client.comments.list({ block_id: id, page_size: 100, ...(startCursor ? { start_cursor: startCursor } : {}) }),
+      ),
+    ),
 })
 
 /** A call the source manifest names in wirecat.config.ts `source.reads`, filled with an id or a cursor. */
@@ -109,4 +117,6 @@ export const manifestPort = (read: NamedRead, serverTime?: () => number | undefi
     const answer = kind<NotionPageMarkdown & { object: string }>("page_markdown", await read("markdown", { id }))
     return { markdown: answer.markdown, truncated: answer.truncated, unknown_block_ids: answer.unknown_block_ids }
   },
+  comments: async (id, startCursor) =>
+    list<NotionComment>("comment", await read("comments", { id, ...(startCursor ? { cursor: startCursor } : {}) })),
 })

@@ -37,6 +37,9 @@ export interface NotionIdentity {
 /** What the connection may read of users, as the first lookup in a run found it. */
 export type UserAccess = "none" | "names" | "emails"
 
+/** A page's comments were read, or the connection may not read comments. */
+export type CommentAccess = "read" | "refused"
+
 export interface NotionMetadata {
   kind: NotionKind
   /** Notion's own parent. `parents` holds the container the sync files it under, which differs for a page in a block. */
@@ -50,6 +53,8 @@ export interface NotionMetadata {
   /** What the read could learn of its authors; a page read before 0.6.0 has none and is read again. */
   authors?: UserAccess
   missingBlocks?: number
+  /** Whether the read could list the page's comments; a page read before 0.8.0 has none and is read again. */
+  comments?: CommentAccess
 }
 
 export interface NotionFile extends SourceFile {

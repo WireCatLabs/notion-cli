@@ -12,7 +12,8 @@
  * - A list answer cut at Notion's 10,000-result cap carries `request_status.type: "incomplete"`; search too.
  *
  * Endpoint pages: https://developers.notion.com/reference/post-search, /query-a-data-source, /retrieve-a-page,
- * /retrieve-a-database, /retrieve-a-block, /get-block-children, /retrieve-page-markdown, /get-self, /get-user.
+ * /retrieve-a-database, /retrieve-a-block, /get-block-children, /retrieve-page-markdown, /get-self, /get-user,
+ * /list-comments.
  */
 
 export interface NotionUser {
@@ -185,6 +186,20 @@ export interface NotionPageMarkdown {
   unknown_block_ids: string[]
 }
 
+/**
+ * An unresolved comment ([comment object](https://developers.notion.com/reference/comment-object)); Notion lists no
+ * resolved one ([list comments](https://developers.notion.com/reference/list-comments)).
+ */
+export interface NotionComment {
+  object: "comment"
+  id: string
+  discussion_id: string
+  created_time: string
+  created_by: NotionUser
+  rich_text: NotionRichText[]
+  display_name?: { resolved_name?: string | null }
+}
+
 /** The token's bot user; a personal access token has one too, owned by the person who made it. */
 export interface NotionSelf {
   object: "user"
@@ -213,6 +228,8 @@ export interface NotionReads {
   blockChildren(id: string, startCursor?: string): Promise<NotionList<NotionBlock>>
   /** `GET /v1/pages/{id}/markdown?markdown_version=v2`; a block id fetches that block's subtree. */
   pageMarkdown(id: string): Promise<NotionPageMarkdown>
+  /** `GET /v1/comments?block_id={id}`, one page of up to 100; 403 when the connection may not read comments. */
+  comments(id: string, startCursor?: string): Promise<NotionList<NotionComment>>
   /**
    * Notion's clock: the `Date` header of its latest answer, in milliseconds, or undefined before any answer. Not a
    * request. The sync compares Notion's timestamps with it, never with this computer's clock.

@@ -62,6 +62,14 @@ export const SOURCE: Readonly<Record<string, unknown>> = {
         markdown_version: "v2",
       },
     },
+    comments: {
+      operation: "list-comments",
+      query: {
+        block_id: "{id}",
+        page_size: 100,
+        start_cursor: "{cursor}",
+      },
+    },
   },
   reread: {
     missing: "authors",
