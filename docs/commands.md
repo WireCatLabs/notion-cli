@@ -320,7 +320,7 @@ notion documents get <page>
 
 ### `notion documents create`
 
-create a Notion page under another page, from Notion-flavoured Markdown. With no --title, Notion takes the text's first # heading as the title
+create a Notion page under another page (--parent), from Notion-flavoured Markdown, or a row in a database (--into). With no --title, Notion takes the text's first # heading as the title. A row's --field values are checked against the database's properties and sent as each type takes it. A database with several data sources takes one of their ids in place of the database. With --from-template, Notion fills the row from that template after it answers, so the text is not there yet when this returns: template_pending says so. databases show lists the properties, their options and the templates
 
 **Changes something in the service.**
 
@@ -331,15 +331,18 @@ notion documents create [options]
 | Option | What it does |
 |---|---|
 | `--parent <id>` | the parent page's id or its Notion link. |
+| `--into <id>` | the database to add it to: its id or Notion link, or one of its data source ids. |
 | `--title <title>` | the page's title. |
+| `--field <key=value>` | a row's value, as Name=Value. Repeat it for more. Lists (multi-select, people, relations) take values split by commas, a person is an email address, a user id or me, a date is 2026-12-01 or a range start/end, and an empty value clears it. Default: ``. |
+| `--from-template <template>` | for a row: default, none, or a template's id or name from databases show. |
 | `--text <text>` | the text, as Notion-flavoured Markdown. |
 | `--file <file>` | read the text from this file; - reads stdin. |
 
-**Example:** `notion personal documents create --parent PAGE_ID --title "Meeting notes" --text "Discussed the roadmap"`, `notion personal documents create --parent https://www.notion.so/Projects-0123456789abcdef0123456789abcdef --file notes.md`, `notion personal documents create --parent PAGE_ID --file notes.md --dry-run`
+**Example:** `notion personal documents create --parent PAGE_ID --title "Meeting notes" --text "Discussed the roadmap"`, `notion personal documents create --into DATABASE_ID --title "Write the plan" --field Status=Open --field Owner=me`, `notion personal documents create --into DATABASE_ID --title "Weekly review" --from-template default --dry-run`
 
 ### `notion documents update`
 
-replace a Notion page's whole text with Notion-flavoured Markdown. A child page or database whose tag the new text leaves out is refused unless --allow-deleting-content is given, which asks as documents delete does
+replace a Notion page's whole text with Notion-flavoured Markdown, change a database row's values with --field, or set the page's icon (--emoji) and cover. A value not named keeps what it had, and a list given replaces the whole list. A child page or database whose tag the new text leaves out is refused unless --allow-deleting-content is given, which asks as documents delete does. Values, icon and cover are set first in one request, then the text
 
 **Changes something in the service.**
 
@@ -355,9 +358,12 @@ notion documents update <page> [options]
 |---|---|
 | `--text <text>` | the text, as Notion-flavoured Markdown. |
 | `--file <file>` | read the text from this file; - reads stdin. |
+| `--field <key=value>` | a row's value, as Name=Value. Repeat it for more. Lists (multi-select, people, relations) take values split by commas, a person is an email address, a user id or me, a date is 2026-12-01 or a range start/end, and an empty value clears it. Default: ``. |
+| `--emoji <emoji>` | the page's icon, one emoji, or none to take it away. |
+| `--cover <link>` | the page's cover, an https link to an image, or none to take it away. |
 | `--allow-deleting-content` | let Notion delete the child pages and databases the new text leaves out. |
 
-**Example:** `notion personal documents update PAGE_ID --file notes.md`, `notion personal documents update PAGE_ID --text "# Plan" --dry-run`, `notion personal documents update PAGE_ID --file page.md --allow-deleting-content`
+**Example:** `notion personal documents update PAGE_ID --file notes.md`, `notion personal documents update ROW_ID --field Status=Done --field "Tags=Urgent, Backend"`, `notion personal documents update PAGE_ID --emoji 📌 --cover https://example.com/cover.png --dry-run`
 
 ### `notion documents delete`
 
@@ -390,6 +396,44 @@ notion documents restore <page>
 | `page` | required | the page's id or its Notion link. |
 
 **Example:** `notion personal documents restore PAGE_ID`, `notion personal documents restore PAGE_ID --dry-run`
+
+### `notion documents move`
+
+move a Notion page, with the pages under it, under another page (--parent) or into a database (--into). A database with several data sources takes one of their ids in place of the database, as databases show lists them. Notion moves no database, and no page to the top of the workspace. The next sync files the page at its new place
+
+**Changes something in the service.**
+
+```sh
+notion documents move <page> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `page` | required | the page's id or its Notion link. |
+
+| Option | What it does |
+|---|---|
+| `--parent <id>` | the page to move it under: its id or its Notion link. |
+| `--into <id>` | the database to move it into: its id or Notion link, or one of its data source ids. |
+
+**Example:** `notion personal documents move PAGE_ID --parent OTHER_PAGE_ID`, `notion personal documents move PAGE_ID --into DATABASE_ID`, `notion personal documents move PAGE_ID --into DATA_SOURCE_ID --dry-run`
+
+### `notion documents rename`
+
+give a Notion page or database row a new title. Its text, icon and place stay as they are
+
+**Changes something in the service.**
+
+```sh
+notion documents rename <page> <title>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `page` | required | the page's id or its Notion link. |
+| `title` | required | the new title. |
+
+**Example:** `notion personal documents rename PAGE_ID "Roadmap 2027"`, `notion personal documents rename PAGE_ID "Roadmap 2027" --dry-run`
 
 ### `notion documents add`
 
@@ -1110,7 +1154,7 @@ notion databases list [query] [options]
 
 ### `notion databases show`
 
-show one database live from Notion: its title, where it sits, and each of its data sources with its id and its properties, with the options of each select and status; a query of the database names a data source id
+show one database live from Notion: its title, where it sits, and each of its data sources with its id, its properties with the options of each select and status, and its templates, which documents create --template takes. A query of the database names a data source id
 
 ```sh
 notion databases show <database>
@@ -1123,6 +1167,32 @@ notion databases show <database>
 **Returns:** database — id, title, description, url, parent, is_inline, in_trash, created_time, and 2 more; every field: notion commands info databases show
 
 **Example:** `notion personal databases show 0123456789abcdef0123456789abcdef`, `notion personal databases show https://www.notion.so/0123456789abcdef0123456789abcdef --json`
+
+## `notion rows`
+
+list a Notion database's rows live, with their values
+
+### `notion rows list`
+
+list a Notion database's rows live, with their values as the local copy keeps them. Each --filter is Name, an operator and a value, and a row must match every one. = and != compare, and with an empty value ask whether it is empty. > >= < <= compare numbers and dates. \~ and !\~ ask whether text or a list holds the value. A people value takes me, an email address or a user id
+
+```sh
+notion rows list <database> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `database` | required | the database's id or Notion link, or one of its data source ids. |
+
+| Option | What it does |
+|---|---|
+| `--filter <query>` | a condition such as Status=Open or Due<2026-12-01. Repeat it for more. Default: ``. |
+| `--limit <n>` | at most this many, up to 100 (50 if not given). |
+| `--cursor <cursor>` | go on from where the last page stopped, as page.next gives it. |
+
+**Returns:** notion row — id, title, url, created_time, last_edited_time, properties; every field: notion commands info rows list
+
+**Example:** `notion personal rows list DATABASE_ID --filter Status=Open`, `notion personal rows list DATABASE_ID --filter "Due<2026-12-01" --filter Owner=me --json`, `notion personal rows list DATABASE_ID --filter "Tags~Backend" --limit 20`
 
 ## `notion comments`
 
@@ -1190,6 +1260,43 @@ notion comments reply <discussion> [options]
 | `--file <file>` | read the comment from this file; - reads stdin. |
 
 **Example:** `notion personal comments reply DISCUSSION_ID --text "Done"`
+
+### `notion comments edit`
+
+change the text of a comment this connection posted, by its id from comments list. Notion lets a connection change only its own comments. The answer keeps the text it had in previous_text
+
+**Changes something in the service.**
+
+```sh
+notion comments edit <comment> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `comment` | required | the comment's id from comments list. |
+
+| Option | What it does |
+|---|---|
+| `--text <text>` | the comment, as Markdown: bold, italic, code, links. |
+| `--file <file>` | read the comment from this file; - reads stdin. |
+
+**Example:** `notion personal comments edit COMMENT_ID --text "Fixed the link"`
+
+### `notion comments delete`
+
+delete a comment this connection posted, by its id from comments list. Notion keeps no deleted comment, so this asks first, as the profile's documents.delete permission says, and the answer keeps its text in previous_text
+
+**Changes something in the service.**
+
+```sh
+notion comments delete <comment>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `comment` | required | the comment's id from comments list. |
+
+**Example:** `notion personal comments delete COMMENT_ID`, `notion personal comments delete COMMENT_ID --dry-run`
 
 ## `notion files`
 

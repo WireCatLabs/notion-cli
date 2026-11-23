@@ -9,6 +9,7 @@ import { definition } from "./program.js"
 import { DATABASE_ID, DISCUSSION_ID, FAKE_TOKEN, fakeNotion, PAGE_ID } from "./testing/fake-notion.js"
 import { signedIn } from "./testing/harness.js"
 
+const COMMENT_ID = "c0c0c0c0-0000-4000-8000-000000000900"
 const COVERED = new Set(["retrieve-a-page", "post-search", "patch-page"])
 
 const UPLOAD = join(tmpdir(), `notion-run-scope-${process.pid}.txt`)
@@ -36,6 +37,10 @@ describe("each remote command runs inside cli-core's run", () => {
       "comments reply": ["personal", "comments", "reply", DISCUSSION_ID, "--text", "Fake text"],
       "files upload": ["personal", "files", "upload", UPLOAD, "--parent", PAGE_ID],
       "databases show": ["personal", "databases", "show", DATABASE_ID],
+      "documents move": ["personal", "documents", "move", PAGE_ID, "--into", DATABASE_ID],
+      "documents rename": ["personal", "documents", "rename", PAGE_ID, "Test title"],
+      "rows list": ["personal", "rows", "list", DATABASE_ID, "--filter", "Status=Done"],
+      "comments edit": ["personal", "comments", "edit", COMMENT_ID, "--text", "Fake text"],
       "api retrieve-a-page": ["personal", "api", "retrieve-a-page", "--page-id", PAGE_ID],
       "api post-search": ["personal", "api", "post-search", "--body", "{}"],
       "api patch-page": ["personal", "api", "patch-page", "--page-id", PAGE_ID, "--body", "{}"],
@@ -51,6 +56,7 @@ describe("each remote command runs inside cli-core's run", () => {
       ),
       "mcp serve": "listens until stopped",
       "documents delete": "the same write path as documents restore, behind a question no run here answers",
+      "comments delete": "the same write path as comments edit, behind a question no run here answers",
       "memories extract": "cli-core's shared command; it asks the configured model, never Notion",
       doctor:
         "cli-core's appDoctorCommand answers --online outside a run of its own; drop this once core runs it inside",

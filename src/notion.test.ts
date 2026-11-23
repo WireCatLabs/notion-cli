@@ -198,10 +198,17 @@ it("databases show gives each data source's id and properties, with select and s
       {
         id: SOURCE_ID,
         title: "Test database 1",
+        templates: [],
         properties: [
           { id: "title", name: "Name", type: "title" },
           { id: "s%3Ab", name: "Status", type: "status", options: ["Not started", "Done"] },
           { id: "t%3Ag", name: "Tags", type: "multi_select", options: ["Test tag"] },
+          { id: "d%3Au", name: "Due", type: "date" },
+          { id: "o%3Aw", name: "Owner", type: "people" },
+          { id: "d%3Ao", name: "Done", type: "checkbox" },
+          { id: "e%3As", name: "Estimate", type: "number" },
+          { id: "n%3Ao", name: "Notes", type: "rich_text" },
+          { id: "s%3Ac", name: "Score", type: "formula" },
         ],
       },
     ],
@@ -209,6 +216,7 @@ it("databases show gives each data source's id and properties, with select and s
   expect(notion.calls.map((call) => call.path)).toEqual([
     `/v1/databases/${DATABASE_ID}`,
     `/v1/data_sources/${SOURCE_ID}`,
+    `/v1/data_sources/${SOURCE_ID}/templates`,
   ])
 })
 

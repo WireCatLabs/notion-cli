@@ -57,7 +57,15 @@ import {
   WORKSPACE_ROOT,
 } from "../sync/source.js"
 import { VERSION } from "../version.js"
-import { createCommand, deleteCommand, getCommand, restoreCommand, updateCommand } from "./documents.js"
+import {
+  createCommand,
+  deleteCommand,
+  getCommand,
+  moveCommand,
+  renameCommand,
+  restoreCommand,
+  updateCommand,
+} from "./documents.js"
 
 type NotionCall = ReturnType<typeof notionCallFor>
 
@@ -559,7 +567,7 @@ export const libraryCommands = (): Command[] => {
   })
   documents.addCommand(getCommand())
   documents.addCommand(createCommand()).addCommand(updateCommand()).addCommand(deleteCommand())
-  documents.addCommand(restoreCommand())
+  documents.addCommand(restoreCommand()).addCommand(moveCommand()).addCommand(renameCommand())
   annotate(documents.command("add"), {
     effects: FETCH,
     mcp: false,

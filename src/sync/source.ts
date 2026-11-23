@@ -13,6 +13,7 @@ import type {
   NotionReads,
 } from "../notion/reads.js"
 import { browseLevel, type NotionSource } from "./browse.js"
+import { pageComments } from "./comments.js"
 import {
   type BlockPosition,
   decodeCursor,
@@ -113,6 +114,7 @@ export const notionSource = (
     retrieveBlock: counted(notion.retrieveBlock),
     blockChildren: counted(notion.blockChildren),
     pageMarkdown: counted(notion.pageMarkdown),
+    comments: counted(notion.comments),
   }
 
   // The state the engine holds does not change while the source lists, and parsing it costs as much as a request.
@@ -917,6 +919,8 @@ export const notionSource = (
 
   const authors = pagePeople(reads, warn, options.userAccess)
 
+  const discussionOf = pageComments(reads, warn)
+
   const content = async (id: string, maxChars?: number): Promise<SourceContent<NotionFile>> => {
     containers = new Map()
     const page = await reads.retrievePage(id)
@@ -932,7 +936,10 @@ export const notionSource = (
         })
     })
     const fields = frontMatter(page.properties)
-    const searchable = [file.name, ...frontMatterLines(fields), body.markdown].filter(Boolean).join("\n\n")
+    const discussion = await discussionOf(id)
+    const searchable = [file.name, ...frontMatterLines(fields), body.markdown, discussion.text]
+      .filter(Boolean)
+      .join("\n\n")
     if (maxChars !== undefined && searchable.length > maxChars)
       throw new CliError("validation_error", "the page is longer than the text limit", {
         reason: "source.text-limit",
@@ -946,6 +953,7 @@ export const notionSource = (
         people: await authors.people(page),
         authors: authors.access(),
         ...(body.missing ? { missingBlocks: body.missing } : {}),
+        comments: discussion.comments,
       },
     }
     return { metadata, markdown: body.markdown, text: withoutSignedLinks(searchable).text, tabs: [] }

@@ -40,5 +40,33 @@
     "reason": "Notion's list comments takes only a page or block and a cursor (https://developers.notion.com/reference/list-comments); there is nothing to filter by on Notion's side.",
     "owner": "@WireCatLabs",
     "review_after": "2027-02-16"
+  },
+  {
+    "rule": "unknown-resource",
+    "target": "rows",
+    "reason": "A Notion database's rows read live with their typed values, which only Notion has among the WireCat CLIs; rows are written as documents (documents create --into, documents update --field), as a row is a page (docs/dev/DESIGN.md, Rows). Add it to the cli-base vocabulary if a second CLI lists a table's rows live (Airtable, Coda).",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-23"
+  },
+  {
+    "rule": "list-without-query",
+    "target": "rows list",
+    "reason": "Each database has its own properties, so no fixed set of query fields can describe them; --filter takes Name<op>Value checked against the database's schema and sent as Notion's filter (https://developers.notion.com/reference/filter-data-source-entries; docs/dev/DESIGN.md, Rows). Review when cli-core's list query takes fields read at run time.",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-23"
+  },
+  {
+    "rule": "option-role",
+    "target": "documents create --from-template",
+    "reason": "Notion fills a new row from one of its database's templates (template in https://developers.notion.com/reference/post-page); no shared flag names a template to start from, and tg's and max's --template is a message text, so the name is --from-template. Add it to the cli-base vocabulary if a second CLI creates from templates (Confluence, Coda).",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-23"
+  },
+  {
+    "rule": "option-role",
+    "target": "documents update --cover",
+    "reason": "A Notion page's cover image, by an https link (cover in https://developers.notion.com/reference/patch-page); the vocabulary's --photo is a local file. Review with IDEA-2869, which adds a cover from a local file through Notion's file upload.",
+    "owner": "@WireCatLabs",
+    "review_after": "2027-02-23"
   }
 ]

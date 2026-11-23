@@ -31,9 +31,17 @@ their properties, and later keeps a folder of Markdown files in step with a Noti
   `--allow-deleting-content`; `--dry-run` shows what a write would do and sends nothing.
 - `notion personal comments list <page>` shows a page's open comments (Notion's API gives no resolved ones), `comments
   create <page> --text …` starts a discussion and `comments reply <discussion> --text …` answers in one.
-  `files upload <file> --parent <page>` adds a file to the end of a page.
+  `comments edit` and `comments delete` change or delete a comment this connection posted. The sync keeps a page's
+  open comments in the copy, so search finds them. `files upload <file> --parent <page>` adds a file to the end of a
+  page.
+- `notion personal documents move <page> --parent <page>` files a page under another page or, with `--into`, into a
+  database. `documents rename <page> <title>` gives it a new title, and `documents update --emoji` and `--cover` set
+  its icon and cover.
 - `notion personal databases list` lists the databases the token sees; `databases show <id or link>` gives each data
-  source's id and its properties.
+  source's id, its properties and its templates.
+- `notion personal documents create --into <database> --title "Write the plan" --field Status=Open --field Owner=me`
+  adds a row, each value checked against the database's properties. `documents update <row> --field Status=Done`
+  changes values, and `rows list <database> --filter Status=Open` lists rows live.
 - `notion doctor`, `notion personal mcp serve` and the other commands every WireCat CLI shares.
 
 The token's variable is `WCNOTION_TOKEN`, not `NOTION_TOKEN`: Notion's own MCP server reads that one, and a token

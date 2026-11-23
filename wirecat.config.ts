@@ -35,6 +35,10 @@ export default defineCli({
         query: { page_size: 100, start_cursor: "{cursor}" },
       },
       markdown: { operation: "retrieve-page-markdown", path: { page_id: "{id}" }, query: { markdown_version: "v2" } },
+      comments: {
+        operation: "list-comments",
+        query: { block_id: "{id}", page_size: 100, start_cursor: "{cursor}" },
+      },
     },
     // Pages read before notion saved their authors (0.5.0 and older) are read once more; src/sync/from-config.ts
     // narrows it to pages and rows and adds those read with less user information than the connection gives now.

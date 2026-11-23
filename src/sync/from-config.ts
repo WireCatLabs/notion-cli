@@ -25,12 +25,13 @@ export const notionSourceFromConfig = (call: ServiceApiCall, options: NotionConf
     call,
     hooks: ({ read, base }) => ({
       ...notionSource(manifestPort(read, serverTime), rest),
-      // Only a page or a row has authors. One read with less user information than the connection gives now is read
-      // again too, so its people are linked once the owner grants email addresses.
+      // Only a page or a row has authors and comments. One read with less user information than the connection gives
+      // now is read again too, so its people are linked once the owner grants email addresses, and so is one read
+      // before the sync kept comments.
       reread: (saved) => {
-        const { kind, authors } = saved.metadata.providerMetadata
+        const { kind, authors, comments } = saved.metadata.providerMetadata
         if (kind !== "page" && kind !== "row") return false
-        if (base.reread?.(saved)) return true
+        if (base.reread?.(saved) || comments === undefined) return true
         const access = options.access?.()
         return authors !== undefined && access !== undefined && ACCESS_RANK[authors] < ACCESS_RANK[access]
       },

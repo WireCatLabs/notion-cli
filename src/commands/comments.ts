@@ -116,10 +116,51 @@ const replyCommand = () =>
     renderAnswer(this, outputFor(this), itemOf({ operation_id: operationId, comment: done }))
   })
 
-/** `comments list|create|reply`: Notion's comments, live. */
+const editCommand = () =>
+  withText(
+    annotate(new Command("edit"), {
+      effects: REMOTE_WRITE,
+      offline: false,
+      examples: [`${CLI} personal comments edit COMMENT_ID --text "Fixed the link"`],
+    })
+      .summary("change a comment this connection posted")
+      .description(
+        "change the text of a comment this connection posted, by its id from comments list. Notion lets a " +
+          "connection change only its own comments. The answer keeps the text it had in previous_text",
+      )
+      .argument("<comment>", "the comment's id from comments list"),
+  ).action(async function (this: Command, comment: string, args: { text?: string; file?: string }) {
+    const id = notionId(comment, "comment")
+    const markdown = (await markdownOf(this, args, true, COMMENT)) ?? ""
+    const { operationId, done } = await write(this, [], (notion) => notion.editComment(id, markdown))
+    renderAnswer(this, outputFor(this), itemOf({ operation_id: operationId, ...done }))
+  })
+
+const deleteCommand = () =>
+  annotate(new Command("delete"), {
+    effects: REMOTE_WRITE,
+    offline: false,
+    examples: [`${CLI} personal comments delete COMMENT_ID`, `${CLI} personal comments delete COMMENT_ID --dry-run`],
+  })
+    .summary("delete a comment this connection posted")
+    .description(
+      "delete a comment this connection posted, by its id from comments list. Notion keeps no deleted comment, so " +
+        "this asks first, as the profile's documents.delete permission says, and the answer keeps its text in " +
+        "previous_text",
+    )
+    .argument("<comment>", "the comment's id from comments list")
+    .action(async function (this: Command, comment: string) {
+      const id = notionId(comment, "comment")
+      const { operationId, done } = await write(this, [], (notion) => notion.deleteComment(id))
+      renderAnswer(this, outputFor(this), itemOf({ operation_id: operationId, ...done }))
+    })
+
+/** `comments list|create|reply|edit|delete`: Notion's comments, live. */
 export const commentsCommand = () =>
   annotate(new Command("comments"), { effects: REMOTE_READ })
     .description("read and write the comments on Notion pages, live")
     .addCommand(listCommand())
     .addCommand(createCommand())
     .addCommand(replyCommand())
+    .addCommand(editCommand())
+    .addCommand(deleteCommand())

@@ -223,7 +223,7 @@
         "documents",
         "create"
       ],
-      "summary": "create a Notion page under another page",
+      "summary": "create a Notion page under another page, or a row in a database",
       "effects": {
         "remote": "write",
         "local": "write"
@@ -235,7 +235,7 @@
         "documents",
         "update"
       ],
-      "summary": "replace a Notion page's text",
+      "summary": "replace a Notion page's text, change a row's values, or set an icon or cover",
       "effects": {
         "remote": "write",
         "local": "write"
@@ -265,6 +265,30 @@
         "local": "write"
       },
       "permission": "documents.restore"
+    },
+    {
+      "path": [
+        "documents",
+        "move"
+      ],
+      "summary": "move a Notion page under another page or into a database",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "documents.move"
+    },
+    {
+      "path": [
+        "documents",
+        "rename"
+      ],
+      "summary": "rename a Notion page or database row",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "documents.rename"
     },
     {
       "path": [
@@ -730,6 +754,19 @@
     },
     {
       "path": [
+        "rows",
+        "list"
+      ],
+      "summary": "list a Notion database's rows live, filtered by their values",
+      "effects": {
+        "remote": "read",
+        "local": "read"
+      },
+      "permission": "rows.list",
+      "entity": "notion_row"
+    },
+    {
+      "path": [
         "comments",
         "list"
       ],
@@ -764,6 +801,30 @@
         "local": "write"
       },
       "permission": "comments.reply"
+    },
+    {
+      "path": [
+        "comments",
+        "edit"
+      ],
+      "summary": "change a comment this connection posted",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "comments.edit"
+    },
+    {
+      "path": [
+        "comments",
+        "delete"
+      ],
+      "summary": "delete a comment this connection posted",
+      "effects": {
+        "remote": "write",
+        "local": "write"
+      },
+      "permission": "comments.delete"
     },
     {
       "path": [

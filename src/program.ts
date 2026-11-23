@@ -25,6 +25,7 @@ import { commentsCommand } from "./commands/comments.js"
 import { databasesCommand } from "./commands/databases.js"
 import { filesCommand } from "./commands/files.js"
 import { libraryCommands } from "./commands/library.js"
+import { rowsCommand } from "./commands/rows.js"
 import { sessionCommand } from "./commands/session.js"
 import { configuration } from "./config.js"
 import { IDENTITY, PACKAGE, SKILL } from "./identity.js"
@@ -91,6 +92,7 @@ export const definition = (): ProgramDefinition => ({
     accountCommand(),
     ...libraryCommands(),
     databasesCommand(),
+    rowsCommand(),
     commentsCommand(),
     filesCommand(),
     apiCommand(),

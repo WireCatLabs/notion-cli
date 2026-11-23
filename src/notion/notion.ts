@@ -1,9 +1,13 @@
 import type { Client } from "@notionhq/client"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { mapped, NOTION } from "./errors.js"
+import { frontMatter, titleOf } from "../sync/front-matter.js"
+import { isItemError, mapped, NOTION } from "./errors.js"
 import { withoutSignedLinks } from "./links.js"
 import { notionPort } from "./port.js"
+import { type Condition, filterFrom, peopleFiltered } from "./properties.js"
+import type { NotionPropertyValue } from "./reads.js"
+import { optionsOf, rowReads } from "./rows.js"
 
 // Each wire name is from Notion's reference, linked at its schema; the strict fake in src/testing/fake-notion.ts
 // refuses any other. No wire type leaves this file (WC-ARCH-3).
@@ -102,19 +106,6 @@ const parentOf = (parent: v.InferOutput<typeof wireParent> | undefined) => {
   return { type: parent.type, id }
 }
 
-/** Option names of a select, multi-select or status property: what a filter like `status:Done` takes. */
-const optionsOf = (property: Record<string, unknown>): string[] | undefined => {
-  const config = property[String(property.type)]
-  if (!config || typeof config !== "object") return undefined
-  const options = (config as { options?: unknown }).options
-  if (!Array.isArray(options)) return undefined
-  return options.flatMap((option) =>
-    option && typeof option === "object" && typeof (option as { name?: unknown }).name === "string"
-      ? [(option as { name: string }).name]
-      : [],
-  )
-}
-
 export const accountSchema = v.strictObject({
   workspace: v.strictObject({ id: v.string(), name: v.nullable(v.string()) }),
   user: v.strictObject({
@@ -153,6 +144,9 @@ const propertySchema = v.strictObject({
   options: v.optional(v.array(v.string())),
 })
 
+export const templateSchema = v.strictObject({ id: v.string(), name: v.string(), is_default: v.boolean() })
+export type Template = v.InferOutput<typeof templateSchema>
+
 export const databaseSchema = v.strictObject({
   id: v.string(),
   title: v.string(),
@@ -163,7 +157,14 @@ export const databaseSchema = v.strictObject({
   in_trash: v.boolean(),
   created_time: v.nullable(v.string()),
   last_edited_time: v.nullable(v.string()),
-  data_sources: v.array(v.strictObject({ id: v.string(), title: v.string(), properties: v.array(propertySchema) })),
+  data_sources: v.array(
+    v.strictObject({
+      id: v.string(),
+      title: v.string(),
+      templates: v.optional(v.array(templateSchema)),
+      properties: v.array(propertySchema),
+    }),
+  ),
 })
 export type Database = v.InferOutput<typeof databaseSchema>
 
@@ -194,8 +195,40 @@ export const commentSchema = v.strictObject({
 })
 export type Comment = v.InferOutput<typeof commentSchema>
 
+/** [Query a data source](https://developers.notion.com/reference/query-a-data-source): one page of rows. */
+const wireRow = v.looseObject({
+  object: v.literal("page"),
+  id: v.string(),
+  url: v.optional(v.string()),
+  created_time: v.optional(v.string()),
+  last_edited_time: v.optional(v.string()),
+  in_trash: v.optional(v.boolean()),
+  properties: v.record(v.string(), v.looseObject({ type: v.string() })),
+})
+
+/** [List data source templates](https://developers.notion.com/reference/list-data-source-templates). */
+const wireTemplates = v.looseObject({
+  templates: v.array(v.looseObject({ id: v.string(), name: v.string(), is_default: v.boolean() })),
+  has_more: v.boolean(),
+  next_cursor: v.nullish(v.string()),
+})
+
+const scalar = v.union([v.string(), v.number(), v.boolean()])
+
+export const rowSchema = v.strictObject({
+  id: v.string(),
+  title: v.string(),
+  url: v.nullable(v.string()),
+  created_time: v.nullable(v.string()),
+  last_edited_time: v.nullable(v.string()),
+  properties: v.record(v.string(), v.union([scalar, v.array(scalar)])),
+})
+export type Row = v.InferOutput<typeof rowSchema>
+
 /** At most this many unknown blocks are fetched again; Notion lists at most 100. */
 const MORE_BLOCKS = 100
+/** A data source's templates read for `databases show`, in pages of 100. */
+const MORE_TEMPLATES = 500
 /** A database's data sources read for `databases show`; Notion lists at most 100. */
 const MORE_SOURCES = 100
 
@@ -208,6 +241,36 @@ const placeholderFor = (markdown: string, id: string) => {
 /** Every Notion read the commands make, each answer checked against its documented shape. */
 export const liveReads = (client: Client) => {
   const port = notionPort(client)
+  const rows = rowReads(client)
+
+  /**
+   * A data source's templates, what `documents create --template` takes by name or id. They are read for a database's
+   * schema only, so one the token may not list is left out, not a failure of the whole answer.
+   */
+  const templatesOf = async (dataSource: string): Promise<Template[] | null> => {
+    const all: Template[] = []
+    let cursor: string | undefined
+    try {
+      do {
+        const page = parsed(
+          wireTemplates,
+          await mapped(() =>
+            client.dataSources.listTemplates({
+              data_source_id: dataSource,
+              page_size: 100,
+              ...(cursor ? { start_cursor: cursor } : {}),
+            }),
+          ),
+        )
+        for (const { id, name, is_default } of page.templates) all.push({ id, name, is_default })
+        cursor = page.has_more ? (page.next_cursor ?? undefined) : undefined
+      } while (cursor && all.length < MORE_TEMPLATES)
+    } catch (error) {
+      if (isItemError(error)) return null
+      throw error
+    }
+    return all
+  }
   return {
     port,
     /** The token's bot user; its workspace id and bot id are the account (DESIGN.md, Sign-in). */
@@ -328,6 +391,56 @@ export const liveReads = (client: Client) => {
       return { items, hasMore: page.has_more, cursor: page.has_more ? (page.next_cursor ?? undefined) : undefined }
     },
 
+    /**
+     * One page of a data source's rows, live, filtered by `--filter` against its schema. A row's values are read as the
+     * sync writes them into front matter, so a query and the local copy show the same words.
+     */
+    rows: async ({
+      database,
+      conditions,
+      limit,
+      cursor,
+    }: {
+      database: string
+      conditions: readonly Condition[]
+      limit: number
+      cursor?: string | undefined
+    }) => {
+      const dataSource = await rows.dataSourceOf(database)
+      const schema = conditions.length > 0 ? await rows.schemaOf(dataSource) : {}
+      const people = await rows.peopleOf(peopleFiltered(schema, conditions))
+      const filter = filterFrom(schema, conditions, people)
+      const page = parsed(
+        wireSearch,
+        await mapped(() =>
+          client.dataSources.query({
+            data_source_id: dataSource,
+            page_size: limit,
+            ...(filter ? { filter: filter as never } : {}),
+            ...(cursor ? { start_cursor: cursor } : {}),
+          }),
+        ),
+      )
+      const items = page.results.map((result): Row => {
+        const row = parsed(wireRow, result)
+        const properties = row.properties as unknown as Record<string, NotionPropertyValue>
+        return {
+          id: row.id,
+          title: titleOf(properties),
+          url: row.url ?? null,
+          created_time: row.created_time ?? null,
+          last_edited_time: row.last_edited_time ?? null,
+          properties: frontMatter(properties),
+        }
+      })
+      return {
+        dataSource,
+        items,
+        hasMore: page.has_more,
+        cursor: page.has_more ? (page.next_cursor ?? undefined) : undefined,
+      }
+    },
+
     /** A database with each data source's id and property schema: what a query or a filter needs. */
     database: async (id: string): Promise<Database> => {
       const database = parsed(wireDatabase, await mapped(() => client.databases.retrieve({ database_id: id })))
@@ -337,9 +450,11 @@ export const liveReads = (client: Client) => {
           wireDataSource,
           await mapped(() => client.dataSources.retrieve({ data_source_id: reference.id })),
         )
+        const templates = await templatesOf(source.id)
         sources.push({
           id: source.id,
           title: textOf(source.title) || reference.name || "",
+          ...(templates ? { templates } : {}),
           properties: Object.values(source.properties ?? {}).map((property) => {
             const options = optionsOf(property)
             return {
