@@ -141,6 +141,11 @@ node -e '
   if (page.markdown !== process.argv[2])
     console.error(`warning: Notion gave back other text than it was sent: ${JSON.stringify(page.markdown)}`)' \
   "$work/first.json" "Written by the WireCat live check, first-$stamp"
+# The mirror takes Notion's form of a page as the truth, so two reads of an unchanged page must give the same bytes,
+# or every sync downloads every page (cli-core #3232): a warning only.
+"${cli[@]}" live documents get "$made" --json >"$work/first-again.json"
+[ "$(field first item.sha256)" = "$(field first-again item.sha256)" ] ||
+  echo "warning: two reads of an unchanged page gave other text, so a mirror would download it at every sync" >&2
 "${cli[@]}" live documents update "$made" --text "Changed by the WireCat live check, second-$stamp" \
   --json >"$work/updated.json"
 "${cli[@]}" live documents get "$made" --json >"$work/second.json"

@@ -388,7 +388,8 @@ below and on the write round trip after them; the rest a person reads in its out
 - `databases list` rows carry a data source's title, and `parent.database_id`, in search results.
 
 The check writes, but only under the page it is given, the owner's test page "WireCat Test". It creates one page
-`wirecat-live-<time>` there and a page under it, reads the text back, replaces it, checks that an update dropping the
+`wirecat-live-<time>` there and a page under it, reads the text back twice (a mirror needs the same bytes each
+time, so a difference is a warning), replaces it, checks that an update dropping the
 child page is refused with `notion.text-refused`, edits part of the text with `--payload` at the fingerprint
 `documents get` gave and checks that the same fingerprint, now stale, is refused with `mirror.remote-changed`, trashes and restores the page, checking `in_trash` each time, and
 leaves it in Notion's trash. Its temporary profile allows `documents.delete`, so no question stops the run; a check
