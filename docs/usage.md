@@ -1,6 +1,20 @@
 # Use it
 
-This page explains how a command is built, and how an agent uses the tool. Read it before your first command.
+Read and change your Notion pages from a terminal, or let your agent do it, always in the workspace you name. Every
+command starts with a profile, so nothing goes to the wrong account.
+
+You or your agent can then fill database rows, change one part of a page without sending all of it again, bring back
+an earlier version and read your meeting notes. A script gets JSON, with an error code to branch on.
+
+**On this page:**
+
+1. [The profile comes first](#the-profile-comes-first)
+2. [Output for scripts](#output-for-scripts)
+3. [Database rows](#database-rows)
+4. [Changing part of a page](#changing-part-of-a-page)
+5. [Earlier versions and the change log](#earlier-versions-and-the-change-log)
+6. [Meeting notes](#meeting-notes)
+7. [Agents](#agents)
 
 ## The profile comes first
 
