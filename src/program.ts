@@ -26,6 +26,7 @@ import { databasesCommand } from "./commands/databases.js"
 import { filesCommand } from "./commands/files.js"
 import { libraryCommands } from "./commands/library.js"
 import { meetingsCommands } from "./commands/meetings.js"
+import { mirrorsCommand } from "./commands/mirrors.js"
 import { rowsCommand } from "./commands/rows.js"
 import { sessionCommand } from "./commands/session.js"
 import { configuration } from "./config.js"
@@ -99,6 +100,7 @@ export const definition = (): ProgramDefinition => ({
     rowsCommand(),
     commentsCommand(),
     filesCommand(),
+    mirrorsCommand(),
     apiCommand(),
     appDoctorCommand(IDENTITY, configuration, { packageName: PACKAGE, local: userInformation }),
     skillCommand(IDENTITY, SKILL),

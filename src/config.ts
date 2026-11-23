@@ -32,6 +32,18 @@ export const PAGE_WRITE_KEYS: Record<string, readonly string[]> = {
   "files upload": ["api.create-file", "api.complete-file-upload", "api.patch-block-children"],
 }
 
+/** The calls a mirror's sync sends, the same keys as the `documents` command that sends each. */
+export const MIRROR_KEYS = { create: "api.post-page", replace: "api.update-page-markdown", trash: "api.patch-page" }
+
+/** What `--dry-run` and `commands` show for a mirror's writes, the keys `mirrorKeys` checks. */
+const MIRROR_CHECKS = [
+  { key: MIRROR_KEYS.create, when: "for each page it creates in Notion" },
+  { key: MIRROR_KEYS.replace, when: "for each page whose text it replaces" },
+  { key: MIRROR_KEYS.trash, when: "for each page it moves to Notion's trash" },
+  { key: DELETE_KEY, when: "for each page or local file it moves to a trash" },
+]
+const MIRROR_WRITES = new Set(["mirrors sync", "mirrors watch", "mirrors conflicts resolve"])
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value)
 
@@ -103,6 +115,7 @@ const api = serviceApiPermissions(API)
 export const permissions = commandPermissions({
   alsoChecks: (path) => {
     if (path[0] === "api") return api.alsoChecks(path)
+    if (MIRROR_WRITES.has(path.join(" "))) return MIRROR_CHECKS
     const keys = PAGE_WRITE_KEYS[path.join(" ")] ?? []
     if (path.join(" ") === "documents update")
       return [

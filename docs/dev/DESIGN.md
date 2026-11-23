@@ -341,7 +341,10 @@ mounted: Notion keeps no meeting files.
 `pushDocuments`: it already keeps conflicts for `mirrors conflicts list|show|resolve`, keeps every replaced version,
 crosses a deletion into the other side's trash, and tells a deletion from mere absence
 ([cli-core #3232](https://github.com/WireCatLabs/cli-core/issues/3232)). `src/notion/mirror-target.ts` is its
-`FileTarget`. The `mirrors` commands themselves wait until cli-core shares them. yandex-disk-cli keeps its own today.
+`FileTarget`. The `mirrors` commands are cli-core's shared group, `fileMirrorsCommand` (cli-core 0.729.0), mounted in
+`src/commands/mirrors.ts` with remote word `notion`, a 5 minute `watch` default and `mirrorKeys`: each write checks the
+same `api.*` key as the `documents` command that sends it, a deletion on either side asks for `documents.delete`, and a
+local file replaced asks nothing, since the mirror writes Notion's form back into the file after every upload.
 
 - **Paths.** Each page under the mirrored page is `<title>.md`, and the pages under it are in the folder `<title>/`.
   A slash in a title becomes `-`, an empty title is `Untitled`. Two pages with one title in one place are mirrored as
