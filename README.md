@@ -18,10 +18,16 @@ their properties, and later keeps a folder of Markdown files in step with a Noti
   - a [personal access token](https://developers.notion.com/guides/connections-and-tokens/personal-access-tokens),
     which acts with your own rights;
   - or an internal connection's token, which sees only the pages shared with that connection.
-- `notion personal documents get <page id or link>` prints one page as Markdown, live.
+- `notion personal documents get <page id or link>` prints one page as Markdown, live, with its sha256.
+  `documents update <page> --payload '[{"old": "Due Friday", "new": "Due Monday"}]' --expected-fingerprint <sha256>`
+  changes only those words, and is refused when the page changed since it was read. Every text write keeps the text
+  it replaced in your local versions.
 - `notion personal sync` copies the pages, the pages under them, the databases and their rows into WireCat's shared
   store. With no folder chosen it copies everything the token sees. `folders add <page or database>` narrows it, and
   `folders browse` shows what there is to choose, one level at a time.
+- `notion personal documents history <page>` shows the earlier versions of a synced page, a deleted one too, and
+  `notion personal changes --since 1d` what changed in your Notion since yesterday. A page that is no longer shared
+  with the token is marked no longer visible, never deleted.
 - `notion personal search <words>` searches the copy offline, in Lucene syntax. `documents list|show|export|context`
   read it, `status` says how far the sync is, and `tags`, `notes`, `memories` and `facts` keep your own notes on a
   page. `memo search` and `search all` find the pages too.

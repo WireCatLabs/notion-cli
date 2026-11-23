@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**216 ✅ · 203 ⛔ · 0 ❌** — 155 commands, 264 options.
+**225 ✅ · 206 ⛔ · 0 ❌** — 158 commands, 273 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -41,8 +41,12 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `documents show` |  | ✅ |  |
 | `documents export` |  | ✅ |  |
 | `documents export` | `--output` | ✅ |  |
+| `documents history` |  | ✅ |  |
+| `documents history` | `--revision` | ✅ |  |
 | `documents context` |  | ✅ |  |
 | `documents get` |  | ✅ |  |
+| `documents check` |  | ✅ |  |
+| `documents check` | `--expected-fingerprint` | ✅ |  |
 | `documents create` |  | ✅ |  |
 | `documents create` | `--parent` | ✅ |  |
 | `documents create` | `--into` | ✅ |  |
@@ -54,6 +58,8 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `documents update` |  | ✅ |  |
 | `documents update` | `--text` | ✅ |  |
 | `documents update` | `--file` | ✅ |  |
+| `documents update` | `--payload` | ✅ |  |
+| `documents update` | `--expected-fingerprint` | ✅ |  |
 | `documents update` | `--field` | ✅ |  |
 | `documents update` | `--emoji` | ✅ |  |
 | `documents update` | `--cover` | ✅ |  |
@@ -67,6 +73,12 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `documents add` |  | ✅ |  |
 | `documents add` | `--title` | ✅ |  |
 | `documents add` | `--subject` | ✅ |  |
+| `changes` |  | ✅ |  |
+| `changes` | `--since` | ✅ |  |
+| `changes` | `--until` | ⛔ | cli-core's shared changes command, tested with its paging and window in cli-core's documents history tests; src/library.test.ts drives --since and --event over a real sync |
+| `changes` | `--event` | ✅ |  |
+| `changes` | `--limit` | ⛔ | cli-core's shared changes command, tested with its paging and window in cli-core's documents history tests; src/library.test.ts drives --since and --event over a real sync |
+| `changes` | `--page` | ⛔ | cli-core's shared changes command, tested with its paging and window in cli-core's documents history tests; src/library.test.ts drives --since and --event over a real sync |
 | `search` |  | ✅ |  |
 | `search` | `--limit` | ✅ |  |
 | `search` | `--page` | ✅ |  |

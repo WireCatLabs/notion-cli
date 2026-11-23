@@ -62,9 +62,14 @@ After each sync the engine keeps an opaque position (the cursor). It holds:
    results at a time, the children of every page, and every row of every database by query. The known top-level
    pages search did not show are read directly at the end. `sync --rescan` walks at once.
 4. **Before anything is removed**, the sync asks Notion for it directly
-   ([retrieve a page](https://developers.notion.com/reference/retrieve-a-page)). It is removed only when Notion
-   answers that it is in the trash, or answers 404 (deleted, or no longer shared with the token). A page that is
-   still there is kept, or moved to where it now sits. When Notion answers 403, the page is kept as it was.
+   ([retrieve a page](https://developers.notion.com/reference/retrieve-a-page)). It leaves the local copy only when
+   Notion answers that it is in the trash, or answers 404. Only the trash counts as a deletion. A 404 means deleted
+   for good or no longer shared with the token, and Notion does not say which, so the page is marked no longer
+   visible: it leaves lists and search, keeps its text, and comes back as it was when Notion shows it again (owner,
+   NEED-2803). The trash is told apart in the daily walk and the rounds of changes. `sync --rescan` walks through
+   cli-core's own walk, which marks a page it no longer finds no longer visible even when it is in the trash, so the
+   text stays (the safe side). A page that is still there is kept, or moved to where it now sits. When Notion answers 403, the page
+   is kept as it was. Either way the text it had is kept as a version: `documents history` and `changes` read them.
 5. **The mark moves** only when the whole pass is done. It moves to the newest edit search showed when the pass
    began, so an edit made during a long pass is read again by the next one.
 
@@ -201,7 +206,8 @@ the rest was synced, and the next sync is likely to leave the same item out. cli
   sync or `--rescan`) they are kept as they are. A data source its database no longer lists takes its rows out of the
   local copy on the next sync that reads the database, and search, which still finds them, does not bring them
   back; when Notion will not show the database (403), they stay.
-- **Only a 404 or the trash removes.** A 403 on a page or a database the sync holds keeps it and its rows as they
+- **Only a 404 or the trash removes, and only the trash deletes.** A 404 marks the item no longer visible, with its
+  text kept. A 403 on a page or a database the sync holds keeps it and its rows as they
   were, with a `notion.kept-unconfirmed` warning: a 403 says nothing about whether the item is still there.
 - **A failure partway** (a 429 after the client's retries, Notion down) ends the pass early. The work done is
   kept, a warning names the failure and the wait Notion asked for, and the next sync goes on from that step. When

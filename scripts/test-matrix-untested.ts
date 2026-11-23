@@ -24,7 +24,12 @@ const MODEL =
   "needs a downloaded meaning model or a configured model provider; cli-core's documents kit tests the shared command " +
   "with a fake model, and no test here downloads one"
 
+const SHARED_CHANGES =
+  "cli-core's shared changes command, tested with its paging and window in cli-core's documents history tests; " +
+  "src/library.test.ts drives --since and --event over a real sync"
+
 export const UNTESTED: { command: string; option?: string; reason: string }[] = [
+  ...["--until", "--limit", "--page"].map((option) => ({ command: "changes", option, reason: SHARED_CHANGES })),
   { command: "sync", option: "--embed", reason: MODEL },
   { command: "memories extract", reason: MODEL },
   ...["--scope", "--tab", "--yes"].map((option) => ({ command: "memories extract", option, reason: MODEL })),

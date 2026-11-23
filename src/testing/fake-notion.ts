@@ -247,6 +247,41 @@ const workspaceRoutes = (workspace: FakeWorkspace): Route[] => [
 ]
 
 /** Notion, answering through `fetch`. `calls` holds every request; `refusals` every one it turned away and why. */
+/**
+ * A Markdown update as [update page markdown](https://developers.notion.com/reference/update-page-markdown) describes
+ * it: `replace_content`, or `update_content` whose parts that match apply and each miss is a `no_match` warning. An
+ * `old_str` found more than once without `replace_all_matches` fails, and so does a call where nothing matches.
+ */
+const editedMarkdown = (markdown: string, body: Record<string, unknown>) => {
+  if (body.type === "replace_content") {
+    const replace = body.replace_content as { new_str?: unknown; allow_deleting_content?: unknown } | undefined
+    if (typeof replace?.new_str !== "string") return 400
+    return { markdown: replace.new_str, allowDeleting: replace.allow_deleting_content, warnings: [] }
+  }
+  if (body.type !== "update_content") return 400
+  const update = body.update_content as { content_updates?: unknown; allow_deleting_content?: unknown } | undefined
+  const parts = update?.content_updates
+  if (!Array.isArray(parts) || parts.length === 0 || parts.length > 100) return 400
+  let text = markdown
+  let matched = 0
+  const warnings: { code: string; message: string }[] = []
+  for (const part of parts as Record<string, unknown>[]) {
+    const extra = Object.keys(part).filter((key) => !["old_str", "new_str", "replace_all_matches"].includes(key))
+    if (extra.length > 0 || typeof part.old_str !== "string" || typeof part.new_str !== "string") return 400
+    if (part.old_str === "") return 400
+    const found = text.split(part.old_str).length - 1
+    if (found === 0) {
+      warnings.push({ code: "no_match", message: "an edit matched nothing" })
+      continue
+    }
+    if (found > 1 && part.replace_all_matches !== true) return 400
+    text = text.replaceAll(part.old_str, () => part.new_str as string)
+    matched++
+  }
+  if (matched === 0) return 400
+  return { markdown: text, allowDeleting: update?.allow_deleting_content, warnings }
+}
+
 export const fakeNotion = (options: FakeNotionOptions = {}) => {
   const pages: Record<string, FakePage> = options.pages ?? {
     [PAGE_ID]: { markdown: "# Test page\n\nFake text written by Test Person." },
@@ -532,14 +567,14 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
       answer: (id, { body = {} }) => {
         const held = pages[id]
         if (!held) return notionError(404, "object_not_found")
-        const replace = body.replace_content as { new_str?: unknown; allow_deleting_content?: unknown } | undefined
-        if (body.markdown_version !== "v2" || body.type !== "replace_content" || typeof replace?.new_str !== "string")
-          return notionError(400, "validation_error")
+        if (body.markdown_version !== "v2") return notionError(400, "validation_error")
+        const edited = editedMarkdown(held.markdown, body)
+        if (typeof edited === "number") return notionError(edited, "validation_error")
         const children = held.markdown.match(/<(page|database)\b[^>]*>.*?<\/\1>/gsu) ?? []
-        const dropped = children.filter((tag) => !(replace.new_str as string).includes(tag))
-        if (dropped.length > 0 && replace.allow_deleting_content !== true) return notionError(400, "validation_error")
-        held.markdown = replace.new_str
-        const warnings = options.updateWarnings ?? []
+        const dropped = children.filter((tag) => !edited.markdown.includes(tag))
+        if (dropped.length > 0 && edited.allowDeleting !== true) return notionError(400, "validation_error")
+        held.markdown = edited.markdown
+        const warnings = [...(options.updateWarnings ?? []), ...edited.warnings]
         return {
           status: 200,
           body: {

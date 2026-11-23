@@ -25,6 +25,10 @@ yourself; if none is given, run a command without one and read the profiles the 
   Then `notion <profile> documents show <id> --json` gives its text, or `documents context <id>` its tags, notes,
   memories and people. An answer with `missing` on `synced_at` means the copy is over a day old: run
   `notion <profile> sync --json` first.
+- `notion <profile> documents history <page> --json` lists the versions the syncs kept, and `--revision <n>` shows
+  one. `notion <profile> changes --since 1d --json` lists what the syncs added, changed, deleted or found no longer
+  visible. Both read the local copy. A page `unavailable` there was not deleted: Notion stopped showing it to the
+  token.
 - `notion <profile> sync --json` copies what changed. `meta.issues` and `item.warnings` name pages Notion would not
   give; the answer then says `meta.complete: false`, though the rest was synced. A sync that stopped before the end
   of its pass also says `meta.complete: false`, with a `next` step: run `sync` again, as it says. `item.pending`
@@ -32,9 +36,15 @@ yourself; if none is given, run a command without one and read the profiles the 
   `notion.timeout-too-short` means the run had no time to keep anything: run it again with a longer `--timeout`.
 - A refusal with reason `profile.account-taken` or `profile.other-account` means the token belongs to another
   profile's Notion connection. Tell the owner which profile the error names; never sign out a profile yourself.
+- To change part of a page, read it with `documents get <page> --json` and keep `item.sha256`. Then
+  `documents update <page> --payload '[{"old": "<text on the page>", "new": "<new text>"}]' --expected-fingerprint
+  <sha256> --json` changes only those parts. Each `old` must be on the page exactly once (add `"all": true` for every
+  place). A `conflict` with reason `mirror.remote-changed` means someone changed the page since you read it: read it
+  again and redo the edit on the new text. `meta.complete: false` with `no_match` in `item.warnings` means a part was
+  not made. `documents check <page> --expected-fingerprint <sha256> --json` answers `changed` without the text.
 - `notion <profile> documents create --parent <page> --text "<text>" --json` makes a page under another one;
-  `documents update <page> --file <path> --json` replaces its whole text, so read it with `documents get` first and
-  keep every `<page>` and `<database>` tag. A refusal with reason `notion.text-refused` most often means the
+  `documents update <page> --file <path> --expected-fingerprint <sha256> --json` replaces its whole text, so read it
+  with `documents get` first and keep every `<page>` and `<database>` tag. A refusal with reason `notion.text-refused` most often means the
   new text drops a child page or database: put its tag back. Pass `--allow-deleting-content` only when the owner asked to
   delete it. `documents delete <page>` moves a page to Notion's trash and `documents restore <page>` brings it back.
   An `outcome_unknown` error means the write may have happened: read the page before you repeat it.

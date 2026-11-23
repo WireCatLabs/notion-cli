@@ -4,6 +4,7 @@ import * as v from "valibot"
 import { frontMatter, titleOf } from "../sync/front-matter.js"
 import { isItemError, mapped, NOTION } from "./errors.js"
 import { withoutSignedLinks } from "./links.js"
+import { fingerprintOf } from "./page-target.js"
 import { notionPort } from "./port.js"
 import { type Condition, filterFrom, peopleFiltered } from "./properties.js"
 import type { NotionPropertyValue } from "./reads.js"
@@ -123,6 +124,7 @@ export const documentSchema = v.strictObject({
   truncated: v.boolean(),
   missing_block_ids: v.array(v.string()),
   signed_links_removed: v.number(),
+  sha256: v.nullable(v.string()),
 })
 export type Document = v.InferOutput<typeof documentSchema>
 
@@ -328,6 +330,8 @@ export const liveReads = (client: Client) => {
           truncated: issues.length > 0,
           missing_block_ids: [...hidden, ...unread],
           signed_links_removed: clean.removed,
+          // Only a whole page has a fingerprint: a write at it must not stand for a part of the page.
+          sha256: issues.length > 0 ? null : fingerprintOf(clean.text),
         },
         issues,
       }

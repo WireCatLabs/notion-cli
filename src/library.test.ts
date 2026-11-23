@@ -271,6 +271,44 @@ describe("sync over the shared store", () => {
     for (const file of filesUnder(dir)) expect(readFileSync(file, "latin1"), file).not.toMatch(/X-Amz-|signature=/iu)
   })
 
+  it("keeps each version a sync replaced: documents history shows the old text and changes lists the edit", async () => {
+    const { run, notion } = cli()
+    await run(["sync"])
+    notion.advance(60 * 60_000)
+    notion.edit(GRANDCHILD, { markdown: "deepest note, edited" })
+    expect((await run(["sync"])).code).toBe(0)
+    const history = await run(["documents", "history", GRANDCHILD])
+    expect(history.code, history.err).toBe(0)
+    const versions = (history.json() as { item: { versions: { revision: number; current: boolean }[] } }).item.versions
+    expect(versions).toHaveLength(2)
+    const first = versions.find((item) => !item.current)?.revision
+    const old = await run(["documents", "history", GRANDCHILD, "--revision", String(first)])
+    expect(JSON.stringify(old.json())).toContain("deepest note")
+    expect(JSON.stringify(old.json())).not.toContain("deepest note, edited")
+    const changes = await run(["changes", "--since", "1d"])
+    expect(changes.code, changes.err).toBe(0)
+    expect((changes.json() as { items: unknown[] }).items).toContainEqual(
+      expect.objectContaining({ title: "Grandchild", event: "changed" }),
+    )
+  })
+
+  it("marks a page no longer shared as no longer visible, never deleted, and keeps its last text", async () => {
+    const { run, notion } = cli()
+    await run(["sync"])
+    notion.page(LONELY).shared = false
+    expect((await run(["sync", "--rescan"])).code).toBe(0)
+    const changes = await run(["changes", "--since", "1d", "--event", "unavailable,deleted"])
+    expect((changes.json() as { items: unknown[] }).items).toEqual([
+      expect.objectContaining({ title: "Lonely", event: "unavailable" }),
+    ])
+    const kept = await run(["documents", "history", LONELY])
+    expect(kept.code, kept.err).toBe(0)
+    const versions = (kept.json() as { item: { versions: { revision: number }[] } }).item.versions
+    const last = await run(["documents", "history", LONELY, "--revision", String(versions[0]?.revision)])
+    expect(JSON.stringify(last.json())).toContain("a page of its own")
+    expect((await run(["search", "lonely"])).out).not.toContain(LONELY)
+  })
+
   it("syncs right after session start: sign-in and sync name the account the same way", async () => {
     const dir = mkdtempSync(join(tmpdir(), "notion-signin-"))
     const env = { MESSAGING_STORE: join(dir, "wirecat.db"), WCNOTION_STATE_DIR: join(dir, "state") }

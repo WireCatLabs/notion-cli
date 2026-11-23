@@ -444,7 +444,7 @@ export const notionSource = (
     for (const file of missing) {
       try {
         const current = await retrieve(file.id, file.providerMetadata.kind)
-        if (current.trashed) listing.gone.push(file.id)
+        if (current.trashed) listing.trashed.push(file.id)
         else if (current.parents[0] === container) listing.files.push(current)
         else listing.moved.push(current)
       } catch (error) {
@@ -481,7 +481,7 @@ export const notionSource = (
       } else at = { k: "blocks", blocks: [{ id }], seen: [] }
     } else at = decodeListPosition(token)
     const files: NotionFile[] = []
-    const listing: Listing = { files: [], gone: [], moved: [] }
+    const listing: Listing = { files: [], gone: [], trashed: [], moved: [] }
     // Notion answers 400 validation_error to a start_cursor it no longer takes. On a later page that is the saved
     // position going stale: as not_found the engine lists the folder again from its first page and drops nothing.
     // Only the request sent with the saved start_cursor: a 400 on any other (a block Notion cannot list) is the
@@ -546,7 +546,7 @@ export const notionSource = (
 
   /** A container's children, with every known child that did not come back checked directly before it counts as gone. */
   const listChildren = async (id: string): Promise<Listing> => {
-    const listing: Listing = { files: await listed(id), gone: [], moved: [] }
+    const listing: Listing = { files: await listed(id), gone: [], trashed: [], moved: [] }
     const seen = new Set(listing.files.map((file) => file.id))
     await confirm(
       [...known.values()].filter((file) => file.parents[0] === id && !seen.has(file.id)),
@@ -597,7 +597,9 @@ export const notionSource = (
     const since = cursor.mark ? minus(cursor.mark, overlapMs) : null
     const items = new Map<string, SourceChange<NotionFile>>()
     const emit = (file: NotionFile) => items.set(file.id, { id: file.id, removed: false, file })
-    const gone = (id: string) => items.set(id, { id, removed: true })
+    // Only the trash is a deletion; a 404 may be a page no longer shared, so its text is kept (owner, NEED-2803).
+    const gone = (id: string, deleted = false) =>
+      items.set(id, { id, removed: true, ...(deleted ? { gone: "deleted" as const } : {}) })
     // The engine walks every folder it is sent, all its rows, so a database it already holds is not sent again.
     const unheld = (file: NotionFile) => {
       const before = known.get(file.id)
@@ -727,7 +729,7 @@ export const notionSource = (
       const found = await readDatabase(task.id)
       if (typeof found !== "object") return
       const file = await databaseFile(found)
-      if (file.trashed) gone(task.id)
+      if (file.trashed) gone(task.id, true)
       else {
         unlisted(found)
         if (unheld(file)) emit(file)
@@ -742,10 +744,11 @@ export const notionSource = (
       while (task.ids.length) {
         const file = known.get(task.ids[0] as string)
         if (file) {
-          const listing: Listing = { files: [], gone: [], moved: [] }
+          const listing: Listing = { files: [], gone: [], trashed: [], moved: [] }
           await confirm([file], task.container, listing)
           for (const found of [...listing.files, ...listing.moved]) if (changedPage(found)) emit(found)
           for (const id of listing.gone) gone(id)
+          for (const id of listing.trashed) gone(id, true)
         }
         task.ids.shift()
         kept++
@@ -764,7 +767,7 @@ export const notionSource = (
         if (!isNotFound(error)) throw error
         cursor.sources = cursor.sources.filter((item) => item.source !== task.source)
         const database = await readDatabase(task.database)
-        if (isGone(database)) gone(task.database)
+        if (isGone(database)) gone(task.database, typeof database === "object")
         else if (typeof database === "object") {
           unlisted(database)
           const file = await databaseFile(database)
@@ -791,7 +794,7 @@ export const notionSource = (
       const database = await readDatabase(id)
       if (database === "unreadable") return
       if (database === "gone" || database.in_trash) {
-        if (!roots.includes(id)) gone(id)
+        if (!roots.includes(id)) gone(id, database !== "gone")
         return
       }
       unlisted(database)
@@ -849,6 +852,7 @@ export const notionSource = (
         if (page || file.providerMetadata.kind === "database") queue({ t: "walk", id: file.id })
       }
       for (const gid of listing.gone) gone(gid)
+      for (const gid of listing.trashed) gone(gid, true)
     }
 
     let done = 0

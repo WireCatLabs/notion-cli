@@ -338,3 +338,122 @@ it.runIf(process.platform === "linux")("--file never follows a link, and never r
   expect(made.code).toBe(0)
   expect(notion.calls[0]?.body).toMatchObject({ markdown: "Fake plain text" })
 })
+
+const fingerprint = async (notion: ReturnType<typeof fakeNotion>) => {
+  const got = await runCli(["personal", "documents", "get", PAGE_ID, "--json"], { notion })
+  return (got.json().item as { sha256: string }).sha256
+}
+
+const PATCHES = (notion: ReturnType<typeof fakeNotion>) => notion.calls.filter((call) => call.method === "PATCH")
+
+it("documents update --payload edits parts of a page at the fingerprint get gave, and keeps the replaced text", async () => {
+  const notion = fakeNotion({ pages: { [PAGE_ID]: { markdown: "# Test page\n\nDue Friday. Owner: Test Person." } } })
+  const sha = await fingerprint(notion)
+  expect(sha).toMatch(/^[0-9a-f]{64}$/u)
+  const payload = JSON.stringify([{ old: "Due Friday", new: "Due Monday" }])
+  const edited = await runCli(
+    ["personal", "documents", "update", PAGE_ID, "--payload", payload, "--expected-fingerprint", sha, "--json"],
+    { notion },
+  )
+  expect(edited.code, edited.err).toBe(0)
+  expect(PATCHES(notion).map((call) => call.body)).toEqual([
+    {
+      markdown_version: "v2",
+      type: "update_content",
+      update_content: { content_updates: [{ old_str: "Due Friday", new_str: "Due Monday" }] },
+    },
+  ])
+  expect(notion.pages[PAGE_ID]?.markdown).toBe("# Test page\n\nDue Monday. Owner: Test Person.")
+  const item = edited.json().item as { sha256: string; replaced: { sha256: string; kept_at: string } }
+  expect(item.sha256).toBe(await fingerprint(notion))
+  expect(item.replaced.sha256).toBe(sha)
+  expect(readFileSync(item.replaced.kept_at, "utf8")).toContain("Due Friday")
+  const check = ["personal", "documents", "check", PAGE_ID, "--json", "--expected-fingerprint"]
+  expect((await runCli([...check, sha], { notion })).json().item).toMatchObject({ changed: true })
+  expect((await runCli([...check, item.sha256], { notion })).json().item).toMatchObject({ changed: false })
+})
+
+it("documents update refuses a page changed since it was read, with nothing sent and the command to read it again", async () => {
+  const notion = fakeNotion({ pages: { [PAGE_ID]: { markdown: "# Test page\n\nDue Friday." } } })
+  const sha = await fingerprint(notion)
+  const page = notion.pages[PAGE_ID]
+  if (page) page.markdown = "# Test page\n\nDue Friday. Edited by someone else."
+  const payload = JSON.stringify([{ old: "Due Friday", new: "Due Monday" }])
+  const refused = await runCli(
+    ["personal", "documents", "update", PAGE_ID, "--payload", payload, "--expected-fingerprint", sha, "--json"],
+    { notion },
+  )
+  expect(refused.code).not.toBe(0)
+  expect(refused.json()).toMatchObject({ error: { code: "conflict", reason: "mirror.remote-changed" } })
+  expect(JSON.stringify(refused.json())).toContain("documents get")
+  const whole = await runCli(
+    ["personal", "documents", "update", PAGE_ID, "--text", "Fake", "--expected-fingerprint", sha, "--json"],
+    { notion },
+  )
+  expect(whole.json()).toMatchObject({ error: { code: "conflict" } })
+  expect(PATCHES(notion)).toEqual([])
+})
+
+it("documents update refuses an edit Notion would apply only in part, before anything is sent", async () => {
+  const notion = fakeNotion({ pages: { [PAGE_ID]: { markdown: "# Test page\n\nTodo. Todo. Done." } } })
+  const sha = await fingerprint(notion)
+  const run = (payload: unknown, more: string[] = ["--expected-fingerprint", sha]) =>
+    runCli(["personal", "documents", "update", PAGE_ID, "--payload", JSON.stringify(payload), ...more, "--json"], {
+      notion,
+    })
+  expect((await run([{ old: "Done", new: "Closed" }], [])).json()).toMatchObject({
+    error: { code: "validation_error" },
+  })
+  expect(
+    (
+      await run([
+        { old: "Done", new: "Closed" },
+        { old: "Missing", new: "x" },
+      ])
+    ).json(),
+  ).toMatchObject({
+    error: { code: "validation_error", reason: "notion.edit-no-match" },
+  })
+  expect((await run([{ old: "Todo", new: "Doing" }])).json()).toMatchObject({
+    error: { code: "validation_error", reason: "notion.edit-many-matches" },
+  })
+  expect(
+    (await run([{ old: "Done", new: "Closed" }], ["--expected-fingerprint", sha, "--emoji", "📌"])).json(),
+  ).toMatchObject({
+    error: { code: "validation_error" },
+  })
+  expect((await run([{ old: "Todo", new: "x", extra: 1 }])).json()).toMatchObject({
+    error: { code: "validation_error" },
+  })
+  expect(PATCHES(notion)).toEqual([])
+  const all = await run([{ old: "Todo", new: "Doing", all: true }])
+  expect(all.code, all.err).toBe(0)
+  expect(notion.pages[PAGE_ID]?.markdown).toBe("# Test page\n\nDoing. Doing. Done.")
+})
+
+it("documents update says an edit landed only in part when Notion warns no_match, and exits non-zero", async () => {
+  const notion = fakeNotion({
+    pages: { [PAGE_ID]: { markdown: "# Test page\n\nDue Friday." } },
+    updateWarnings: [{ code: "no_match", message: "wirecat-secret-marker" }],
+  })
+  const sha = await fingerprint(notion)
+  const payload = JSON.stringify([{ old: "Due Friday", new: "Due Monday" }])
+  const partial = await runCli(
+    ["personal", "documents", "update", PAGE_ID, "--payload", payload, "--expected-fingerprint", sha, "--json"],
+    { notion },
+  )
+  expect(partial.code).not.toBe(0)
+  expect(partial.json()).toMatchObject({ item: { warnings: ["no_match"] }, meta: { complete: false } })
+  expect(partial.out).not.toContain("wirecat-secret-marker")
+})
+
+it("documents update keeps the text a whole replace overwrites, with or without a fingerprint", async () => {
+  const notion = fakeNotion({ pages: { [PAGE_ID]: { markdown: "# Test page\n\nOld fake text" } } })
+  const replaced = await runCli(["personal", "documents", "update", PAGE_ID, "--text", "New fake text", "--json"], {
+    notion,
+  })
+  expect(replaced.code, replaced.err).toBe(0)
+  const item = replaced.json().item as { replaced: { kept_at: string } }
+  expect(readFileSync(item.replaced.kept_at, "utf8")).toBe("# Test page\n\nOld fake text")
+  expect(notion.pages[PAGE_ID]?.markdown).toBe("New fake text")
+})

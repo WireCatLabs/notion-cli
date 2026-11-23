@@ -196,6 +196,18 @@
     {
       "path": [
         "documents",
+        "history"
+      ],
+      "summary": "list the versions of a document kept in the local copy, or show one with…",
+      "effects": {
+        "remote": "none",
+        "local": "read"
+      },
+      "permission": "documents.history"
+    },
+    {
+      "path": [
+        "documents",
         "context"
       ],
       "summary": "show a document with its tags, relationships, notes, memories and editors",
@@ -221,6 +233,18 @@
     {
       "path": [
         "documents",
+        "check"
+      ],
+      "summary": "say whether a Notion page changed since it was read",
+      "effects": {
+        "remote": "read",
+        "local": "read"
+      },
+      "permission": "documents.check"
+    },
+    {
+      "path": [
+        "documents",
         "create"
       ],
       "summary": "create a Notion page under another page, or a row in a database",
@@ -235,7 +259,7 @@
         "documents",
         "update"
       ],
-      "summary": "replace a Notion page's text, change a row's values, or set an icon or cover",
+      "summary": "change a Notion page's text in place or whole, a row's values, its icon or cover",
       "effects": {
         "remote": "write",
         "local": "write"
@@ -301,6 +325,17 @@
         "local": "write"
       },
       "permission": "documents.add"
+    },
+    {
+      "path": [
+        "changes"
+      ],
+      "summary": "list the documents the sync added, changed, removed or brought back, newest…",
+      "effects": {
+        "remote": "none",
+        "local": "read"
+      },
+      "permission": "changes"
     },
     {
       "path": [

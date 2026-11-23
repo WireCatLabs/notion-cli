@@ -250,7 +250,7 @@ notion documents list [query] [options]
 | `--limit <n>` | how many documents to return. Default: `50`. |
 | `--page <n>` | which page to return. Default: `1`. |
 
-**Next usually:** `notion documents show <document>`, `notion documents context <document>`, `notion tags list <document> [query]`
+**Next usually:** `notion documents show <document>`, `notion documents history <document>`, `notion documents context <document>`
 
 **Example:** `notion personal documents list`, `notion personal documents list tag:budget`, `notion personal documents list person:PERSON_UID --limit 10`
 
@@ -288,6 +288,24 @@ notion documents export <document> [options]
 
 **Example:** `notion personal documents export DOC_ID --output notes.md`
 
+### `notion documents history`
+
+list the versions of a document kept in the local copy, or show one with --revision
+
+```sh
+notion documents history <document> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `document` | required | page id, Notion link, or a search hit's document: ref. |
+
+| Option | What it does |
+|---|---|
+| `--revision <n>` | show the text of this version. |
+
+**Example:** `notion personal documents history DOC_ID`, `notion personal documents history DOC_ID --revision 3`
+
 ### `notion documents context`
 
 show a document with its tags, relationships, notes, memories and editors
@@ -314,9 +332,27 @@ notion documents get <page>
 |---|---|---|
 | `page` | required | the page's id or its Notion link. |
 
-**Returns:** document markdown — id, markdown, truncated, missing_block_ids, signed_links_removed; every field: notion commands info documents get
+**Returns:** document markdown — id, markdown, truncated, missing_block_ids, signed_links_removed, sha256; every field: notion commands info documents get
 
 **Example:** `notion personal documents get https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef`, `notion personal documents get 0123456789abcdef0123456789abcdef --json`
+
+### `notion documents check`
+
+read one page live and say whether its text still has the sha256 documents get answered, without the text. changed is true when it differs. A page too long for Notion to give whole has no fingerprint: changed is null and the answer is incomplete
+
+```sh
+notion documents check <page> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `page` | required | the page's id or its Notion link. |
+
+| Option | What it does |
+|---|---|
+| `--expected-fingerprint <hash>` | the sha256 documents get answered. |
+
+**Example:** `notion personal documents check PAGE_ID --expected-fingerprint SHA256`, `notion personal documents check https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef --expected-fingerprint SHA256 --json`
 
 ### `notion documents create`
 
@@ -342,7 +378,7 @@ notion documents create [options]
 
 ### `notion documents update`
 
-replace a Notion page's whole text with Notion-flavoured Markdown, change a database row's values with --field, or set the page's icon (--emoji) and cover. A value not named keeps what it had, and a list given replaces the whole list. A child page or database whose tag the new text leaves out is refused unless --allow-deleting-content is given, which asks as documents delete does. Values, icon and cover are set first in one request, then the text
+change parts of a Notion page's text where they are (--payload), replace its whole text with Notion-flavoured Markdown, change a database row's values with --field, or set the page's icon (--emoji) and cover. With --expected-fingerprint, the sha256 documents get answered, the page is read again just before the write and the write is refused when it changed: Notion has no conditional write, so an edit landing after that read is not caught. --payload needs it. Every text write keeps the text it replaces in the profile's local versions, and answers the new sha256. A value not named keeps what it had, and a list given replaces the whole list. A child page or database whose tag the new text leaves out is refused unless --allow-deleting-content is given, which asks as documents delete does. Values, icon and cover are set first in one request, then the text
 
 **Changes something in the service.**
 
@@ -358,12 +394,14 @@ notion documents update <page> [options]
 |---|---|
 | `--text <text>` | the text, as Notion-flavoured Markdown. |
 | `--file <file>` | read the text from this file; - reads stdin. |
+| `--payload <json>` | parts of the text to change where they are, as JSON: [{"old": "text on the page now", "new": "its new text"}], up to 100. Each old text must be on the page once, or add "all": true to change every place it is. |
+| `--expected-fingerprint <hash>` | the page's sha256 from documents get or documents check; the write is refused when the page changed since. |
 | `--field <key=value>` | a row's value, as Name=Value. Repeat it for more. Lists (multi-select, people, relations) take values split by commas, a person is an email address, a user id or me, a date is 2026-12-01 or a range start/end, and an empty value clears it. Default: ``. |
 | `--emoji <emoji>` | the page's icon, one emoji, or none to take it away. |
 | `--cover <link>` | the page's cover, an https link to an image, or none to take it away. |
 | `--allow-deleting-content` | let Notion delete the child pages and databases the new text leaves out. |
 
-**Example:** `notion personal documents update PAGE_ID --file notes.md`, `notion personal documents update ROW_ID --field Status=Done --field "Tags=Urgent, Backend"`, `notion personal documents update PAGE_ID --emoji 📌 --cover https://example.com/cover.png --dry-run`
+**Example:** `notion personal documents update PAGE_ID --file notes.md`, `notion personal documents update PAGE_ID --payload '[{"old":"Due Friday","new":"Due Monday"}]' --expected-fingerprint SHA256`, `notion personal documents update ROW_ID --field Status=Done --field "Tags=Urgent, Backend" --emoji 📌`
 
 ### `notion documents delete`
 
@@ -456,6 +494,24 @@ notion documents add <page> [options]
 
 **Example:** `notion personal documents add https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef`, `notion personal documents add PAGE_ID --subject person:PERSON_UID`
 
+## `notion changes`
+
+list the documents the sync added, changed, removed or brought back, newest first
+
+```sh
+notion changes [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--since <time>` | from this time: an ISO 8601 time, today, yesterday, or 30m, 2h, 1d ago. Default: `1d`. |
+| `--until <time>` | up to this time, in the same forms. |
+| `--event <events>` | only these, comma separated: added, changed, restored, deleted, unavailable, unsynced. |
+| `--limit <n>` | how many changes to return. Default: `50`. |
+| `--page <n>` | which page to return. Default: `1`. |
+
+**Example:** `notion personal changes`, `notion personal changes --since 7d --event deleted,unavailable`
+
 ## `notion search`
 
 search imported documents by words, and by meaning when indexed
@@ -504,7 +560,7 @@ notion catalog show <file>
 |---|---|---|
 | `file` | required | page or database id, or its Notion link. |
 
-**Next usually:** `notion documents show <document>`, `notion documents context <document>`, `notion tags list <document> [query]`
+**Next usually:** `notion documents show <document>`, `notion documents history <document>`, `notion documents context <document>`
 
 **Example:** `notion personal catalog show FILE_ID --offline`
 
@@ -525,7 +581,7 @@ notion catalog list [query] [options]
 | `--limit <n>` | how many entries to return (at most 1000). Default: `50`. |
 | `--page <n>` | which page to return. Default: `1`. |
 
-**Next usually:** `notion documents show <document>`, `notion documents context <document>`, `notion tags list <document> [query]`
+**Next usually:** `notion documents show <document>`, `notion documents history <document>`, `notion documents context <document>`
 
 **Example:** `notion personal catalog list "parent:FOLDER_ID AND kind:file" --offline`
 
@@ -546,7 +602,7 @@ notion catalog search <query> [options]
 | `--limit <n>` | how many entries to return (at most 1000). Default: `50`. |
 | `--page <n>` | which page to return. Default: `1`. |
 
-**Next usually:** `notion documents show <document>`, `notion documents context <document>`, `notion tags list <document> [query]`
+**Next usually:** `notion documents show <document>`, `notion documents history <document>`, `notion documents context <document>`
 
 **Example:** `notion personal catalog search "budget AND person:Rin*" --offline`
 
@@ -2612,7 +2668,7 @@ notion config set <setting> <value> [options]
 
 | Argument | | What it is |
 |---|---|---|
-| `setting` | required | one of: limit, timeout_ms, color, record, record_input, keep_runs_for_days, keep_successful_runs_for_days, keep_store_runs_for_days, runs_size_limit_mb, permissions, requests_per_minute, search_reranker, embedding_provider, embedding_model, embedding_base_url, embedding_dims, models, update_check, skill_hint, search_stemmers.cyrillic, search_stemmers.latin, owner_languages, crm.<provider>:<account>.links, crm.<provider>:<account>.company-types, crm.<provider>:<account>.scope, crm.<provider>:<account>.unassigned, crm.<provider>:<account>.self, crm.<provider>:<account>.stage-tasks, crm.<provider>:<account>.activities, crm.<provider>:<account>.files.max_files, crm.<provider>:<account>.files.max_file_mb, crm.<provider>:<account>.files.max_run_mb, crm.<provider>:<account>.files.run_minutes, crm.<provider>:<account>.files.days, crm.<provider>:<account>.files.max_total_mb. |
+| `setting` | required | one of: limit, timeout_ms, color, record, record_input, keep_runs_for_days, keep_successful_runs_for_days, keep_store_runs_for_days, runs_size_limit_mb, permissions, requests_per_minute, search_reranker, embedding_provider, embedding_model, embedding_base_url, embedding_dims, models, keep_versions_for_days, update_check, skill_hint, search_stemmers.cyrillic, search_stemmers.latin, owner_languages, crm.<provider>:<account>.links, crm.<provider>:<account>.company-types, crm.<provider>:<account>.scope, crm.<provider>:<account>.unassigned, crm.<provider>:<account>.self, crm.<provider>:<account>.stage-tasks, crm.<provider>:<account>.activities, crm.<provider>:<account>.files.max_files, crm.<provider>:<account>.files.max_file_mb, crm.<provider>:<account>.files.max_run_mb, crm.<provider>:<account>.files.run_minutes, crm.<provider>:<account>.files.days, crm.<provider>:<account>.files.max_total_mb. |
 | `value` | required | a number, true or false; for a group tg:work,max:Alice,email:me@x. |
 
 | Option | What it does |
@@ -2633,7 +2689,7 @@ notion config unset <setting> [options]
 
 | Argument | | What it is |
 |---|---|---|
-| `setting` | required | one of: limit, timeout_ms, color, record, record_input, keep_runs_for_days, keep_successful_runs_for_days, keep_store_runs_for_days, runs_size_limit_mb, permissions, requests_per_minute, search_reranker, embedding_provider, embedding_model, embedding_base_url, embedding_dims, models, update_check, skill_hint, search_stemmers.cyrillic, search_stemmers.latin, owner_languages, crm.<provider>:<account>.links, crm.<provider>:<account>.company-types, crm.<provider>:<account>.scope, crm.<provider>:<account>.unassigned, crm.<provider>:<account>.self, crm.<provider>:<account>.stage-tasks, crm.<provider>:<account>.activities, crm.<provider>:<account>.files.max_files, crm.<provider>:<account>.files.max_file_mb, crm.<provider>:<account>.files.max_run_mb, crm.<provider>:<account>.files.run_minutes, crm.<provider>:<account>.files.days, crm.<provider>:<account>.files.max_total_mb. |
+| `setting` | required | one of: limit, timeout_ms, color, record, record_input, keep_runs_for_days, keep_successful_runs_for_days, keep_store_runs_for_days, runs_size_limit_mb, permissions, requests_per_minute, search_reranker, embedding_provider, embedding_model, embedding_base_url, embedding_dims, models, keep_versions_for_days, update_check, skill_hint, search_stemmers.cyrillic, search_stemmers.latin, owner_languages, crm.<provider>:<account>.links, crm.<provider>:<account>.company-types, crm.<provider>:<account>.scope, crm.<provider>:<account>.unassigned, crm.<provider>:<account>.self, crm.<provider>:<account>.stage-tasks, crm.<provider>:<account>.activities, crm.<provider>:<account>.files.max_files, crm.<provider>:<account>.files.max_file_mb, crm.<provider>:<account>.files.max_run_mb, crm.<provider>:<account>.files.run_minutes, crm.<provider>:<account>.files.days, crm.<provider>:<account>.files.max_total_mb. |
 
 | Option | What it does |
 |---|---|
