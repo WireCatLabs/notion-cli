@@ -2,6 +2,64 @@
 
 Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
 
+## 0.8.0 — 23.11.2026
+
+### Added
+
+- **A page's text edited in place, at the version an agent read.** `documents get` answers `sha256`, and
+  `documents check <page> --expected-fingerprint <sha256>` says whether the page changed since. `documents update
+  <page> --payload '[{"old": "Due Friday", "new": "Due Monday"}]' --expected-fingerprint <sha256>` changes only those
+  parts, with Notion's `update_content`. A whole `--text` or `--file` takes `--expected-fingerprint` too. The page is
+  read again just before the write, and the write is refused when it changed (`mirror.remote-changed`). Notion has no
+  conditional write, so an edit landing after that read is not caught. A part whose old text is not on the page once
+  is refused with nothing sent, and a part Notion still reports as not matched makes the answer incomplete. Why: an
+  agent could only rewrite a whole page, over anyone's newer edit
+  ([docs/dev/DESIGN.md](docs/dev/DESIGN.md#writes)).
+- **Every text write keeps the text it replaced.** The profile's local versions hold it, and the answer names it
+  (`replaced.sha256`, `replaced.kept_at`).
+- **Earlier versions of every synced page, and a change log.** `documents history <page>` lists the versions the
+  syncs kept, and `--revision <n>` shows one. `changes --since 1d` lists the pages added, changed, deleted or no
+  longer visible. `keep_versions_for_days` (365 by default) sets how long they are kept. Both are local reads, so an
+  agent gets them over MCP too ([docs/dev/SYNC.md](docs/dev/SYNC.md)).
+- **Notion AI meeting notes in WireCat's meetings.** `notion <profile> meetings sync` copies the meeting notes of the
+  meetings the token's user attended, with attendees, the AI summary, the notes and the transcript, into the shared
+  store beside Zoom calls. `meetings list`, `show`, `transcript`, `summary`, `export` and `people` read them offline,
+  and `search all` finds them. A summary Notion writes after the meeting is read at the next sync. Notion documents
+  no line format for a transcript, so its lines are kept as written, with no speaker or time. Why: the owner's
+  meetings in Notion were not with the others ([docs/dev/DESIGN.md](docs/dev/DESIGN.md#meeting-notes)).
+- **A database row is created and changed with typed values.** `documents create --into <database>` adds a row
+  with `--title` and `--field Name=Value`. Each value is checked against the database's properties and sent as its
+  type takes it: text, number, select, status, multi-select, date or range, checkbox, link, email, phone, people and
+  relations. A person is an email address, a user id or `me`. `--from-template default`, a template's id or its name fills
+  the row from a template, and the answer says `template_pending: true`, since Notion adds the template's text after
+  it answers. `documents update <row> --field Status=Done` changes the values named and keeps the rest. `rows list
+  <database> --filter Status=Open --filter "Due<2026-12-01"` lists rows live with their values. `databases show` now
+  lists each data source's templates. Why: an agent could add a task to a Notion database only through raw `api`
+  calls, with no check of its values ([docs/dev/DESIGN.md](docs/dev/DESIGN.md#rows)).
+- **`notion <profile> documents move` and `documents rename` file and name pages.** `move` puts a page under another
+  page (`--parent`) or into a database (`--into`). `rename` sets the title of a page or a row. `documents update
+  --emoji` and `--cover` set the icon and the cover, or take them away with `none`. Why: moving a page needed a raw
+  `api` call ([docs/dev/DESIGN.md](docs/dev/DESIGN.md#moving-and-renaming)).
+- **Comments are in the local copy and in search, and the connection's own comments can be fixed.** The sync reads a
+  page's open comments with its text and adds them to the page's searchable text, never to its Markdown. A page
+  synced before this version is read once more to add them. A connection without the "Read comments" capability
+  gets one warning and the rest of the sync goes on. `comments edit` and `comments delete` change or delete a comment
+  this connection posted. Notion keeps no deleted comment, so `comments delete` asks first, as `documents delete`
+  does, and both answer the comment's earlier text in `previous_text`
+  ([docs/dev/SYNC.md](docs/dev/SYNC.md#comments)).
+
+### Changed — may break callers
+
+- **Uses `@wirecat/cli-core` 0.724.0 and `@wirecat/cli-base` 0.130.0**, whose vocabulary has the words of the shared
+  `changes` command and the `summary` and `people` views of the shared meetings commands.
+
+### Fixed
+
+- **A page answered with 404 is no longer visible, not deleted.** Notion gives a 404 for a deleted page and for one
+  no longer shared with the connection. Such a page leaves lists and search, keeps its text in the local copy, and
+  comes back as it was when Notion shows it again. Only a page in Notion's trash counts as deleted.
+- cli-core 0.720.0 (was 0.718.0), cli-base 0.126.1 (was 0.125.0).
+
 ## 0.7.0 — 21.11.2026
 
 ### Added
