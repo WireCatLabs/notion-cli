@@ -33,9 +33,9 @@ mkdir -p "$HOME"
   const answer = JSON.parse(require("fs").readFileSync(0, "utf8"))
   if (answer.wcat_describe !== 2 || !/^[0-9a-f]{64}$/.test(answer.manifest_sha256)) throw new Error("not format 2")'
 
-# The check's own profile allows documents.delete, so the trash steps run without a question; the file is in $work.
+# The check's own profile allows documents.delete and the raw comment delete it also checks, so the trash steps run without a question; the file is in $work.
 mkdir -p "$WCNOTION_CONFIG_DIR"
-printf '%s\n' '{"profiles":{"live":{"permissions":{"documents.delete":"allow"}}}}' >"$WCNOTION_CONFIG_DIR/config.json"
+printf '%s\n' '{"profiles":{"live":{"permissions":{"documents.delete":"allow","api.delete-a-comment":"allow"}}}}' >"$WCNOTION_CONFIG_DIR/config.json"
 
 "${cli[@]}" live session start --credential-storage file --json >/dev/null
 made=""
@@ -91,7 +91,12 @@ node -e '
   if (typeof read("user").name !== "string" || read("user").name !== read("self").name)
     throw new Error("users/{id} gave no name for the bot: the token needs user information capabilities")' "$work"
 first=$(node -e 'const l = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(l.items[0]?.id ?? "")' "$work/list.json")
-if [ -n "$first" ]; then "${cli[@]}" live databases show "$first" --json >/dev/null; fi
+if [ -n "$first" ]; then
+  "${cli[@]}" live databases show "$first" --json >"$work/database.json"
+  # A read only: this database may be anywhere in the workspace, so no row is written to it.
+  source=$(node -e 'const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(d.item.data_sources[0]?.id ?? "")' "$work/database.json")
+  [ -z "$source" ] || "${cli[@]}" live rows list "$source" --limit 1 --json >/dev/null
+fi
 "${cli[@]}" live doctor --json >/dev/null
 
 # One write round trip under the test page.
@@ -133,6 +138,26 @@ node -e '
   const thread = answer.items.filter((one) => one.discussion_id === process.argv[2])
   if (thread.length !== 2) throw new Error(`comments list shows ${thread.length} comments in the discussion, not 2`)' \
   "$work/comments.json" "$discussion"
+comment=$(field commented item.comment.id)
+"${cli[@]}" live comments edit "$comment" --text "WireCat live check comment, edited $stamp" --json >"$work/edited.json"
+[ "$(field edited item.previous_text)" = "WireCat live check comment, $stamp" ] ||
+  { echo "comments edit did not answer the earlier text" >&2; exit 1; }
+"${cli[@]}" live comments delete "$comment" --json >"$work/uncommented.json"
+"${cli[@]}" live comments list "$made" --json >"$work/comments-left.json"
+node -e '
+  const answer = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+  if (answer.items.some((one) => one.id === process.argv[2])) throw new Error("comments delete left the comment")' \
+  "$work/comments-left.json" "$comment"
+"${cli[@]}" live documents rename "$made" "wirecat-live-renamed-$stamp" --json >"$work/renamed.json"
+"${cli[@]}" live documents update "$made" --emoji "🧪" --cover none --json >/dev/null
+[ "$(field renamed item.page.title)" = "wirecat-live-renamed-$stamp" ] || { echo "rename did not set the title" >&2; exit 1; }
+"${cli[@]}" live documents create --parent "$page" --title "wirecat-live-target-$stamp" --json >"$work/target.json"
+target=$(field target item.page.id)
+"${cli[@]}" live documents move "$made" --parent "$target" --json >"$work/moved.json"
+[ "$(field moved item.page.parent.id | tr -d -)" = "$(printf %s "$target" | tr -d -)" ] ||
+  { echo "move did not put the page under the target" >&2; exit 1; }
+"${cli[@]}" live documents move "$made" --parent "$page" --json >/dev/null
+"${cli[@]}" live documents delete "$target" --json >/dev/null
 printf 'Uploaded by the WireCat live check, %s\n' "$stamp" >"$work/wirecat-live-$stamp.txt"
 "${cli[@]}" live files upload "$work/wirecat-live-$stamp.txt" --parent "$made" --json >"$work/uploaded.json"
 [ "$(field uploaded item.upload.parts)" = "1" ] || { echo "a small file went in more than one part" >&2; exit 1; }
@@ -148,4 +173,5 @@ made=""
 "${cli[@]}" live session end --json >/dev/null
 echo "live check passed: describe format 2, sign-in, users/me, the bot's name from users/{id}, databases list and show, documents get," \
   "a child_page block against its page, doctor, a page created, read, updated, refused, commented on, replied to," \
+  "a comment edited and deleted, the page renamed, given an icon, moved and moved back," \
   "given a file, trashed and restored under the test page and left in the trash, sign-out"
