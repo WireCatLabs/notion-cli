@@ -219,11 +219,12 @@ guard and send journal, with the command's own permission key, and answers with 
 ## Rows
 
 Rows were added in 0.8.0 (plan IDEA-2863 in cli-private). The plan named `rows create|update|query`. The shared
-vocabulary has no `rows` resource and no `query` verb, and a row is a page, so a row is written as a document:
+vocabulary has no `query` verb, and a row is a page, so a row is written as a document:
 `documents create --into <database>` and `documents update <row> --field`. Only the live list is its own group,
 `rows list`, as no shared command lists a table's rows live. `--field <key=value>` is the vocabulary's flag for a
-named value on a write. The lint overrides name the three words the vocabulary lacks (`rows`, `--from-template`,
-`--cover`) and the list without a query.
+named value on a write. `rows`, `databases`, `--from-template` and `--cover` are in the vocabulary since cli-base
+0.128.0 ([cli-base #693](https://github.com/WireCatLabs/cli-base/issues/693)). The lint override left is the list
+without a query.
 
 - **Typed values come from the schema.** Each `--field Name=Value` is checked against the data source's properties
   ([retrieve a data source](https://developers.notion.com/reference/retrieve-a-data-source)) and sent in the shape
