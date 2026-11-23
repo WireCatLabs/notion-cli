@@ -7,32 +7,11 @@
     "review_after": "2027-02-14"
   },
   {
-    "rule": "unknown-resource",
-    "target": "databases",
-    "reason": "A Notion database holds data sources of rows with typed properties; no shared noun names it, as sheets is Drive's own (docs/dev/DESIGN.md, Commands). Add it to the cli-base vocabulary if a second CLI gets databases (Airtable, Coda).",
-    "owner": "@WireCatLabs",
-    "review_after": "2027-02-14"
-  },
-  {
     "rule": "undeclared-host",
     "target": "app.notion.com",
     "reason": "The link a child page gets before its text is read, in Notion's own form https://app.notion.com/p/{page-id} (src/sync/source.ts); a person opens it, notion never sends a request there, and hostFetch would refuse one.",
     "owner": "@WireCatLabs",
     "review_after": "2027-05-16"
-  },
-  {
-    "rule": "option-role",
-    "target": "documents update --allow-deleting-content",
-    "reason": "Notion's own name for the switch its Markdown update takes (allow_deleting_content), and the flag of Notion's own CLI: it lets an update delete the child pages and databases its new text leaves out. The vocabulary's --allow-delete means a call that deletes for good, and Notion's API deletes no page for good (https://developers.notion.com/reference/trash-page; docs/dev/DESIGN.md, Writes). Add it to the cli-base vocabulary if a second CLI writes pages with children (Confluence, Outline).",
-    "owner": "@WireCatLabs",
-    "review_after": "2027-02-16"
-  },
-  {
-    "rule": "unknown-verb",
-    "target": "comments reply",
-    "reason": "Notion answers in a discussion by its discussion_id (https://developers.notion.com/reference/create-a-comment), as drive-cli's comments reply answers in a Google comment thread; review when the shared vocabulary names comment-thread actions.",
-    "owner": "@WireCatLabs",
-    "review_after": "2027-02-16"
   },
   {
     "rule": "list-without-query",
@@ -42,30 +21,9 @@
     "review_after": "2027-02-16"
   },
   {
-    "rule": "unknown-resource",
-    "target": "rows",
-    "reason": "A Notion database's rows read live with their typed values, which only Notion has among the WireCat CLIs; rows are written as documents (documents create --into, documents update --field), as a row is a page (docs/dev/DESIGN.md, Rows). Add it to the cli-base vocabulary if a second CLI lists a table's rows live (Airtable, Coda).",
-    "owner": "@WireCatLabs",
-    "review_after": "2027-02-23"
-  },
-  {
     "rule": "list-without-query",
     "target": "rows list",
     "reason": "Each database has its own properties, so no fixed set of query fields can describe them; --filter takes Name<op>Value checked against the database's schema and sent as Notion's filter (https://developers.notion.com/reference/filter-data-source-entries; docs/dev/DESIGN.md, Rows). Review when cli-core's list query takes fields read at run time.",
-    "owner": "@WireCatLabs",
-    "review_after": "2027-02-23"
-  },
-  {
-    "rule": "option-role",
-    "target": "documents create --from-template",
-    "reason": "Notion fills a new row from one of its database's templates (template in https://developers.notion.com/reference/post-page); no shared flag names a template to start from, and tg's and max's --template is a message text, so the name is --from-template. Add it to the cli-base vocabulary if a second CLI creates from templates (Confluence, Coda).",
-    "owner": "@WireCatLabs",
-    "review_after": "2027-02-23"
-  },
-  {
-    "rule": "option-role",
-    "target": "documents update --cover",
-    "reason": "A Notion page's cover image, by an https link (cover in https://developers.notion.com/reference/patch-page); the vocabulary's --photo is a local file. Review with IDEA-2869, which adds a cover from a local file through Notion's file upload.",
     "owner": "@WireCatLabs",
     "review_after": "2027-02-23"
   }
