@@ -29,6 +29,9 @@ yourself; if none is given, run a command without one and read the profiles the 
   one. `notion <profile> changes --since 1d --json` lists what the syncs added, changed, deleted or found no longer
   visible. Both read the local copy. A page `unavailable` there was not deleted: Notion stopped showing it to the
   token.
+- `notion <profile> meetings sync --json` copies Notion AI meeting notes into the shared meetings; then
+  `meetings list --json`, `meetings transcript <id> --json` and `meetings summary <id> --json` read them offline. A
+  refusal with reason `notion.meeting-notes-unavailable` means the workspace has none for this user: tell the owner.
 - `notion <profile> sync --json` copies what changed. `meta.issues` and `item.warnings` name pages Notion would not
   give; the answer then says `meta.complete: false`, though the rest was synced. A sync that stopped before the end
   of its pass also says `meta.complete: false`, with a `next` step: run `sync` again, as it says. `item.pending`

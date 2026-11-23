@@ -312,6 +312,29 @@ writes' guard, send journal, `operation_id`, `--dry-run` and `WCNOTION_READ_ONLY
   `api.patch-block-children`. The file is opened once and checked as `--file` is: no link, no system or credential
   file.
 
+## Meeting notes
+
+Notion AI meeting notes go into cli-core's meetings category (IDEA-2868 of the Notion roadmap), so they sit beside
+Zoom calls and the other meetings in the shared store, under the profile's Notion account. `meetings sync` reads them
+with [query meeting notes](https://developers.notion.com/reference/query-meeting-notes) and the shared commands read
+the store: `meetings list|show|transcript|summary|export|people|repair` and `events list`. `meetings import` is not
+mounted: Notion keeps no meeting files.
+
+- **What the API gives.** One `meeting_notes` block per meeting the token's user attended, with its title, status,
+  calendar event (times, attendee ids), recording times and the block ids of its AI summary, notes and transcript.
+  Each of those blocks is read as Markdown with
+  [retrieve a page as Markdown](https://developers.notion.com/reference/retrieve-page-markdown), which takes a block
+  id; the transcript with `include_transcript=true`. The summary is the meeting's summary, the notes a section of it.
+- **Listing.** The query has no cursor, only `limit` (50 at most) and `has_more`. The sync filters
+  `last_edited_time` on or after the cursor, to the minute in UTC, sorted oldest first, and asks again from the last
+  note's edit time while `has_more` is true, at most 200 times. A summary written after the meeting edits the note,
+  so the next sync reads it again. A whole page of 50 notes edited in one minute stops the listing there.
+- **Attendees** are user ids, read with `GET /v1/users/{id}` for a name and an email address, as page authors are.
+- **Not documented, not guessed.** The docs give no line format for a transcript (speaker, time). Each line is kept as
+  written, with no speaker and no time of its own. An internal connection is likely to see no meetings, since it
+  attends none: only a personal access token was assumed to.
+- **A workspace without AI meeting notes** answers 400. The sync says so with `notion.meeting-notes-unavailable`.
+
 ## Keeping a local folder in step
 
 `mirrors` uses cli-core's mirror engine, as drive-cli does: a three-way merge of Markdown blocks, conflicts settled

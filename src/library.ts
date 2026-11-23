@@ -23,9 +23,10 @@ import { type NotionFile, type UserAccess, WORKSPACE_ROOT } from "./sync/source.
 export const PROVIDER = {
   name: "notion",
   kind: "documents",
+  kinds: ["documents", "meetings"],
   aliases: [],
   command: IDENTITY.command,
-  opens: { document: "documents show" },
+  opens: { document: "documents show", meeting: "meetings show" },
 } as const satisfies ProviderEntry
 
 /** The most entries one sync walks under the chosen folders. */
@@ -187,6 +188,20 @@ export const withProfileLock = async <T>(
 
 const recalled = (env: NodeJS.ProcessEnv, profile: string) =>
   readJson<{ account?: unknown }>(accountFileFor(IDENTITY, profile, env))?.account
+
+/** The Notion connection a profile signed in to, as `session start` and `sync` recorded it; meetings need no sync. */
+export const accountOf = (env: NodeJS.ProcessEnv, profile: string): string => {
+  const account = recalled(env, profile)
+  if (typeof account !== "string")
+    throw new CliError(
+      "authentication_error",
+      `profile ${profile} is not signed in — ${IDENTITY.command} ${profile} session start`,
+      {
+        reason: "session.missing",
+      },
+    )
+  return account
+}
 
 /** The account a profile has synced as: local reads never ask Notion, and a profile only signed in has no copy. */
 export const principalOf = (env: NodeJS.ProcessEnv, profile: string): string => {

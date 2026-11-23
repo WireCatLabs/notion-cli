@@ -110,6 +110,24 @@ holds() { node -e '
   const page = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).item
   if (!page.markdown.includes(process.argv[2])) throw new Error(`documents get does not show ${process.argv[2]}`)' \
   "$work/$1.json" "$2"; }
+# AI meeting notes are read only, into this check's own store. A workspace without them for the token's user is a
+# warning, not a failure: the owner may not use them.
+week_ago=$(node -e 'process.stdout.write(new Date(Date.now() - 7 * 86400000).toISOString())')
+if "${cli[@]}" live meetings sync --since-time "$week_ago" --json >"$work/meetings.json" \
+  2>"$work/meetings-error.json"; then
+  "${cli[@]}" live meetings list --json >"$work/meetings-list.json"
+  node -e '
+    const list = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+    if (!Array.isArray(list.items)) throw new Error("meetings list has no items")
+    console.error(`meeting notes of the last week: ${list.items.length}`)' "$work/meetings-list.json"
+elif [ "$(field meetings-error error.reason 2>/dev/null)" = "notion.meeting-notes-unavailable" ]; then
+  # The same 400 also answers a filter Notion does not take, so the owner reads Notion's words here.
+  echo "warning: no AI meeting notes for this token's user, so meetings were not checked:" >&2
+  cat "$work/meetings-error.json" >&2
+else
+  cat "$work/meetings-error.json" >&2
+  exit 1
+fi
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 "${cli[@]}" live documents create --parent "$page" --title "wirecat-live-$stamp" \
   --text "Written by the WireCat live check, first-$stamp" --json >"$work/created.json"
@@ -199,7 +217,7 @@ made=""
 
 "${cli[@]}" live session end --json >/dev/null
 echo "live check passed: describe format 2, sign-in, users/me, the bot's name from users/{id}, databases list and show, documents get," \
-  "a child_page block against its page, doctor, a page created, read, updated, refused, edited in place at its" \
+  "a child_page block against its page, doctor, the last week's meeting notes, a page created, read, updated, refused, edited in place at its" \
   "fingerprint and refused at a stale one, commented on, replied to," \
   "a comment edited and deleted, the page renamed, given an icon, moved and moved back," \
   "given a file, trashed and restored under the test page and left in the trash, sign-out"

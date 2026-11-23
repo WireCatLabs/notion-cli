@@ -25,6 +25,7 @@ import { commentsCommand } from "./commands/comments.js"
 import { databasesCommand } from "./commands/databases.js"
 import { filesCommand } from "./commands/files.js"
 import { libraryCommands } from "./commands/library.js"
+import { meetingsCommands } from "./commands/meetings.js"
 import { rowsCommand } from "./commands/rows.js"
 import { sessionCommand } from "./commands/session.js"
 import { configuration } from "./config.js"
@@ -66,7 +67,7 @@ const userInformation = (env: NodeJS.ProcessEnv) => {
 const mcpCommand = () =>
   appMcpCommand(IDENTITY, configuration, {
     name: "Notion",
-    // Pages and databases are shared: other members write their text, titles and options (WC-MCP-11).
+    // Pages, databases and meeting notes are shared: other members and Notion AI write their text (WC-MCP-11).
     untrusted: [
       "page text",
       "page and database titles",
@@ -75,6 +76,8 @@ const mcpCommand = () =>
       "links",
       "comment text",
       "author names",
+      "meeting titles, summaries, notes and transcripts",
+      "attendee names",
     ],
     permissionExample: "documents.get=deny",
     skill: SKILL,
@@ -91,6 +94,7 @@ export const definition = (): ProgramDefinition => ({
     sessionCommand(),
     accountCommand(),
     ...libraryCommands(),
+    ...meetingsCommands(),
     databasesCommand(),
     rowsCommand(),
     commentsCommand(),

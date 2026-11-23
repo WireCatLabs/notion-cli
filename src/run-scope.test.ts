@@ -56,6 +56,12 @@ describe("each remote command runs inside cli-core's run", () => {
           ]),
       ),
       "mcp serve": "listens until stopped",
+      ...Object.fromEntries(
+        ["meetings list", "meetings show", "meetings sync"].map((command) => [
+          command,
+          "needs the Notion account session start records, which no run here has; src/meetings.test.ts checks the run",
+        ]),
+      ),
       "documents delete": "the same write path as documents restore, behind a question no run here answers",
       "comments delete": "the same write path as comments edit, behind a question no run here answers",
       "memories extract": "cli-core's shared command; it asks the configured model, never Notion",

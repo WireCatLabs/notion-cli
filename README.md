@@ -28,6 +28,9 @@ their properties, and later keeps a folder of Markdown files in step with a Noti
 - `notion personal documents history <page>` shows the earlier versions of a synced page, a deleted one too, and
   `notion personal changes --since 1d` what changed in your Notion since yesterday. A page that is no longer shared
   with the token is marked no longer visible, never deleted.
+- `notion personal meetings sync` copies your Notion AI meeting notes, with attendees, summary and transcript, into
+  WireCat's meetings, beside Zoom calls. `meetings list`, `meetings transcript <id>` and `search all` read them
+  offline.
 - `notion personal search <words>` searches the copy offline, in Lucene syntax. `documents list|show|export|context`
   read it, `status` says how far the sync is, and `tags`, `notes`, `memories` and `facts` keep your own notes on a
   page. `memo search` and `search all` find the pages too.

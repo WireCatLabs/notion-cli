@@ -1183,6 +1183,199 @@ notion identities link <document> <notion-id> <person>
 
 **Example:** `notion personal identities link DOC_ID NOTION_ID person:PERSON_UID`
 
+## `notion meetings`
+
+stored meetings and their records
+
+### `notion meetings list`
+
+meetings, newest first: the service's and the stored ones, kept in the store
+
+```sh
+notion meetings list [query] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | optional | field:value terms that narrow the list — the fields are below. |
+
+| Option | What it does |
+|---|---|
+| `--backend <archive\|server\|both>` | where to read: the store (archive), the service (server), or both, kept in the store (default: both). |
+| `--limit <n>` | meetings per page; the profile's defaults.limit when absent. |
+| `--page <n>` | which page, starting at 1. |
+
+**Returns:** meeting — ref, id, provider_id, provider, account, title, url, started_at, and 12 more; every field: notion commands info meetings list
+
+**Next usually:** `notion meetings show <meeting>`, `notion meetings transcript <meeting>`, `notion meetings summary <meeting>`
+
+**Example:** `notion personal meetings list`
+
+### `notion meetings show`
+
+show a meeting, read again from the service with its people, transcript and documents
+
+```sh
+notion meetings show <meeting> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `meeting` | required | the stored meeting's number, its meeting: ref, or the service's id (provider_id). |
+
+| Option | What it does |
+|---|---|
+| `--backend <archive\|server\|both>` | where to read: the store (archive), the service (server), or both, kept in the store (default: both). |
+
+**Returns:** meeting details — ref, id, provider_id, provider, account, title, url, started_at, and 21 more; every field: notion commands info meetings show
+
+**Next usually:** `notion meetings transcript <meeting>`, `notion meetings summary <meeting>`, `notion meetings export <meeting>`
+
+**Example:** `notion personal meetings show 123`
+
+### `notion meetings transcript`
+
+show current meeting transcripts
+
+```sh
+notion meetings transcript <meeting> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `meeting` | required | stored meeting id. |
+
+| Option | What it does |
+|---|---|
+| `--history` | include superseded transcript versions. |
+
+**Returns:** meeting transcript — ref, meeting, source, language, superseded_at, created_at, lines, untrusted; every field: notion commands info meetings transcript
+
+**Example:** `notion personal meetings transcript 123`
+
+### `notion meetings summary`
+
+show stored meeting summaries
+
+```sh
+notion meetings summary <meeting>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `meeting` | required | stored meeting id. |
+
+**Returns:** meeting summary — id, meeting, source, title, overview, sections, next_steps, content, and 4 more; every field: notion commands info meetings summary
+
+**Next usually:** `notion meetings show <meeting>`, `notion meetings transcript <meeting>`, `notion meetings export <meeting>`
+
+**Example:** `notion personal meetings summary 123`
+
+### `notion meetings export`
+
+export a meeting as Markdown or one transcript as WebVTT
+
+**Changes something on this computer only.**
+
+```sh
+notion meetings export <meeting> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `meeting` | required | stored meeting id. |
+
+| Option | What it does |
+|---|---|
+| `--format <format>` | export format. One of: `markdown`, `vtt`. Default: `markdown`. |
+| `--transcript-id <id>` | export a specific transcript version. |
+| `--output <file>` | write content to a new file through the host's writer. |
+
+**Returns:** meeting export — meeting_id, format, filename, content, untrusted, output; every field: notion commands info meetings export
+
+**Example:** `notion personal meetings export 123`
+
+### `notion meetings people`
+
+find meeting participants by name or email
+
+```sh
+notion meetings people <query> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | required | a name or an email address. |
+
+| Option | What it does |
+|---|---|
+| `--limit <n>` | most matching observations per page, 1–1000 (default 50). |
+| `--scan-limit <n>` | most participant observations to inspect, 1–10000 (default 1000). |
+| `--max-read-bytes <bytes>` | most stored name and email bytes to read (default 1048576). |
+| `--cursor <cursor>` | continue with the same name query and selected account. |
+
+**Returns:** meeting participants — schema_version, kind, account_id, query, items, ambiguity, coverage, page; every field: notion commands info meetings people
+
+**Example:** `notion personal meetings people "invoice"`
+
+### `notion meetings sync`
+
+bring the stored meetings up to date from the connected account, oldest first; a run that stops before its deadline keeps what it saved and the next one goes on from there
+
+**Changes something on this computer only.**
+
+```sh
+notion meetings sync [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--since-time <time>` | fetch meetings starting at or after this ISO 8601 date or time, or 30m, 2h, 7d ago. |
+| `--lookback-days <days>` | revisit recent occurrences for late transcripts (0–31). |
+| `--rescan` | read the last 30 days again, not only what came after the last sync. |
+
+**Returns:** meeting ingestion — meetings, participants, transcript_rows, summaries, warnings, timezone; every field: notion commands info meetings sync
+
+**Example:** `notion personal meetings sync`
+
+### `notion meetings repair`
+
+preview filling in what older builds left out of stored transcripts (their language); --yes stores it
+
+**Changes something on this computer only.**
+
+```sh
+notion meetings repair [options]
+```
+
+| Option | What it does |
+|---|---|
+| `--yes` | store the detected languages; otherwise only preview. |
+
+**Returns:** meeting repair — account_id, applied, transcripts, languages; every field: notion commands info meetings repair
+
+**Example:** `notion personal meetings repair`
+
+## `notion events`
+
+the owner's stored events
+
+### `notion events list`
+
+list stored events
+
+```sh
+notion events list [query]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `query` | optional | event id, origin or time fields that narrow the list. |
+
+**Returns:** event — id, event_series_id, title, description, location, starts_at, ends_at, timezone, and 13 more; every field: notion commands info events list
+
+**Example:** `notion personal events list`
+
 ## `notion databases`
 
 read Notion databases and their data sources
