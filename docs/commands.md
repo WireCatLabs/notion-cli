@@ -1209,7 +1209,7 @@ notion meetings list [query] [options]
 
 **Next usually:** `notion meetings show <meeting>`, `notion meetings transcript <meeting>`, `notion meetings summary <meeting>`
 
-**Example:** `notion personal meetings list`
+**Example:** `notion personal meetings list --limit 50 --json`
 
 ### `notion meetings show`
 
@@ -1231,7 +1231,7 @@ notion meetings show <meeting> [options]
 
 **Next usually:** `notion meetings transcript <meeting>`, `notion meetings summary <meeting>`, `notion meetings export <meeting>`
 
-**Example:** `notion personal meetings show 123`
+**Example:** `notion personal meetings show 1 --json`
 
 ### `notion meetings transcript`
 
@@ -1251,7 +1251,7 @@ notion meetings transcript <meeting> [options]
 
 **Returns:** meeting transcript — ref, meeting, source, language, superseded_at, created_at, lines, untrusted; every field: notion commands info meetings transcript
 
-**Example:** `notion personal meetings transcript 123`
+**Example:** `notion personal meetings transcript 1 --json`
 
 ### `notion meetings summary`
 
@@ -1269,7 +1269,7 @@ notion meetings summary <meeting>
 
 **Next usually:** `notion meetings show <meeting>`, `notion meetings transcript <meeting>`, `notion meetings export <meeting>`
 
-**Example:** `notion personal meetings summary 123`
+**Example:** `notion personal meetings summary 1 --json`
 
 ### `notion meetings export`
 
@@ -1293,7 +1293,7 @@ notion meetings export <meeting> [options]
 
 **Returns:** meeting export — meeting_id, format, filename, content, untrusted, output; every field: notion commands info meetings export
 
-**Example:** `notion personal meetings export 123`
+**Example:** `notion personal meetings export 1 --format markdown --json`
 
 ### `notion meetings people`
 
@@ -1316,7 +1316,7 @@ notion meetings people <query> [options]
 
 **Returns:** meeting participants — schema_version, kind, account_id, query, items, ambiguity, coverage, page; every field: notion commands info meetings people
 
-**Example:** `notion personal meetings people "invoice"`
+**Example:** `notion personal meetings people "Test Person" --json`
 
 ### `notion meetings sync`
 
@@ -1336,7 +1336,7 @@ notion meetings sync [options]
 
 **Returns:** meeting ingestion — meetings, participants, transcript_rows, summaries, warnings, timezone; every field: notion commands info meetings sync
 
-**Example:** `notion personal meetings sync`
+**Example:** `notion personal meetings sync --since-time 2026-11-01T00:00:00Z --json`
 
 ### `notion meetings repair`
 
@@ -1354,7 +1354,7 @@ notion meetings repair [options]
 
 **Returns:** meeting repair — account_id, applied, transcripts, languages; every field: notion commands info meetings repair
 
-**Example:** `notion personal meetings repair`
+**Example:** `notion personal meetings repair --json`
 
 ## `notion events`
 
@@ -1374,7 +1374,7 @@ notion events list [query]
 
 **Returns:** event — id, event_series_id, title, description, location, starts_at, ends_at, timezone, and 13 more; every field: notion commands info events list
 
-**Example:** `notion personal events list`
+**Example:** `notion personal events list --json`
 
 ## `notion databases`
 

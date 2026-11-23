@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
-import { metaOf } from "@wirecat/cli-base/commands"
+import { annotate, metaOf } from "@wirecat/cli-base/commands"
 import type { EventSink } from "@wirecat/cli-core/cli"
 import {
   type Body,
+  hasSharedContract,
   inCommandRun,
   meetingAnswerBody,
   outputFor,
@@ -42,6 +43,33 @@ const noneYet = (profile: string) =>
   )
 
 const UNUSED = new Set(["import"])
+
+const EXAMPLES: Record<string, string> = {
+  "meetings list": "--limit 50",
+  "meetings show": "1",
+  "meetings transcript": "1",
+  "meetings summary": "1",
+  "meetings export": "1 --format markdown",
+  "meetings people": '"Test Person"',
+  "meetings sync": "--since-time 2026-11-01T00:00:00Z",
+  "meetings repair": "",
+  "events list": "",
+}
+
+const pathOf = (command: Command): string[] =>
+  command.parent?.parent ? [...pathOf(command.parent), command.name()] : [command.name()]
+
+const withExample = (leaf: Command) => {
+  const path = pathOf(leaf).join(" ")
+  const args = EXAMPLES[path]
+  if (args === undefined) return
+  const change = (one: Command) => {
+    annotate(one, { examples: [[IDENTITY.command, "personal", path, args, "--json"].filter(Boolean).join(" ")] })
+  }
+  if (hasSharedContract(leaf))
+    overrideSharedContract(leaf, "notion's examples name its profile and a meeting id.", change)
+  else change(leaf)
+}
 
 /**
  * cli-core's `meetings` and `events` commands over Notion AI meeting notes (IDEA-2868 of the Notion roadmap). The
@@ -94,6 +122,7 @@ export const meetingsCommands = (): Command[] => {
       },
     )
   for (const leaf of holder.commands.flatMap(leaves)) {
+    withExample(leaf)
     leaf.hook("preAction", async (_leaf, at) => {
       const { env, profile } = contextOf(at)
       const reads = metaOf(at).effects?.local === "read"
