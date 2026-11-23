@@ -18,6 +18,7 @@ export const REASONS = defineReasons(
       ["notion.edit-no-match", "validation_error", "an edit's old text is not on the page; nothing was sent"],
       ["notion.edit-many-matches", "validation_error", "an edit's old text is on the page more than once"],
       ["notion.edit-partial", "provider_error", "Notion made only some of the edits"],
+      ["notion.meeting-notes-unavailable", "validation_error", "the workspace has no AI meeting notes for this user"],
       ["notion.page-not-whole", "validation_error", "a page too long to read whole has no fingerprint to write at"],
       ["notion.rate-limited", "rate_limited", "Notion asked to slow down"],
       ["notion.unavailable", "provider_unavailable", "Notion is down or overloaded"],

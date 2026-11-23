@@ -5,6 +5,7 @@
 
 import { isCliError } from "@wirecat/cli-base"
 import type { NotionQueryRequest, NotionSearchRequest } from "../notion/reads.js"
+import { type FakeMeetingNote, meetingNotePages, meetingNotesRoute } from "./fake-meeting-notes.js"
 import type { FakeNotion as FakeWorkspace } from "./fake-notion-reads.js"
 
 /** Spelled so gitleaks lets it through; never a real token. */
@@ -85,7 +86,13 @@ export interface FakeNotionOptions {
   partialAnswers?: boolean
   /** Templates of the first data source, as `GET /v1/data_sources/{id}/templates` lists them. */
   templates?: { id: string; name: string; is_default: boolean }[]
+  /** AI meeting notes the token's user attended; their summary, notes and transcript blocks are in `pages`. */
+  meetingNotes?: FakeMeetingNote[]
+  /** The workspace has no AI meeting notes for the token's user: the query answers 400. */
+  noMeetingNotes?: boolean
 }
+
+export type { FakeMeetingNote }
 
 export const PERSON_ID = "99999999-0000-4000-8000-000000000099"
 export const OTHER_PERSON_ID = "98989898-0000-4000-8000-000000000098"
@@ -286,6 +293,7 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
   const pages: Record<string, FakePage> = options.pages ?? {
     [PAGE_ID]: { markdown: "# Test page\n\nFake text written by Test Person." },
   }
+  Object.assign(pages, meetingNotePages(options.meetingNotes ?? []))
   const calls: FakeCall[] = []
   const refusals: string[] = []
   const failures = [...(options.failures ?? [])]
@@ -359,6 +367,13 @@ export const fakeNotion = (options: FakeNotionOptions = {}) => {
         }
       },
     },
+    meetingNotesRoute({
+      notes: options.meetingNotes ?? [],
+      unavailable: options.noMeetingNotes === true,
+      author: PERSON_ID,
+      error: notionError,
+      text,
+    }),
     {
       // https://developers.notion.com/reference/post-search
       method: "POST",

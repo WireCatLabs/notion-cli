@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**225 ✅ · 206 ⛔ · 0 ❌** — 158 commands, 273 options.
+**232 ✅ · 224 ⛔ · 0 ❌** — 167 commands, 289 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -140,6 +140,31 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `facts reverse` |  | ✅ |  |
 | `identities list` |  | ✅ |  |
 | `identities link` |  | ✅ |  |
+| `meetings list` |  | ✅ |  |
+| `meetings list` | `--backend` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings list` | `--limit` | ✅ |  |
+| `meetings list` | `--page` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings show` |  | ✅ |  |
+| `meetings show` | `--backend` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings transcript` |  | ✅ |  |
+| `meetings transcript` | `--history` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings summary` |  | ✅ |  |
+| `meetings export` |  | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings export` | `--format` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings export` | `--transcript-id` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings export` | `--output` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings people` |  | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings people` | `--limit` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings people` | `--scan-limit` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings people` | `--max-read-bytes` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings people` | `--cursor` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings sync` |  | ✅ |  |
+| `meetings sync` | `--since-time` | ✅ |  |
+| `meetings sync` | `--lookback-days` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings sync` | `--rescan` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings repair` |  | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `meetings repair` | `--yes` | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
+| `events list` |  | ⛔ | cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and the meeting notes source (src/meetings.test.ts) |
 | `databases list` |  | ✅ |  |
 | `databases list` | `--limit` | ✅ |  |
 | `databases list` | `--cursor` | ✅ |  |

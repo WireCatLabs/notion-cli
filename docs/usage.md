@@ -59,6 +59,18 @@ Each sync keeps a page's text before it changes or leaves the copy, for `keep_ve
 A page in Notion's trash is `deleted`. A page Notion answers 404 for is `unavailable`: deleted for good, or no longer
 shared with the token. It keeps its text and comes back when Notion shows it again.
 
+## Meeting notes
+
+```sh
+notion personal meetings sync --since-time 2026-11-01
+notion personal meetings list
+notion personal meetings transcript 12
+```
+
+`meetings sync` copies the Notion AI meeting notes of the meetings you attended, with their attendees, AI summary,
+your notes and the transcript. Use a personal access token: an internal connection attends no meetings. A workspace
+without AI meeting notes gets an error with the reason `notion.meeting-notes-unavailable`.
+
 ## Agents
 
 `notion skill install` puts the tool's skill where Claude Code, Codex, Gemini CLI and OpenClaw look for it.

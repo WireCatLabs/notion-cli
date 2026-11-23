@@ -28,7 +28,24 @@ const SHARED_CHANGES =
   "cli-core's shared changes command, tested with its paging and window in cli-core's documents history tests; " +
   "src/library.test.ts drives --since and --event over a real sync"
 
+const SHARED_MEETINGS =
+  "cli-core's shared meetings command, tested in cli-core's src/meetings/cli; notion supplies only the store and " +
+  "the meeting notes source (src/meetings.test.ts)"
+const meetingsUntested: [string, string[]][] = [
+  ["meetings export", ["", "--format", "--output", "--transcript-id"]],
+  ["meetings list", ["--backend", "--page"]],
+  ["meetings people", ["", "--cursor", "--limit", "--max-read-bytes", "--scan-limit"]],
+  ["meetings repair", ["", "--yes"]],
+  ["meetings show", ["--backend"]],
+  ["meetings sync", ["--lookback-days", "--rescan"]],
+  ["meetings transcript", ["--history"]],
+  ["events list", [""]],
+]
+
 export const UNTESTED: { command: string; option?: string; reason: string }[] = [
+  ...meetingsUntested.flatMap(([command, options]) =>
+    options.map((option) => ({ command, ...(option ? { option } : {}), reason: SHARED_MEETINGS })),
+  ),
   ...["--until", "--limit", "--page"].map((option) => ({ command: "changes", option, reason: SHARED_CHANGES })),
   { command: "sync", option: "--embed", reason: MODEL },
   { command: "memories extract", reason: MODEL },

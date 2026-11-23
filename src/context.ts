@@ -73,6 +73,10 @@ const transportOf = (command: Command, events: EventSink | undefined, onAnswer?:
   }
 }
 
+/** The SDK client of one run, over the run's transport, for the reads `liveReads` does not wrap. */
+export const notionClientFor = (command: Command, token: string, events: EventSink) =>
+  notionClient({ token, ...transportOf(command, events) })
+
 /** Notion for one run: the SDK over the run's transport. */
 export const notionFor = (command: Command, token: string, events: EventSink): LiveReads =>
   liveReads(notionClient({ token, ...transportOf(command, events) }))
