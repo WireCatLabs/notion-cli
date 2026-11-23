@@ -337,11 +337,29 @@ mounted: Notion keeps no meeting files.
 
 ## Keeping a local folder in step
 
-`mirrors` uses cli-core's mirror engine, as drive-cli does: a three-way merge of Markdown blocks, conflicts settled
-with `--keep`, nothing deleted on the other side. The Notion side reads a page as Markdown and writes only the
-changed parts with [update page Markdown](https://developers.notion.com/reference/update-page-markdown). Notion applies
-the parts that match and only warns about the rest, so a warning counts as a failed write. Child pages are never
-deleted.
+`mirrors` uses cli-core's file mirror engine (`syncFileMirror`), as yandex-disk-cli does, not drive-cli's
+`pushDocuments`: it already keeps conflicts for `mirrors conflicts list|show|resolve`, keeps every replaced version,
+crosses a deletion into the other side's trash, and tells a deletion from mere absence
+([cli-core #3232](https://github.com/WireCatLabs/cli-core/issues/3232)). `src/notion/mirror-target.ts` is its
+`FileTarget`. The `mirrors` commands themselves wait until cli-core shares them. yandex-disk-cli keeps its own today.
+
+- **Paths.** Each page under the mirrored page is `<title>.md`, and the pages under it are in the folder `<title>/`.
+  A slash in a title becomes `-`, an empty title is `Untitled`. Two pages with one title in one place are mirrored as
+  neither, and the listing says it is incomplete, so neither looks deleted. Only `.md` files are sent.
+- **Notion's own Markdown.** Notion keeps a page as blocks and gives back its own Markdown, so the target says it
+  `rewrites`: after a write the mirror takes Notion's form into the local file, the earlier version kept. Both sides
+  then hold the same bytes, and the next sync merges against one base. A page's Markdown holds a `<page>` tag for each
+  page under it, so creating a page changes its parent's file. A whole-page replace keeps child pages: one left out
+  is refused, never deleted (`allow_deleting_content` stays off).
+- **Checked just before the write.** Notion has no conditional write. Each update and trash reads the page again,
+  compares the fingerprint with what the listing saw, and refuses another one. An edit landing after that read is not
+  caught.
+- **Deletion and absence.** A page is deleted only when Notion says it is in the trash. A page missing from the
+  listing is looked up by its id from the last sync: moved elsewhere, it is still there, and a 404 may mean it is no
+  longer shared. Both leave the local file alone, as `unknown`. A local deletion trashes the page in Notion, where it
+  can be restored. A page with pages under it is not trashed, since Notion would trash them with it.
+- **Cost.** Each sync reads every mirrored page's Markdown and lists the pages under each: about two requests a page.
+  `last_edited_time` is rounded to the minute, so it cannot prove a page unchanged.
 
 ## Live check
 
@@ -378,11 +396,7 @@ that fails half way trashes its page on the way out.
 
 ## Open questions for the owner
 
-- **Mirrors, to settle before step 6:**
-  - Where a page created from a local file keeps its origin key, so a create cut short is not repeated. Drive keeps
-    it in a hidden file property. A Notion page has properties only inside a database.
-  - Notion has no revision lock on a write. A check of `last_edited_time` before the write leaves a short race.
-  - A Markdown edit must match its old text exactly once. A line that repeats (the same checklist item twice) needs
-    a whole-page replace instead.
-  - Notion blocks the shared Markdown blocks cannot hold (toggles, callouts, mentions, child pages, and possibly
-    bookmarks and embeds) must pass through unchanged.
+- **Mirrors.** The four questions of step 6 are settled by the file mirror engine (above): a page is found by its
+  path and id, not an origin key, a write is checked just before it is sent, the whole page is replaced, and Notion's
+  own Markdown is taken back, so blocks Markdown shows as tags pass through. Not checked live yet: that two reads of an
+  unchanged page give the same Markdown.
