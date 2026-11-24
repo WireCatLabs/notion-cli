@@ -1,7 +1,8 @@
 # Settings
 
-Settings live in one file, `config.json`, in the folder `notion doctor` shows. Each profile has its own part,
-and `defaults` apply to every profile. This page lists how to see and change them.
+Decide once what your agent may change in Notion, and how much one command lists. Settings live in one file,
+`config.json`, in the folder `notion doctor` shows. Each profile has its own part, and `defaults` apply to every
+profile.
 
 ```sh
 notion personal config show
