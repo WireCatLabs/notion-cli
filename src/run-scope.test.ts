@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs"
+import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Readable } from "node:stream"
@@ -45,6 +45,7 @@ describe("each remote command runs inside cli-core's run", () => {
       "api retrieve-a-page": ["personal", "api", "retrieve-a-page", "--page-id", PAGE_ID],
       "api post-search": ["personal", "api", "post-search", "--body", "{}"],
       "api patch-page": ["personal", "api", "patch-page", "--page-id", PAGE_ID, "--body", "{}"],
+      "mirrors add": ["personal", "mirrors", "add", PAGE_ID, mkdtempSync(join(tmpdir(), "notion-run-scope-mirror-"))],
     },
     skip: {
       ...Object.fromEntries(
@@ -56,6 +57,13 @@ describe("each remote command runs inside cli-core's run", () => {
           ]),
       ),
       "mcp serve": "listens until stopped",
+      ...Object.fromEntries(
+        ["mirrors preview", "mirrors sync", "mirrors watch", "mirrors conflicts resolve"].map((command) => [
+          command,
+          "needs a saved mirror, which no run here has; cli-core's shared group reaches Notion only through connect, " +
+            "the same run as mirrors add",
+        ]),
+      ),
       ...Object.fromEntries(
         ["meetings list", "meetings show", "meetings sync"].map((command) => [
           command,

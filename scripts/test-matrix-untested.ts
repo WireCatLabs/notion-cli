@@ -42,7 +42,29 @@ const meetingsUntested: [string, string[]][] = [
   ["events list", [""]],
 ]
 
+const SHARED_MIRRORS =
+  "cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and " +
+  "file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, " +
+  "src/mirror-target.test.ts)"
+const mirrorsUntested: [string, string[]][] = [
+  ["mirrors add", ["--ignore"]],
+  ["mirrors status", [""]],
+  ["mirrors preview", ["", "--keep"]],
+  ["mirrors sync", ["--keep", "--allow-deletions", "--allow-replacements", "--replace", "--repin"]],
+  ["mirrors watch", ["", "--every"]],
+  ["mirrors update", ["", "--ignore", "--clear"]],
+  ["mirrors remove", [""]],
+  ["mirrors versions list", [""]],
+  ["mirrors versions restore", [""]],
+  ["mirrors conflicts list", [""]],
+  ["mirrors conflicts show", [""]],
+  ["mirrors conflicts resolve", ["", "--keep", "--file"]],
+]
+
 export const UNTESTED: { command: string; option?: string; reason: string }[] = [
+  ...mirrorsUntested.flatMap(([command, options]) =>
+    options.map((option) => ({ command, ...(option ? { option } : {}), reason: SHARED_MIRRORS })),
+  ),
   ...meetingsUntested.flatMap(([command, options]) =>
     options.map((option) => ({ command, ...(option ? { option } : {}), reason: SHARED_MEETINGS })),
   ),

@@ -59,6 +59,57 @@ Each sync keeps a page's text before it changes or leaves the copy, for `keep_ve
 A page in Notion's trash is `deleted`. A page Notion answers 404 for is `unavailable`: deleted for good, or no longer
 shared with the token. It keeps its text and comes back when Notion shows it again.
 
+## Keep a folder of Markdown files and Notion pages the same
+
+A mirror pairs a local folder with one Notion page. Each page under that page is a Markdown file named after its
+title, and the pages under it are in a folder of the same name. Edit the files in any editor, or the pages in Notion,
+and a sync copies each change to the other side.
+
+```sh
+notion personal mirrors add https://www.notion.so/Notes-0123456789abcdef0123456789abcdef ~/Notes
+notion personal mirrors preview
+notion personal mirrors sync
+```
+
+`mirrors add` checks the page and saves the pair. Nothing is copied until `mirrors sync`. `mirrors preview` shows
+what a sync would do and changes nothing.
+
+What a sync does:
+
+- **A new or changed file** becomes a new or changed page, and a page changed in Notion is written into its file.
+  Notion keeps a page in its own Markdown, so after a page is sent, its file gets Notion's form of the text. Your
+  earlier text is kept as a version.
+- **A file deleted on one side** goes to the other side's trash: Notion's trash for a page, and `.wirecat-trash/<date>/` inside the
+  mirrored folder for a file.
+  Only a page in Notion's trash counts as deleted. A page you moved elsewhere, or one the connection can no longer
+  see, leaves its file alone.
+- **A file changed on both sides** is merged line by line when the changes are in different places. When they touch
+  the same lines, the sync leaves both as they are and lists a conflict. `mirrors conflicts list` shows them,
+  `mirrors conflicts show <id> <path>` shows the three versions, and `mirrors conflicts resolve <id> <path> --keep
+  local`, `--keep notion`, `--keep both` or `--file <final>` settles one.
+- **Every overwrite and deletion** first keeps the earlier text on this computer, for `keep_versions_for_days` (365 by
+  default). `mirrors versions list <id> <path>` shows them and `mirrors versions restore <id> <path> <sha256>` puts
+  one back.
+
+A sync that would delete more than 10 files or overwrite more than 50 stops before it changes anything, and says
+which flag lets it go on. Run `mirrors preview`, then `mirrors sync <id> --allow-deletions <count>` or
+`--allow-replacements <count>`. `mirrors watch` keeps syncing until
+Ctrl-C. Notion has no change feed, so it reads every mirrored page each time it checks, every 5 minutes by default.
+
+Limits:
+
+- Only `.md` files become pages. Leave other files out with `mirrors update <id> --ignore <path>`.
+- A sync reads every mirrored page, about two requests a page. Notion answers about three requests a second, so 300
+  pages take about 3 minutes.
+- Renaming a file trashes the page and makes a new one, so the page loses its comments, links to it and sharing.
+  Rename the page in Notion instead.
+- A page with pages under it is trashed only once their files are gone too, so deleting a folder of pages takes two
+  syncs.
+- Two pages with the same title in one place are left out until one is renamed.
+
+The permissions `api.post-page`, `api.update-page-markdown` and `api.patch-page` apply to a sync as to `documents`,
+and a deletion on either side asks for `documents.delete`.
+
 ## Meeting notes
 
 ```sh

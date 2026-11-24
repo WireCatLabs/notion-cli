@@ -7,7 +7,7 @@ ran it · ⛔ not tested offline, with the reason and where it is checked instea
 Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 [TESTING.md](TESTING.md) for how, and for the states and failures that cut across commands.
 
-**232 ✅ · 224 ⛔ · 0 ❌** — 167 commands, 289 options.
+**235 ✅ · 246 ⛔ · 0 ❌** — 180 commands, 301 options.
 
 | Command | Option | | Note |
 |---|---|---|---|
@@ -188,6 +188,31 @@ Measured from the test run (`coverage/argv.jsonl`), not searched for — see
 | `comments delete` |  | ✅ |  |
 | `files upload` |  | ✅ |  |
 | `files upload` | `--parent` | ✅ |  |
+| `mirrors add` |  | ✅ |  |
+| `mirrors add` | `--ignore` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors list` |  | ✅ |  |
+| `mirrors status` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors preview` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors preview` | `--keep` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors sync` |  | ✅ |  |
+| `mirrors sync` | `--keep` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors sync` | `--allow-deletions` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors sync` | `--allow-replacements` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors sync` | `--replace` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors sync` | `--repin` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors watch` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors watch` | `--every` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors update` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors update` | `--ignore` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors update` | `--clear` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors remove` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors versions list` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors versions restore` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors conflicts list` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors conflicts show` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors conflicts resolve` |  | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors conflicts resolve` | `--keep` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
+| `mirrors conflicts resolve` | `--file` | ⛔ | cli-core's shared file mirror group (fileMirrorsCommand), tested in cli-core's src/cli/documents/file-mirrors and file-conflicts tests; notion supplies only the target, its keys and add's page (src/mirrors.test.ts, src/mirror-target.test.ts) |
 | `api list` |  | ✅ |  |
 | `api show` |  | ✅ |  |
 | `api get-self` |  | ⛔ | generated from Notion's OpenAPI document; src/commands/api.test.ts drives the shared executor through retrieve-a-page, post-search and delete-a-block, and scripts/notion-spec.test.ts checks the generation |

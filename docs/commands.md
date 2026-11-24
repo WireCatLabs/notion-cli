@@ -1571,6 +1571,246 @@ notion files upload <file> [options]
 
 **Example:** `notion personal files upload report.pdf --parent PAGE_ID`, `notion personal files upload photo.png --parent PAGE_ID --dry-run`
 
+## `notion mirrors`
+
+keep local folders and Notion pages the same, both ways, file by file
+
+### `notion mirrors add`
+
+mirror a local folder and a Notion page both ways: checks the Notion page and saves the pair; nothing is copied until mirrors sync. Each page under it is a Markdown file named after its title, and the pages under that one are in a folder of the same name
+
+**Changes something on this computer only.**
+
+```sh
+notion mirrors add <folder> <path> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `folder` | required | the Notion page whose pages become the folder's files, by its id or its Notion link. |
+| `path` | required | the local folder. |
+
+| Option | What it does |
+|---|---|
+| `--ignore <path>` | leave this path out on both sides, a path or a glob; repeat it for more: a name at any depth (node_modules, *.iso) or a path from the mirror's root (/Photos). |
+
+**Example:** `notion personal mirrors add 0123456789abcdef0123456789abcdef ./notes`, `notion personal mirrors add 0123456789abcdef0123456789abcdef ~/Roadmap --ignore drafts`
+
+### `notion mirrors list`
+
+list this profile's mirrors
+
+```sh
+notion mirrors list
+```
+
+**Example:** `notion personal mirrors list --json`
+
+### `notion mirrors status`
+
+show which local files the next sync would send or delete on Notion; Notion is not asked
+
+```sh
+notion mirrors status [id]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | optional | mirror id from mirrors list; every mirror of the profile when omitted. |
+
+**Example:** `notion personal mirrors status --json`
+
+### `notion mirrors preview`
+
+list Notion and show what mirrors sync would do: each upload, download, merge, rename, trash and conflict; nothing is changed on either side
+
+```sh
+notion mirrors preview [id] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | optional | mirror id from mirrors list; every mirror of the profile when omitted. |
+
+| Option | What it does |
+|---|---|
+| `--keep <side>` | settle each conflict: keep the local file, the Notion one, or both. One of: `local`, `notion`, `both`. |
+
+**Example:** `notion personal mirrors preview --json`, `notion personal mirrors preview 1a2b3c4d --keep notion`
+
+### `notion mirrors sync`
+
+sync mirrors both ways once: a change on one side is copied to the other, a deletion goes to the other side's trash, a text file changed on both sides in different places is merged, and any other file changed on both sides is reported for mirrors conflicts or --keep; mirrors preview shows the plan first. A run stops before its deadline, keeps what it did, and the next sync goes on from there
+
+**Changes something in the service.**
+
+```sh
+notion mirrors sync [id] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | optional | mirror id from mirrors list; every mirror of the profile when omitted. |
+
+| Option | What it does |
+|---|---|
+| `--keep <side>` | settle each conflict: keep the local file, the Notion one, or both. One of: `local`, `notion`, `both`. |
+| `--allow-deletions <count>` | let this run delete up to this many files when the guard stops it. |
+| `--allow-replacements <count>` | let this run overwrite up to this many existing files when the guard stops it; each is kept as a version first. |
+| `--replace` | let this run overwrite any number of existing files when the guard stops it; each is kept as a version first. |
+| `--repin` | the Notion or local folder was replaced and the new one is right: record it and sync. |
+
+**Example:** `notion personal mirrors sync`, `notion personal mirrors sync 1a2b3c4d --keep notion`
+
+### `notion mirrors watch`
+
+keep syncing both ways until Ctrl-C or --timeout: on each local save, and when Notion changes; a file changed on both sides that cannot be merged is reported for mirrors conflicts
+
+**Changes something in the service.**
+
+```sh
+notion mirrors watch [id] [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | optional | mirror id from mirrors list; every mirror of the profile when omitted. |
+
+| Option | What it does |
+|---|---|
+| `--every <duration>` | how often to ask Notion whether anything changed. Default: `5m`. |
+
+**Example:** `notion personal mirrors watch`, `notion personal mirrors watch 1a2b3c4d --every 2m --jsonl`
+
+### `notion mirrors update`
+
+add paths to what a mirror ignores, as mirrors list shows it. --clear empties the list first, so --clear with --ignore keeps only the paths given: that is how one path stops being ignored. An ignored path is left alone on both sides and never deleted, now or later; one no longer ignored is synced as a new folder, copying one-sided files and reporting different ones as conflicts, deleting nothing
+
+**Changes something on this computer only.**
+
+```sh
+notion mirrors update <id> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | required | mirror id from mirrors list. |
+
+| Option | What it does |
+|---|---|
+| `--ignore <path>` | leave this path out on both sides, a path or a glob; repeat it for more: a name at any depth (node_modules, *.iso) or a path from the mirror's root (/Photos). |
+| `--clear` | empty the list before adding any --ignore paths; alone, sync every path again. |
+
+**Example:** `notion personal mirrors update 1a2b3c4d --ignore Photos --ignore "*.iso"`, `notion personal mirrors update 1a2b3c4d --clear --ignore Photos`
+
+### `notion mirrors remove`
+
+stop mirroring a folder: nothing on Notion or in the local folder is changed; its kept versions stay
+
+**Changes something on this computer only.**
+
+```sh
+notion mirrors remove <id>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | required | mirror id from mirrors list. |
+
+**Example:** `notion personal mirrors remove 1a2b3c4d`
+
+### `notion mirrors versions`
+
+the versions of a mirrored file that syncs replaced or deleted, kept on this computer
+
+#### `notion mirrors versions list`
+
+list what syncs did to a mirrored file, oldest first, and which versions are still kept
+
+```sh
+notion mirrors versions list <id> <path>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | required | mirror id from mirrors list. |
+| `path` | required | the file's path inside the mirror, like notes/plan.md. |
+
+**Example:** `notion personal mirrors versions list 1a2b3c4d notes/plan.md --json`
+
+#### `notion mirrors versions restore`
+
+put a kept version back into the local folder; the file there now is kept first, and the next mirrors sync sends the restored one to Notion
+
+**Changes something on this computer only.**
+
+```sh
+notion mirrors versions restore <id> <path> <sha256>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | required | mirror id from mirrors list. |
+| `path` | required | the file's path inside the mirror, like notes/plan.md. |
+| `sha256` | required | the version's hash, old or new in mirrors versions list. |
+
+**Example:** `notion personal mirrors versions restore 1a2b3c4d notes/plan.md 9f86d081…`
+
+### `notion mirrors conflicts`
+
+files changed on both sides that a sync could not merge: list them, show the three versions and the lines that conflict, and resolve each by keeping a side or giving the final file
+
+#### `notion mirrors conflicts list`
+
+list the conflicts each mirror's last sync left, with why and when it found them
+
+```sh
+notion mirrors conflicts list [id]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | optional | mirror id from mirrors list; every mirror of the profile when omitted. |
+
+**Example:** `notion personal mirrors conflicts list --json`
+
+#### `notion mirrors conflicts show`
+
+show a conflict's three versions (the last sync's, the local and the remote) and each changed stretch of the line merge; merged is the whole file with conflict markers, a start for resolve --file
+
+```sh
+notion mirrors conflicts show <id> <path>
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | required | mirror id from mirrors list. |
+| `path` | required | the file's path inside the mirror, like notes/plan.md. |
+
+**Example:** `notion personal mirrors conflicts show 1a2b3c4d notes/plan.md --json`
+
+#### `notion mirrors conflicts resolve`
+
+settle a conflict on both sides at once: keep the local file, the notion's, or both (the notion's beside the local one), or give the final file. Refused with nothing written when either side changed since the conflict was found; every replaced version is kept
+
+**Changes something in the service.**
+
+```sh
+notion mirrors conflicts resolve <id> <path> [options]
+```
+
+| Argument | | What it is |
+|---|---|---|
+| `id` | required | mirror id from mirrors list. |
+| `path` | required | the file's path inside the mirror, like notes/plan.md. |
+
+| Option | What it does |
+|---|---|
+| `--keep <side>` | keep the local file, the notion's, or both. One of: `local`, `notion`, `both`. |
+| `--file <file>` | the final content, written to both sides. |
+
+**Example:** `notion personal mirrors conflicts resolve 1a2b3c4d notes/plan.md --keep notion`, `notion personal mirrors conflicts resolve 1a2b3c4d notes/plan.md --file ~/plan-final.md`
+
 ## `notion api`
 
 the raw Notion API, one command per operation of its OpenAPI document

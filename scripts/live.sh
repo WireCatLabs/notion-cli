@@ -8,7 +8,9 @@
 # child page from its child_page block, and the check compares that block with the page (docs/dev/SYNC.md).
 # It writes only under that page: it creates one page `wirecat-live-<time>` there with a page under it, changes it,
 # edits part of its text at the fingerprint read and is refused at a stale one, trashes and restores it, comments on
-# it, replies, uploads a small text file to it, and leaves it in Notion's trash.
+# it, replies, uploads a small text file to it, and leaves it in Notion's trash. Then it mirrors a new page
+# `wirecat-live-mirror-<time>` with a temporary folder, sends a file, brings a Notion edit back, sends a deletion and
+# leaves that page in the trash too.
 # No other page is changed (docs/dev/DESIGN.md, Writes). The token needs the read and insert comments capabilities, and
 # user information including email addresses.
 set -euo pipefail
@@ -141,6 +143,11 @@ node -e '
   if (page.markdown !== process.argv[2])
     console.error(`warning: Notion gave back other text than it was sent: ${JSON.stringify(page.markdown)}`)' \
   "$work/first.json" "Written by the WireCat live check, first-$stamp"
+# The mirror takes Notion's form of a page as the truth, so two reads of an unchanged page must give the same bytes,
+# or every sync downloads every page (cli-core #3232): a warning only.
+"${cli[@]}" live documents get "$made" --json >"$work/first-again.json"
+[ "$(field first item.sha256)" = "$(field first-again item.sha256)" ] ||
+  echo "warning: two reads of an unchanged page gave other text, so a mirror would download it at every sync" >&2
 "${cli[@]}" live documents update "$made" --text "Changed by the WireCat live check, second-$stamp" \
   --json >"$work/updated.json"
 "${cli[@]}" live documents get "$made" --json >"$work/second.json"
@@ -174,6 +181,15 @@ fi
 [ "$(field stale error.reason)" = "mirror.remote-changed" ] || { echo "the stale edit's refusal is not mirror.remote-changed" >&2; exit 1; }
 "${cli[@]}" live documents get "$made" --json >"$work/kept-edit.json"
 holds kept-edit "edited-$stamp"
+# A mirror sends Notion's own Markdown back after each sync, child page tag included: it must read back the same, or
+# each sync changes the page a little more (cli-core #3232). A warning only.
+node -e '
+  const page = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).item
+  require("fs").writeFileSync(process.argv[2], page.markdown)' "$work/kept-edit.json" "$work/round-trip.md"
+"${cli[@]}" live documents update "$made" --file "$work/round-trip.md" --json >/dev/null
+"${cli[@]}" live documents get "$made" --json >"$work/round-trip.json"
+[ "$(field kept-edit item.sha256)" = "$(field round-trip item.sha256)" ] ||
+  echo "warning: Notion's own Markdown sent back read back as other text, so a mirror would change the page at each sync" >&2
 "${cli[@]}" live comments create "$made" --text "WireCat live check comment, $stamp" --json >"$work/commented.json"
 discussion=$(field commented item.comment.discussion_id)
 "${cli[@]}" live comments reply "$discussion" --text "WireCat live check reply, $stamp" --json >/dev/null
@@ -215,9 +231,57 @@ printf 'Uploaded by the WireCat live check, %s\n' "$stamp" >"$work/wirecat-live-
 [ "$(field left item.page.in_trash)" = "true" ] || { echo "the last delete left the page out of the trash" >&2; exit 1; }
 made=""
 
+# A two-way mirror of a new page under the test page: a local file becomes a page, a Notion edit comes back, a second
+# sync with no change does nothing, and a local deletion sends the page to Notion's trash.
+"${cli[@]}" live documents create --parent "$page" --title "wirecat-live-mirror-$stamp" --json >"$work/mirror-root.json"
+mirror_root=$(field mirror-root item.page.id)
+made=$mirror_root
+mkdir -p "$work/mirror"
+printf 'Written in the mirrored folder, %s\n' "$stamp" >"$work/mirror/Plan.md"
+# A second file stays: a sync refuses to send deletions from a folder left empty, which may be an unmounted drive.
+printf 'Stays in the mirrored folder, %s\n' "$stamp" >"$work/mirror/Notes.md"
+"${cli[@]}" live mirrors add "$mirror_root" "$work/mirror" --json >"$work/mirror-added.json"
+mirror=$(field mirror-added item.id)
+"${cli[@]}" live mirrors sync "$mirror" --json >"$work/mirror-sent.json"
+node -e '
+  const item = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).items[0]
+  if (!item.uploaded.includes("Plan.md") || !item.uploaded.includes("Notes.md"))
+    throw new Error(`the mirror sent ${item.uploaded.join(", ") || "nothing"}, not Plan.md and Notes.md`)' \
+  "$work/mirror-sent.json"
+"${cli[@]}" live api get-block-children --block-id "$mirror_root" --json >"$work/mirror-children.json"
+plan=$(node -e '
+  const answer = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+  const block = (answer.item?.results ?? answer.items ?? []).find((one) => one.child_page?.title === "Plan")
+  if (!block) throw new Error("the mirror made no page Plan under its page")
+  process.stdout.write(block.id)' "$work/mirror-children.json")
+"${cli[@]}" live mirrors sync "$mirror" --json >"$work/mirror-idle.json"
+node -e '
+  const item = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).items[0]
+  const moved = [...item.uploaded, ...item.downloaded, ...(item.rewritten ?? [])]
+  if (moved.length) console.error(`warning: a sync with no change moved ${moved.join(", ")}, so Notion gives other text at each read`)' \
+  "$work/mirror-idle.json"
+"${cli[@]}" live documents update "$plan" --text "Edited in Notion, $stamp" --json >/dev/null
+"${cli[@]}" live mirrors sync "$mirror" --json >"$work/mirror-pulled.json"
+[ "$(field mirror-pulled items.0.downloaded.0)" = "Plan.md" ] || { echo "the mirror did not bring the Notion edit back" >&2; exit 1; }
+grep -q "Edited in Notion, $stamp" "$work/mirror/Plan.md" || { echo "Plan.md does not hold the Notion edit" >&2; exit 1; }
+rm "$work/mirror/Plan.md"
+"${cli[@]}" live mirrors sync "$mirror" --json >"$work/mirror-deleted.json"
+[ "$(field mirror-deleted items.0.trashed.0.path)" = "Plan.md" ] || { echo "the mirror did not send the deletion" >&2; exit 1; }
+"${cli[@]}" live api retrieve-a-page --page-id "$plan" --json >"$work/mirror-plan.json"
+[ "$(field mirror-plan item.in_trash)" = "true" ] || { echo "the deleted file's page is not in Notion's trash" >&2; exit 1; }
+"${cli[@]}" live mirrors versions list "$mirror" Plan.md --json >"$work/mirror-versions.json"
+node -e '
+  const items = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).items
+  if (!items.some((one) => one.event === "deleted")) throw new Error("mirrors versions list has no deletion of Plan.md")' \
+  "$work/mirror-versions.json"
+"${cli[@]}" live mirrors remove "$mirror" --json >/dev/null
+"${cli[@]}" live documents delete "$mirror_root" --json >/dev/null
+made=""
+
 "${cli[@]}" live session end --json >/dev/null
 echo "live check passed: describe format 2, sign-in, users/me, the bot's name from users/{id}, databases list and show, documents get," \
   "a child_page block against its page, doctor, the last week's meeting notes, a page created, read, updated, refused, edited in place at its" \
   "fingerprint and refused at a stale one, commented on, replied to," \
   "a comment edited and deleted, the page renamed, given an icon, moved and moved back," \
-  "given a file, trashed and restored under the test page and left in the trash, sign-out"
+  "given a file, trashed and restored under the test page and left in the trash," \
+  "a mirror that sent a file, brought a Notion edit back and sent a deletion to the trash, sign-out"

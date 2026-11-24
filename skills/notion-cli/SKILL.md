@@ -64,6 +64,12 @@ yourself; if none is given, run a command without one and read the profiles the 
 - `notion <profile> comments edit <comment> --text "<text>"` and `comments delete <comment>` work only on comments
   this connection posted. A refusal with reason `notion.not-own-comment` means someone else wrote it: tell the owner.
   `previous_text` in the answer is the text it had.
+- `notion <profile> mirrors sync --json` syncs the owner's mirrors, local folders of Markdown files paired with the
+  pages under one Notion page. Run `mirrors preview --json` first when unsure. A stop with reason
+  `mirror.too-many-deletions` or `mirror.too-many-replacements` is for the owner to approve: tell them, never pass
+  `--allow-deletions` yourself. `meta.issues` with reason `mirror.partial` means some files were not synced:
+  `mirrors conflicts list --json` and `mirrors conflicts show <id> <path> --json` show why. Settle a conflict with
+  `mirrors conflicts resolve <id> <path> --keep local|notion|both` only when the owner said which side.
 - `notion <profile> session status --check --json` says whether the token works, and for which workspace.
 
 Find the rest with the tool itself: `notion commands --json`, `notion help <command>`, `notion doctor --json`.

@@ -10,6 +10,9 @@ with your own Notion token: a personal access token, or the token of an internal
 folder chosen it copies everything the token sees; `folders add` narrows it to chosen pages and databases. `search`,
 `documents list|show|export|context`, `status`, `catalog` and the knowledge commands (`tags`, `relationships`,
 `notes`, `memories`, `facts`, `identities`) read and annotate that copy offline.
+`mirrors` keeps a local folder of Markdown files and the pages under one Notion page the same, both ways: a deletion
+goes to the other side's trash, each overwrite keeps the earlier text, and a change on both sides is merged or listed as
+a conflict.
 It has the commands every WireCat CLI shares: `doctor`, `commands`, `config`, `skill`, `mcp`, `runs` and `upgrade`.
 
 Start with [installation](installation.md), then [usage](usage.md).

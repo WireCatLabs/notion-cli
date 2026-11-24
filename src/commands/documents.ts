@@ -5,6 +5,7 @@ import { CliError, visibleControls } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { answerEntity, itemOf, outputFor, REMOTE_READ, REMOTE_WRITE, renderAnswer } from "@wirecat/cli-core/cli"
 import { type FileTarget, fileVersions, guardedFileWrite } from "@wirecat/cli-core/documents"
+import { keepVersionsForDays } from "@wirecat/cli-core/documents/cli"
 import { Command, Option } from "commander"
 import { DELETE_KEY } from "../config.js"
 import { contextOf, withNotion } from "../context.js"
@@ -253,7 +254,7 @@ const guardedText = async (
   expected: string | undefined,
   markdown: string | undefined,
 ) => {
-  const { env, profile } = contextOf(command)
+  const { env, profile, settings } = contextOf(command)
   const outcome: PageWriteOutcome = { warnings: [] }
   const target = pageTarget(reads, writes, change, outcome)
   let fingerprint = expected
@@ -266,7 +267,7 @@ const guardedText = async (
     }
     fingerprint = fingerprintOf(document.markdown)
   }
-  const versions = fileVersions(join(profileDir(env, profile), "versions"))
+  const versions = fileVersions(join(profileDir(env, profile), "versions"), Date.now, keepVersionsForDays(settings))
   const folder = mkdtempSync(join(tmpdir(), "wcnotion-update-"))
   try {
     const from = join(folder, "text")
