@@ -164,7 +164,7 @@ it("over MCP a page's text never comes from the server's stdin or from a credent
       arguments: { parent: PAGE_ID, file: join(process.env.HOME ?? "", ".ssh", "id_ed25519") },
     })
     expect(key.isError).toBe(true)
-    expect(JSON.stringify(key.body)).toContain("file.refused-place")
+    expect(key.body).toMatchObject({ error: { code: "permission_error", reason: "access.denied", param: "--file" } })
     expect(notion.calls).toEqual([])
     expect((await mcp.call("notion_read", { command: "doctor" })).isError).toBeFalsy()
   } finally {
