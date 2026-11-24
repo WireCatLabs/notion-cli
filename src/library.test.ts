@@ -388,6 +388,24 @@ describe("sync over the shared store", () => {
     expect((found.json() as { item: { hits: { id: string }[] } }).item.hits.map((hit) => hit.id)).toEqual([GRANDCHILD])
   })
 
+  it("marks a page's text and the browsed names in a scheduled agent's run", async () => {
+    const { env, http } = cli()
+    const MARK = "0123456789abcdef"
+    const locked = { ...env, WCNOTION_READ_ONLY: "1", WCNOTION_UNTRUSTED_MARK: MARK }
+    const marked = (text: string) => new RegExp(`^⟦untrusted:${MARK} source=[^⟧]+⟧${text}⟦/untrusted:${MARK}⟧$`)
+    const read = async (argv: string[]) => {
+      const ran = await runCli(["personal", ...argv, "--json"], { notion: http, keyring: signedIn(), env: locked })
+      expect(ran.code, ran.err).toBe(0)
+      return ran.json() as { item: Record<string, unknown>; items: Record<string, unknown>[] }
+    }
+    expect((await read(["documents", "get", ROADMAP])).item.markdown).toMatch(
+      marked("[\\s\\S]*quarterly roadmap[\\s\\S]*"),
+    )
+    const browsed = (await read(["folders", "browse"])).items.find((item) => item.id === ROADMAP)
+    expect(browsed?.name).toMatch(marked("Roadmap"))
+    expect(browsed?.id).toBe(ROADMAP)
+  })
+
   it("removing the last chosen folder says the next sync copies the whole workspace, and it does", async () => {
     const { run } = cli()
     await run(["folders", "add", CHILD])

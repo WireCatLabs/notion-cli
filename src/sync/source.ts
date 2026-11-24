@@ -462,6 +462,19 @@ export const notionSource = (
     }
   }
 
+  /** Held pages and databases this run found in the trash. */
+  const inTrash = new Set<string>()
+
+  /** A full walk removes a page listed in the trash as deleted; left out of the listing, it would stay as unavailable. */
+  const withTrashed = (listing: Listing) => [
+    ...listing.files,
+    ...listing.trashed.flatMap((id) => {
+      const file = known.get(id)
+      if (file) inTrash.add(id)
+      return file ? [{ ...file, trashed: true }] : []
+    }),
+  ]
+
   /**
    * One page of a folder's children for the engine's walk, with the position of the next in `cursor`. A database goes a
    * page of rows at a time, a page a page of blocks at a time. Known children a page did not show are read directly
@@ -469,7 +482,9 @@ export const notionSource = (
    * missing once its last block is listed. The workspace is one listing, as search has no order to resume a span by.
    */
   const childrenPage = async (id: string, token?: string): Promise<{ files: NotionFile[]; cursor?: string }> => {
-    if (id === WORKSPACE_ROOT) return { files: (await listChildren(id)).files }
+    if (id === WORKSPACE_ROOT) return { files: withTrashed(await listChildren(id)) }
+    // The walk goes on into a folder it was given in the trash: what is below leaves as no longer visible, unread.
+    if (inTrash.has(id)) return { files: [] }
     let at: ListPosition
     if (token === undefined) {
       const kind = await kindOf(id)
@@ -514,7 +529,7 @@ export const notionSource = (
       }
       for (const row of page.rows) if (!row.in_trash) files.push(await pageFile(row))
       await confirm(page.missing, id, listing)
-      for (const file of listing.files) files.push(file)
+      for (const file of withTrashed(listing)) files.push(file)
       const next: ListPosition | undefined = page.next
         ? { k: "rows", sources: at.sources, ...page.next }
         : at.sources.length > 1
@@ -541,7 +556,7 @@ export const notionSource = (
       id,
       listing,
     )
-    return { files: [...files, ...listing.files] }
+    return { files: [...files, ...withTrashed(listing)] }
   }
 
   /** A container's children, with every known child that did not come back checked directly before it counts as gone. */
@@ -970,7 +985,7 @@ export const notionSource = (
     },
     async children(id) {
       fresh()
-      if (id === WORKSPACE_ROOT) return (await listChildren(id)).files
+      if (id === WORKSPACE_ROOT) return withTrashed(await listChildren(id))
       const files: NotionFile[] = []
       let cursor: string | undefined
       do {

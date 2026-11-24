@@ -18,7 +18,13 @@ import {
   writesOwnerFiles,
 } from "@wirecat/cli-core/cli"
 import { catalogFiles, syncDocuments } from "@wirecat/cli-core/documents"
-import { addDocumentCommands, type DocumentWords, keepVersionsForDays } from "@wirecat/cli-core/documents/cli"
+import {
+  addDocumentCommands,
+  DOCUMENT_UNTRUSTED,
+  type DocumentWords,
+  keepVersionsForDays,
+  marksUntrusted,
+} from "@wirecat/cli-core/documents/cli"
 import { modelGateway, modelTarget } from "@wirecat/cli-core/models"
 import { Command } from "commander"
 import * as v from "valibot"
@@ -574,7 +580,7 @@ export const libraryCommands = (): Command[] => {
       decider,
     },
   })
-  documents.addCommand(getCommand()).addCommand(checkCommand())
+  documents.addCommand(marksUntrusted(getCommand(), ["markdown"])).addCommand(checkCommand())
   documents.addCommand(createCommand()).addCommand(updateCommand()).addCommand(deleteCommand())
   documents.addCommand(restoreCommand()).addCommand(moveCommand()).addCommand(renameCommand())
   annotate(documents.command("add"), {
@@ -619,7 +625,7 @@ export const libraryCommands = (): Command[] => {
   const folders = find(holder, "folders")
   // Choosing a folder changes what the next sync keeps and removes, so an agent asks for it through the write tool.
   writesOwnerFiles(find(folders, "add"))
-  annotate(find(folders, "browse"), { partial: true })
+  marksUntrusted(annotate(find(folders, "browse"), { partial: true }), DOCUMENT_UNTRUSTED)
   for (const group of holder.commands)
     group.hook("preAction", (_group, action) => {
       running = action

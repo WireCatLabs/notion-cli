@@ -11,6 +11,7 @@ import {
   renderAnswer,
   secretInput,
 } from "@wirecat/cli-core/cli"
+import { marksUntrusted } from "@wirecat/cli-core/documents/cli"
 import { Command, Option } from "commander"
 import { withNotion } from "../context.js"
 import { IDENTITY } from "../identity.js"
@@ -159,7 +160,7 @@ const deleteCommand = () =>
 export const commentsCommand = () =>
   annotate(new Command("comments"), { effects: REMOTE_READ })
     .description("read and write the comments on Notion pages, live")
-    .addCommand(listCommand())
+    .addCommand(marksUntrusted(listCommand(), ["text", "author_name"]))
     .addCommand(createCommand())
     .addCommand(replyCommand())
     .addCommand(editCommand())
