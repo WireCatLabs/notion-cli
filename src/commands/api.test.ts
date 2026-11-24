@@ -42,7 +42,18 @@ const fakeNotion = () => {
     if (headers.get("notion-version") !== "2026-03-11") return refuse(400, "missing_version")
     const route = `${method} ${url.pathname}`
     if (route === `GET /v1/pages/${PAGE}`)
-      return Response.json({ object: "page", id: PAGE, in_trash: false, properties: {} })
+      return Response.json({
+        object: "page",
+        id: PAGE,
+        in_trash: false,
+        properties: {
+          Name: {
+            id: "title",
+            type: "title",
+            title: [{ type: "text", text: { content: "Fake plan" }, plain_text: "Fake plan" }],
+          },
+        },
+      })
     if (route === "GET /v1/pages/00000000-0000-4000-8000-000000000404") return refuse(404, "object_not_found")
     if (route === "POST /v1/search")
       return Response.json({
@@ -80,7 +91,12 @@ afterEach(() => rmSync(configFile, { force: true }))
 // biome-ignore lint/suspicious/noExplicitAny: an answer's shape is what each test checks
 type Answer = Record<string, any>
 
-const notion = async (argv: string[], service = fakeNotion(), answer?: (question: string) => string | null) => {
+const notion = async (
+  argv: string[],
+  service = fakeNotion(),
+  answer?: (question: string) => string | null,
+  env?: NodeJS.ProcessEnv,
+) => {
   const out: string[] = []
   const err: string[] = []
   const options: RunOptions & ServiceEnvironment = {
@@ -90,6 +106,7 @@ const notion = async (argv: string[], service = fakeNotion(), answer?: (question
     fetch: service.fetch,
     sleep: async () => {},
     ...(answer ? { answer } : {}),
+    ...(env ? { env: { ...process.env, ...env } } : {}),
   }
   const code = await run(argv, options)
   const text = out.join("") || err.join("")
@@ -105,6 +122,24 @@ describe("notion api", () => {
     expect(NOTION_VERSION).toBe(CLIENT_VERSION)
     const flagged = await notion(["personal", "api", "retrieve-a-page", "--page-id", PAGE, "--notion-version", "x"])
     expect(flagged.code).toBe(2)
+  })
+
+  it("marks the rich text in a raw answer in a scheduled agent's run, and leaves ids and types", async () => {
+    const MARK = "0123456789abcdef"
+    const env = { WCNOTION_READ_ONLY: "1", WCNOTION_UNTRUSTED_MARK: MARK }
+    const result = await notion(
+      ["personal", "api", "retrieve-a-page", "--page-id", PAGE, "--json"],
+      undefined,
+      undefined,
+      env,
+    )
+    expect(result.code, result.text).toBe(0)
+    const [title] = result.json().item.properties.Name.title
+    const marked = new RegExp(`^⟦untrusted:${MARK} source=[^⟧]+⟧Fake plan⟦/untrusted:${MARK}⟧$`)
+    expect(title.plain_text).toMatch(marked)
+    expect(title.text.content).toMatch(marked)
+    expect(title.type).toBe("text")
+    expect(result.json().item.id).toBe(PAGE)
   })
 
   it("searches with a POST that only reads, and says not_found without repeating Notion's message", async () => {

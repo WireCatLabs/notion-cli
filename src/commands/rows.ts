@@ -8,6 +8,7 @@ import {
   REMOTE_READ,
   renderAnswer,
 } from "@wirecat/cli-core/cli"
+import { DOCUMENT_UNTRUSTED, marksUntrusted } from "@wirecat/cli-core/documents/cli"
 import { Command, Option } from "commander"
 import { withNotion } from "../context.js"
 import { IDENTITY } from "../identity.js"
@@ -87,4 +88,4 @@ const listCommand = () =>
 export const rowsCommand = (): Command =>
   annotate(new Command("rows"), { effects: REMOTE_READ })
     .description("list a Notion database's rows live, with their values")
-    .addCommand(listCommand())
+    .addCommand(marksUntrusted(listCommand(), DOCUMENT_UNTRUSTED))
