@@ -2,6 +2,43 @@
 
 Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
 
+## 0.9.0 — 25.11.2026
+
+### Added
+
+- **Keep a local folder of Markdown files and Notion pages the same, both ways.** `mirrors add <page> <folder>` pairs
+  a folder with the pages under one Notion page: each page is a file named after its title, and the pages under it are
+  in a folder of the same name. `mirrors sync` copies each change to the other side. A deletion goes to the other
+  side's trash, and only a page in Notion's trash counts as deleted. Every overwrite keeps the earlier text for
+  `keep_versions_for_days` (365 by default). A file changed on both sides is merged line by line, or listed for
+  `mirrors conflicts resolve`. `mirrors preview`, `status`, `watch`, `update`, `remove` and `versions list|restore`
+  are there too. These are cli-core's shared commands, the same as in ydisk. See [usage](docs/usage.md).
+
+### Changed — may break callers
+
+- **Built on cli-core 1.0.0 and cli-base 1.0.0.** The generated API files read their types from
+  `@wirecat/cli-base/codegen/runtime`, and the store types from `@wirecat/cli-core/store/areas`. Store version 73 comes
+  with cli-core 1.0: once a 1.0 tool opens the store, a 0.x tool refuses it, so upgrade every WireCat CLI together.
+- **Over MCP, a call that names a credential file or a WireCat folder now answers `permission_error`**
+  (`access.denied`), checked by cli-core before the command runs. It answered `validation_error` before.
+
+### Fixed
+
+- **The text `documents update` replaces is kept as long as synced versions.** It stayed 30 days. It now follows the
+  profile's `keep_versions_for_days`, 365 days by default, the same period as `documents history`.
+- **A scheduled agent reads other people's Notion text marked.** In a run locked read-only with a mark
+  (`WCNOTION_READ_ONLY=1` and `WCNOTION_UNTRUSTED_MARK`), `documents get` marks the page's Markdown, `folders browse`
+  the names, `databases list|show` the titles, descriptions, property names, select options and template names, `rows
+  list` the row titles, `comments list` the comment text and its author, and the `api` group's operations every string
+  in the raw answer, its keys left as they are. cli-core's shared commands already marked theirs, `mirrors preview` and
+  `mirrors conflicts list|show` among them. Outside such a run no answer changes. A marked property name is passed back
+  to `rows list --filter` without the markers. Not marked yet: the values in `rows list`'s `properties`, whose keys
+  differ in each database.
+- **A `--rescan` removes a page or row found in Notion's trash as deleted.** A full walk that read a held page or row
+  directly and found it in the trash left it out, so it stayed as no longer visible with its text kept. It now leaves
+  as deleted, as the change feed already did. A page Notion no longer finds stays as no longer visible. What was
+  under a page or database in the trash is not read, and leaves as no longer visible, as before.
+
 ## 0.8.0 — 23.11.2026
 
 ### Added
