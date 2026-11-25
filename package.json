@@ -1,6 +1,6 @@
 {
   "name": "@wirecat/notion-cli",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Notion pages and databases for you and your AI agent: read live with your own token, through the terminal or MCP",
   "license": "Apache-2.0",
   "author": "Viacheslav Ptsarev",
