@@ -12,6 +12,7 @@ import {
   termField,
   withQuery,
 } from "@wirecat/cli-core/cli"
+import { DOCUMENT_UNTRUSTED, marksUntrusted } from "@wirecat/cli-core/documents/cli"
 import { Command } from "commander"
 import { withNotion } from "../context.js"
 import { IDENTITY } from "../identity.js"
@@ -105,5 +106,5 @@ const showCommand = () =>
 export const databasesCommand = (): Command =>
   annotate(new Command("databases"), { effects: REMOTE_READ })
     .description("read Notion databases and their data sources")
-    .addCommand(listCommand())
-    .addCommand(showCommand())
+    .addCommand(marksUntrusted(listCommand(), DOCUMENT_UNTRUSTED))
+    .addCommand(marksUntrusted(showCommand(), [...DOCUMENT_UNTRUSTED, "options"]))

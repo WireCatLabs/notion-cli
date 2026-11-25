@@ -182,6 +182,32 @@ it("databases list title: asks Notion's search for titles with those words", asy
   expect(notion.calls[0]?.body).toMatchObject({ query: "database 2" })
 })
 
+it("marks database titles, property names, options and row titles in a scheduled agent's run", async () => {
+  const MARK = "0123456789abcdef"
+  const env = { WCNOTION_READ_ONLY: "1", WCNOTION_UNTRUSTED_MARK: MARK }
+  const marked = (text: string) => new RegExp(`^⟦untrusted:${MARK} source=[^⟧]+⟧${text}⟦/untrusted:${MARK}⟧$`)
+  const read = async (argv: string[]) => {
+    const ran = await runCli(["personal", ...argv, "--json"], { notion: fakeNotion(), env })
+    expect(ran.code, ran.err).toBe(0)
+    return ran.json() as { item: Record<string, unknown>; items: Record<string, unknown>[] }
+  }
+  const [database] = (await read(["databases", "list"])).items
+  expect(database?.title).toMatch(marked("Test database.*"))
+  expect(database?.data_source_id).toBe(SOURCE_ID)
+  const shown = (await read(["databases", "show", DATABASE_ID])).item as {
+    title: string
+    description: string
+    data_sources: { title: string; properties: { name: string; type: string; options?: string[] }[] }[]
+  }
+  expect(shown.title).toMatch(marked("Test database"))
+  expect(shown.description).toMatch(marked("Fake description"))
+  const status = shown.data_sources[0]?.properties.find((property) => property.type === "status")
+  expect(status?.name).toMatch(marked("Status"))
+  expect(status?.options?.[0]).toMatch(marked("Not started"))
+  const [row] = (await read(["rows", "list", DATABASE_ID])).items
+  expect(row?.title).toMatch(marked(".+"))
+})
+
 it("databases show gives each data source's id and properties, with select and status options", async () => {
   const notion = fakeNotion()
   const shown = await runCli(["personal", "databases", "show", DATABASE_ID.replaceAll("-", ""), "--json"], { notion })

@@ -39,7 +39,9 @@ type At = BrowsePosition["at"]
 const batchOf = async (ports: BrowsePorts, parent: string, at: At): Promise<BrowseLevel & { next?: At }> => {
   if (at.k === "list") {
     const page = await ports.childrenPage(parent, at.position)
-    return { files: page.files, ...(page.cursor ? { next: { k: "list", position: page.cursor } } : {}), cut: false }
+    // A walk's listing holds the known pages in the trash, which are no choice for folders add.
+    const files = page.files.filter((file) => !file.trashed)
+    return { files, ...(page.cursor ? { next: { k: "list", position: page.cursor } } : {}), cut: false }
   }
   const page = await ports.topPage(at.kind, at.start, SEARCH_PAGE)
   const next: At | undefined = page.next

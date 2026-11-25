@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, wr
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { fakeNotion, notionError, PAGE_ID } from "./testing/fake-notion.js"
+import { DISCUSSION_ID, fakeNotion, notionError, PAGE_ID } from "./testing/fake-notion.js"
 import { runCli } from "./testing/harness.js"
 
 const PAGE_LINK = `https://www.notion.so/test-space/Test-page-${PAGE_ID.replaceAll("-", "")}`
@@ -78,6 +78,20 @@ it("comments create starts a discussion, reply answers in it, and list pages thr
   ).json() as Listed
   expect(rest.items.map((item) => [item.text, item.discussion_id])).toEqual([["Fake reply", comment.discussion_id]])
   expect(notion.refusals).toEqual([])
+})
+
+it("marks a comment's text and author in a scheduled agent's run", async () => {
+  const MARK = "0123456789abcdef"
+  const marked = (text: string) => new RegExp(`^⟦untrusted:${MARK} source=[^⟧]+⟧${text}⟦/untrusted:${MARK}⟧$`)
+  const listed = await runCli(["personal", "comments", "list", PAGE_ID, "--json"], {
+    notion: fakeNotion({ discussions: [DISCUSSION_ID], othersComments: true }),
+    env: { WCNOTION_READ_ONLY: "1", WCNOTION_UNTRUSTED_MARK: MARK },
+  })
+  expect(listed.code, listed.err).toBe(0)
+  const [comment] = (listed.json() as Listed).items
+  expect(comment?.text).toMatch(marked("Fake earlier comment"))
+  expect(comment?.author_name).toMatch(marked("Test bot"))
+  expect(comment?.discussion_id).toBe(DISCUSSION_ID)
 })
 
 it("comments list says Notion lists only unresolved comments, and a comment needs its text", async () => {

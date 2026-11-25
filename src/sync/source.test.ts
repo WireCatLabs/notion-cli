@@ -274,6 +274,53 @@ describe("the Notion source under cli-core's sync engine", () => {
     expect(notion.log).toContainEqual({ method: "retrievePage", id: "b" })
   })
 
+  it("removes a held page found in the trash on a rescan as deleted, and keeps no text of it", async () => {
+    const run = harness(notion)
+    await run.sync()
+    notion.page("b").trashed = true
+    notion.advance(MINUTE)
+    await run.sync(true)
+    expect(run.saved.has("b")).toBe(false)
+    expect(run.removals.get("b")).toBe("deleted")
+    expect(notion.log).toContainEqual({ method: "retrievePage", id: "b" })
+  })
+
+  it("on a rescan, removes a held row or child page found in the trash as deleted", async () => {
+    const run = harness(notion)
+    await run.sync()
+    notion.edit("r1", { trashed: true })
+    notion.edit("a1", { trashed: true })
+    notion.advance(MINUTE)
+    await run.sync(true)
+    expect(run.removals.get("r1")).toBe("deleted")
+    expect(run.removals.get("a1")).toBe("deleted")
+    expect(run.saved.has("r2")).toBe(true)
+  })
+
+  it("on a rescan, reads nothing under a held page or database found in the trash, and deletes nothing there", async () => {
+    const run = harness(notion)
+    await run.sync()
+    notion.edit("a", { trashed: true })
+    const database = notion.databases.get("db")
+    if (database) database.trashed = true
+    notion.advance(MINUTE)
+    const before = notion.log.length
+    await run.sync(true)
+    expect(run.removals.get("a")).toBe("deleted")
+    for (const id of ["a1", "r1", "r2", "r3"]) expect(run.removals.get(id)).toBe("unavailable")
+    const after = notion.log.slice(before)
+    expect(after).not.toContainEqual({ method: "blockChildren", id: "a" })
+    expect(after.filter((call) => call.method === "queryDataSource")).toEqual([])
+  })
+
+  it("leaves a held child page in the trash out of folders browse", async () => {
+    const run = harness(notion)
+    await run.sync()
+    notion.edit("a1", { trashed: true })
+    const level = await run.sourceOf().browse("a", 10)
+    expect(level.files.map((file) => file.id)).not.toContain("a1")
+  })
+
   it("marks a page unshared from the token no longer visible at the next walk, not deleted", async () => {
     const run = harness(notion)
     await run.sync()
