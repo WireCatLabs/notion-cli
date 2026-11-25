@@ -124,7 +124,7 @@ describe("notion api", () => {
     expect(flagged.code).toBe(2)
   })
 
-  it("marks the rich text in a raw answer in a scheduled agent's run, and leaves ids and types", async () => {
+  it("marks every string of a raw answer in a scheduled agent's run", async () => {
     const MARK = "0123456789abcdef"
     const env = { WCNOTION_READ_ONLY: "1", WCNOTION_UNTRUSTED_MARK: MARK }
     const result = await notion(
@@ -138,8 +138,8 @@ describe("notion api", () => {
     const marked = new RegExp(`^⟦untrusted:${MARK} source=[^⟧]+⟧Fake plan⟦/untrusted:${MARK}⟧$`)
     expect(title.plain_text).toMatch(marked)
     expect(title.text.content).toMatch(marked)
-    expect(title.type).toBe("text")
-    expect(result.json().item.id).toBe(PAGE)
+    expect(title.type).toMatch(new RegExp(`^⟦untrusted:${MARK} source=[^⟧]+⟧text⟦/untrusted:${MARK}⟧$`))
+    expect(Object.keys(result.json().item.properties)).toEqual(["Name"])
   })
 
   it("searches with a POST that only reads, and says not_found without repeating Notion's message", async () => {

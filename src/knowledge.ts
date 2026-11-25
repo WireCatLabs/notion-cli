@@ -1,14 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
 import { documentIngestion, documentKnowledge } from "@wirecat/cli-core/documents"
 import { type DocumentKnowledgePort, factItem, memoryItem } from "@wirecat/cli-core/documents/cli"
-import type { LinkInput, MessageStore } from "@wirecat/cli-core/store"
+import type { MessageStore } from "@wirecat/cli-core/store"
+import type { LinkInput } from "@wirecat/cli-core/store/areas"
 import { PROVIDER } from "./library.js"
 import type { NotionFile, NotionIdentity } from "./sync/source.js"
 
 const external = (id: string) => `${id}.md`
 const PROVENANCE = "notion:pages.retrieve"
 
-export const ingestionOf = (store: MessageStore) =>
+// Named: the inferred type reaches store types no cli-core entry point exports.
+export const ingestionOf = (store: MessageStore): ReturnType<typeof documentIngestion<NotionFile>> =>
   documentIngestion<NotionFile>(store, {
     provider: PROVIDER.name,
     command: PROVIDER.command,

@@ -1,5 +1,4 @@
 import { serviceApiCommand } from "@wirecat/cli-core/cli"
-import { marksUntrusted } from "@wirecat/cli-core/documents/cli"
 import type { Command } from "commander"
 import { API, configuration } from "../config.js"
 import { notionFetchFor, tokenOf } from "../context.js"
@@ -14,14 +13,8 @@ import { notionRefusal } from "../notion/errors.js"
  * `documents.delete` too (src/config.ts). The requests take the SDK commands' transport: the profile's pace and the
  * run's record.
  */
-/**
- * Where a raw answer holds other people's text: rich text, names of people, options and files, a page's Markdown.
- * Notion's titles are lists of rich text, so their text is in `plain_text` and `text.content`, not in `title`.
- */
-const RAW_UNTRUSTED = ["plain_text", "text.content", "name", "resolved_name", "markdown"]
-
-export const apiCommand = (): Command => {
-  const group = serviceApiCommand({
+export const apiCommand = (): Command =>
+  serviceApiCommand({
     ...API,
     app: IDENTITY,
     configuration,
@@ -34,8 +27,3 @@ export const apiCommand = (): Command => {
     schemas: () => import("../generated/schemas.js").then((module) => module.schemas),
     definitions: () => import("../generated/definitions.js").then((module) => module.definitions),
   })
-  // list and show describe only the API document.
-  for (const operation of group.commands)
-    if (operation.name() !== "list" && operation.name() !== "show") marksUntrusted(operation, RAW_UNTRUSTED)
-  return group
-}
