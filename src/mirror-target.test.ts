@@ -86,6 +86,7 @@ const put = (root: string, path: string, text: string) => {
 const tree = (root: string) =>
   Object.fromEntries(
     readdirSync(root, { recursive: true, encoding: "utf8" })
+      .map((path) => path.replaceAll("\\", "/"))
       .filter((path) => !path.split("/").some((part) => part.startsWith(".")) && path.endsWith(".md"))
       .map((path) => [posix.normalize(path), readFileSync(join(root, path), "utf8")]),
   )
