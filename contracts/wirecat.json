@@ -32,7 +32,7 @@
         "session",
         "start"
       ],
-      "summary": "sign in to Notion with a personal access token or an internal connection's token",
+      "summary": "sign in to Notion with its token",
       "effects": {
         "remote": "read",
         "local": "write"

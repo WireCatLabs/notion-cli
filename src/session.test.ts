@@ -42,7 +42,7 @@ it("session status, list and end; end leaves Notion's own CLI's entry in the sam
     workspace: { id: WORKSPACE_ID },
   })
   const listed = await runCli(["session", "list", "--json"], { keyring })
-  expect(listed.json().items).toEqual([{ profile: "personal", signed_in: true, token_from: "keyring" }])
+  expect(listed.json().items).toEqual([{ profile: "personal", signed_in: true, state: "saved", token_from: "keyring" }])
   expect((await runCli(["personal", "session", "end", "--json"], { keyring })).code).toBe(0)
   expect((await runCli(["personal", "session", "status", "--json"], { keyring })).json().item).toMatchObject({
     state: "missing",
