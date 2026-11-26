@@ -57,7 +57,7 @@ keep this profile's Notion token in the OS keyring
 
 ### `notion session start`
 
-sign this profile in: a Notion personal access token, which acts with your own rights, or an internal connection's token, which sees only the pages shared with that connection. It is asked hidden or read from stdin, never taken as an argument, checked with Notion, and only then kept in the keyring, or in a private file
+sign this profile in: the Notion token is asked hidden or read from stdin, never taken as an argument, checked with Notion, and only then kept in the keyring, or in a private file. The token is a Notion personal access token, which acts with your own rights, or an internal connection's token, which sees only the pages shared with that connection
 
 **Changes something on this computer only.**
 
