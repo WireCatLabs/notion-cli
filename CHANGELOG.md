@@ -2,6 +2,14 @@
 
 Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
 
+## 0.11.0 — 27.11.2026
+
+### Changed — may break callers
+
+- **Built on cli-core 2.0.0.** It brings store version 78: the store calls AI agents `agent` (`agent:<id>`, `type:
+  "agent"`) where it said `bot`, and `bot:<id>` now names a sender bot. Once a 2.0 tool opens the store, a 1.x tool
+  refuses it, so upgrade every WireCat CLI together. notion's own commands and their JSON do not change.
+
 ## 0.10.0 — 26.11.2026
 
 ### Changed — may break callers
