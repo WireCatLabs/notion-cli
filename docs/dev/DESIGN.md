@@ -28,7 +28,7 @@ Languages: en, ru, es.
 ## What the tool does
 
 `notion` keeps a copy of the Notion pages and databases a person chooses on their computer, makes them searchable
-offline with the rest of WireCat (`memo search`, `search all`), and gives an agent the same through MCP. Later it keeps
+offline with the rest of WireCat (`wcat search`, `search all`), and gives an agent the same through MCP. Later it keeps
 a folder of Markdown files and a Notion page tree in step, both ways.
 
 The work goes in this order, each step one pull request:

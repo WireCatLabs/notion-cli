@@ -594,7 +594,7 @@ export const libraryCommands = (): Command[] => {
   })
     .summary("keep one Notion page's text in memory, read live, without syncing a folder")
     .description(
-      "read one page live and keep its text among the sources added by hand, where memo and search all find it; " +
+      "read one page live and keep its text among the sources added by hand, where wcat and search all find it; " +
         "adding it again keeps its new text as the next revision",
     )
     .argument("<page>", "the page's id or its Notion link")

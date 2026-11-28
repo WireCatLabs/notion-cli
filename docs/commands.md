@@ -475,7 +475,7 @@ notion documents rename <page> <title>
 
 ### `notion documents add`
 
-read one page live and keep its text among the sources added by hand, where memo and search all find it; adding it again keeps its new text as the next revision
+read one page live and keep its text among the sources added by hand, where wcat and search all find it; adding it again keeps its new text as the next revision
 
 **Changes something on this computer only.**
 
