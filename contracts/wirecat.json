@@ -2365,7 +2365,21 @@
     ],
     "signIn": {
       "gives": "Lets your agent read the Notion pages and databases your token can see.",
-      "asks": "A Notion personal access token, or the token of an internal connection you made in Notion."
+      "asks": "A Notion personal access token, or the token of an internal connection you made in Notion.",
+      "methods": [
+        {
+          "id": "token",
+          "label": "Notion token",
+          "words": [
+            "{profile}",
+            "session",
+            "start",
+            "--json"
+          ],
+          "stdin": true,
+          "password": "WCNOTION_TOKEN"
+        }
+      ]
     },
     "skill": {
       "status": [
@@ -2389,6 +2403,7 @@
       ]
     },
     "mcpServer": {
+      "port": 8762,
       "start": [
         "mcp",
         "server",
