@@ -17,13 +17,13 @@ unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME WCNOTION_CONFI
 mkdir -p "$HOME"
 npm install -g --prefix "$scratch/prefix" --cache "$npm_cache" --fetch-retries 6 --fetch-retry-mintimeout 20000 \
   --fetch-retry-maxtimeout 120000 --maxsockets 4 --ignore-scripts --no-audit --no-fund --loglevel error \
-  @wirecat/tg-cli @wirecat/max-cli @wirecat/whatsapp-cli @wirecat/cli-memo @wirecat/drive-cli @wirecat/zoom-cli \
+  @wirecat/tg-cli @wirecat/max-cli @wirecat/whatsapp-cli @wirecat/wirecat @wirecat/drive-cli @wirecat/zoom-cli \
   @wirecat/gcal-cli
 bin="$scratch/prefix/bin"
 others=()
 # A groups file replaces cli-base's PARITY_GROUPS. The template keeps one because it is in no group of cli-base's.
 [ -f "$root/config/parity-groups.json" ] && others+=(--groups "$root/config/parity-groups.json")
-for cli in tg max wa memo drive zm gcal; do
+for cli in tg max wa wcat-wirecat drive zm gcal; do
   [ "$cli" = "$command" ] || others+=(--cli "$bin/$cli")
 done
 # This CLI's entity schemas and error reasons, from its own `commands info`, so same-entity-schema and
