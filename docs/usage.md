@@ -42,8 +42,9 @@ notion personal search "quarterly plan"
 notion personal documents get https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef
 ```
 
-`search` finds the words in any of their forms, and `--exact` matches them as typed. Run `notion personal sync
---embed` once, and search also finds a page by its meaning, through a model on your computer. `documents show` reads a
+`search` finds the words in any of their forms, and `--exact` matches them as typed. When a text model is already
+downloaded on your computer, `notion personal sync --embed` also indexes the new text, so search finds a page by its
+meaning too. `documents show` reads a
 page from the copy, and `documents get` reads it live.
 
 ## Comments
