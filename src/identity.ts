@@ -26,9 +26,19 @@ export const DESKTOP: ManifestIdentity = {
   hosts: ["api.notion.com"],
   tagline: "Notion pages and databases, searchable on your computer",
   syncs: "Notion pages and database rows",
+  mcpPort: 8762,
   signIn: {
     gives: "Lets your agent read the Notion pages and databases your token can see.",
     asks: "A Notion personal access token, or the token of an internal connection you made in Notion.",
+    methods: [
+      {
+        id: "token",
+        label: "Notion token",
+        words: ["{profile}", "session", "start", "--json"],
+        password: "WCNOTION_TOKEN",
+        stdin: true,
+      },
+    ],
   },
 }
 
