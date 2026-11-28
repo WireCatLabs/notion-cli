@@ -81,8 +81,8 @@ Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
   meetings the token's user attended, with attendees, the AI summary, the notes and the transcript, into the shared
   store beside Zoom calls. `meetings list`, `show`, `transcript`, `summary`, `export` and `people` read them offline,
   and `search all` finds them. A summary Notion writes after the meeting is read at the next sync. Notion documents
-  no line format for a transcript, so its lines are kept as written, with no speaker or time. Why: meetings
-  held in Notion were missing from WireCat's shared meetings list ([docs/dev/DESIGN.md](docs/dev/DESIGN.md#meeting-notes)).
+  no line format for a transcript, so its lines are kept as written, with no speaker or time. Why: the owner's
+  meetings in Notion were not with the others ([docs/dev/DESIGN.md](docs/dev/DESIGN.md#meeting-notes)).
 - **A database row is created and changed with typed values.** `documents create --into <database>` adds a row
   with `--title` and `--field Name=Value`. Each value is checked against the database's properties and sent as its
   type takes it: text, number, select, status, multi-select, date or range, checkbox, link, email, phone, people and
@@ -174,8 +174,9 @@ Notable changes to `@wirecat/notion-cli`. One section per version, newest first.
   search and memo's digest showed them with an empty excerpt, and `documents show` could not open them.
 - **An agent's `relationships add` is saved.** It is written unconfirmed for the owner, who confirms it by adding the
   same relationship or rejects it by removing it. It used to write nothing.
-- **A sync that stopped halfway now tells you to run it again.** When a slow Notion listing ran out of time, the
-  answer said `complete: false` with no next step, and `status` showed a total as if nothing were left.
+- **A sync cut inside Notion's own pass says to sync again.** When a slow listing reached the deadline, its cursor
+  waited on the sync's pending plan, where notion did not look: the answer said `complete: false` with no step to run
+  next, and `status` gave a total as if the pass were planned. notion now reads that cursor too.
 - cli-core 0.687.0 (was 0.680.0), cli-base 0.109.0 (was 0.106.0).
 - Sync now saves a page's creator and last editor as people in the shared store, with their names and email addresses
   from Notion, and links the page to them as `owner` and `last-editor`. An email address joins them to the person who
