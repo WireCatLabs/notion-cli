@@ -3,18 +3,22 @@
 Read and change your Notion pages from a terminal, or let your agent do it, always in the workspace you name. Every
 command starts with a profile, so nothing goes to the wrong account.
 
-You or your agent can then fill database rows, change one part of a page without sending all of it again, bring back
-an earlier version and read your meeting notes. A script gets JSON, with an error code to branch on.
+You or your agent can then find a page offline, answer comments, fill database rows, change one part of a page
+without sending all of it again, bring back an earlier version, keep a folder of Markdown files in step with Notion
+and read your meeting notes. A script gets JSON, with an error code to branch on.
 
 **On this page:**
 
 1. [The profile comes first](#the-profile-comes-first)
-2. [Output for scripts](#output-for-scripts)
-3. [Database rows](#database-rows)
-4. [Changing part of a page](#changing-part-of-a-page)
-5. [Earlier versions and the change log](#earlier-versions-and-the-change-log)
-6. [Meeting notes](#meeting-notes)
-7. [Agents](#agents)
+2. [Find and read a page](#find-and-read-a-page)
+3. [Comments](#comments)
+4. [Output for scripts](#output-for-scripts)
+5. [Database rows](#database-rows)
+6. [Changing part of a page](#changing-part-of-a-page)
+7. [Earlier versions and the change log](#earlier-versions-and-the-change-log)
+8. [Keep a folder of Markdown files and Notion pages the same](#keep-a-folder-of-markdown-files-and-notion-pages-the-same)
+9. [Meeting notes](#meeting-notes)
+10. [Agents](#agents)
 
 ## The profile comes first
 
@@ -27,10 +31,38 @@ notion personal config show
 `WCNOTION_PROFILE=personal` does the same for one shell session. No profile is ever assumed, not even the only one: a
 command without one stops with exit code 2 and lists the profiles on this computer.
 
+## Find and read a page
+
+Search runs on the copy on your computer, so it works without the internet. Read a page live from Notion when you
+need its current text:
+
+```sh
+notion personal sync
+notion personal search "quarterly plan"
+notion personal documents get https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef
+```
+
+`search` finds the words in any of their forms, and `--exact` matches them as typed. When a text model is already
+downloaded on your computer, `notion personal sync --embed` also indexes the new text, so search finds a page by its
+meaning too. `documents show` reads a
+page from the copy, and `documents get` reads it live.
+
+## Comments
+
+```sh
+notion personal comments list PAGE_ID
+notion personal comments create PAGE_ID --text "Looks good"
+notion personal comments reply DISCUSSION_ID --text "Done, see the new plan"
+```
+
+`comments list` shows only open comments, because Notion's API gives no resolved ones. Reply to a discussion by the
+`discussion_id` that `comments list` gives. `comments edit` and `comments delete` change only the comments this
+connection posted.
+
 ## Output for scripts
 
-Every command except `mcp serve` on stdin and stdout takes `--json`, and prints one JSON value on stdout. Errors are JSON on stderr, with a code to branch
-on. The [command reference](commands.md) lists the codes.
+Every command except `mcp serve` on stdin and stdout takes `--json`, and prints one JSON value on stdout. Errors
+are JSON on stderr, with a code to branch on. The [command reference](commands.md) lists the codes.
 
 ## Database rows
 

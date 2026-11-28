@@ -27,8 +27,8 @@ the API operation it sends, such as `api.patch-page` for `documents delete`, so 
 
 ## Run records
 
-A command that fails is kept as a run, for `notion runs list` and `runs show`. A command you add that does its work
-in `context.run` is kept when it succeeds too, unless `record` is `false` (then only failures) or it ran with
-`--no-record`. `documents`, `databases` and `session status --check` do their work in a run, so `--record` keeps them. `record_input` decides whether a run
-keeps the words you typed; it is `true` unless you set it to `false`. Secrets are masked either way; see
-[Security](security.md).
+Each failed command is kept as a run, so `notion runs list` and `runs show` tell you what happened. `documents`,
+`databases`, `comments` and `session status --check` are kept when they succeed too. Set `record` to `false` to keep failures
+only. Add `--no-record` to keep nothing of one command, or `--record` to keep a success that would not be kept
+otherwise. A run keeps the command line as you typed it. With `record_input` set to `false`, it hides every value that
+may be your text. Secrets are hidden either way; see [Security](security.md).
